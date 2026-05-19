@@ -42,3 +42,25 @@ Pour éviter l’erreur MIME `text/jsx` (module bloqué sur `src/main.jsx`), con
 5. Faites un rechargement forcé du navigateur (`Ctrl+F5` ou `Cmd+Shift+R`) pour vider le cache.
 
 Si vous déployez la branche source au lieu du build `dist/`, le navigateur reçoit `src/main.jsx` en `text/jsx` et bloque le module.
+
+
+## Erreur 404 + CSP sur `unispourlapaix.github.io/Planning-AVD`
+
+Si vous voyez:
+- `GET .../Planning-AVD/ [404]`
+- CSP `default-src 'none'`
+- favicon bloqué
+
+cela signifie généralement que GitHub renvoie sa **page 404 système** (pas votre app).
+
+Causes fréquentes:
+1. Le workflow Pages ne s'est pas déclenché (mauvaise branche).
+2. Pages n'est pas configuré sur **GitHub Actions**.
+3. Le déploiement a échoué.
+
+Vérifications:
+1. `Settings → Pages → Source: GitHub Actions`.
+2. Onglet `Actions` : workflow vert sur la branche utilisée (`main`, `master` ou `work`).
+3. Ouvrir l'URL fournie par le job `deploy` après succès.
+
+Note: la CSP `default-src 'none'` vient de la page 404 GitHub, pas de votre `index.html`.
