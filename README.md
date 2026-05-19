@@ -23,3 +23,10 @@ Cette app **doit** être déployée depuis le dossier `dist/` (build Vite), pas 
 Si vous ouvrez `index.html` source directement sans build, le navigateur peut afficher des erreurs JS (imports/JSX non transformés).
 
 Le workflow `.github/workflows/deploy-gh-pages.yml` construit puis publie automatiquement `dist/` sur GitHub Pages.
+
+## Dépannage production
+
+- Si vous voyez une erreur `babel.min.js` ou `import declarations may only appear at top level`, la page servie est une ancienne version CDN/Babel.
+- Vérifiez que GitHub Pages publie **le workflow GitHub Actions** (branche `gh-pages` artifact) et non une ancienne racine statique.
+- Faites un hard refresh (Ctrl/Cmd+Shift+R) pour vider le cache navigateur/CDN.
+
