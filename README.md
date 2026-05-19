@@ -30,3 +30,13 @@ Le workflow `.github/workflows/deploy-gh-pages.yml` construit puis publie automa
 - Vérifiez que GitHub Pages publie **le workflow GitHub Actions** (branche `gh-pages` artifact) et non une ancienne racine statique.
 - Faites un hard refresh (Ctrl/Cmd+Shift+R) pour vider le cache navigateur/CDN.
 
+
+## Configuration GitHub Pages (obligatoire)
+
+Dans le dépôt GitHub:
+
+1. **Settings → Pages**
+2. **Build and deployment**: sélectionner **GitHub Actions**
+3. Ne pas utiliser "Deploy from a branch" avec les sources `src/*.jsx`
+
+Sinon le navigateur charge `src/main.jsx` (MIME `text/jsx`) et bloque le module.
