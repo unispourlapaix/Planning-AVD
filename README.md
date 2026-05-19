@@ -33,10 +33,12 @@ Le workflow `.github/workflows/deploy-gh-pages.yml` construit puis publie automa
 
 ## Configuration GitHub Pages (obligatoire)
 
-Dans le dépôt GitHub:
+Pour éviter l’erreur MIME `text/jsx` (module bloqué sur `src/main.jsx`), configurez GitHub Pages **exactement** ainsi :
 
-1. **Settings → Pages**
-2. **Build and deployment**: sélectionner **GitHub Actions**
-3. Ne pas utiliser "Deploy from a branch" avec les sources `src/*.jsx`
+1. Ouvrez **Settings → Pages** du dépôt.
+2. Dans **Build and deployment**, choisissez **Source: GitHub Actions**.
+3. Vérifiez que le workflow `Deploy to GitHub Pages` s’exécute et publie `dist/`.
+4. **Ne pas** utiliser **Deploy from a branch** avec les sources (`src/*.jsx`).
+5. Faites un rechargement forcé du navigateur (`Ctrl+F5` ou `Cmd+Shift+R`) pour vider le cache.
 
-Sinon le navigateur charge `src/main.jsx` (MIME `text/jsx`) et bloque le module.
+Si vous déployez la branche source au lieu du build `dist/`, le navigateur reçoit `src/main.jsx` en `text/jsx` et bloque le module.
