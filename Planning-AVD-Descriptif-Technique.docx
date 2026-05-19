@@ -20,7 +20,7 @@ L'application Planning-AVD permet de centraliser la planification des tâches d'
 - Suppression des noms de personnes dans les données d'exemple, remplacés par des rôles d'équipe
 
 5. Fichier principal
-- planning-avq.jsx
+- planning-avd.jsx
 
 6. Évolutions proposées
 - Sauvegarde des tâches dans un backend (API REST)
