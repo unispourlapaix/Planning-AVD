@@ -1,0 +1,36 @@
+Planning-AVD — Descriptif Technique
+
+1. Objectif
+L'application Planning-AVD permet de centraliser la planification des tâches d'une équipe.
+
+2. Fonctionnalités livrées
+- Tableau de suivi des tâches (titre, responsable, échéance, statut)
+- Compteurs dynamiques par statut (À faire / En cours / Terminé)
+- Formulaire d'ajout de tâches
+- Mise à jour du statut en direct
+
+3. Architecture technique
+- Front-end: React (composant fonctionnel)
+- Gestion d'état: useState
+- Calculs agrégés: useMemo
+- Style: objet JavaScript inline (sans dépendance CSS externe)
+- Compatibilité GitHub Pages: exécution via `index.html` + CDN React/ReactDOM + Babel Standalone (sans étape de build)
+
+4. Normalisation des noms
+- Nom de l'application corrigé: Planning-AVD
+- Suppression des noms de personnes dans les données d'exemple, remplacés par des rôles d'équipe
+
+5. Fichier principal
+- planning-avd.jsx
+
+6. Évolutions proposées
+- Sauvegarde des tâches dans un backend (API REST)
+- Authentification utilisateur
+- Filtrage / recherche avancée
+
+
+7. Déploiement GitHub Pages
+- Publier les fichiers à la racine du dépôt (`index.html`, `planning-avd.jsx`).
+- Dans GitHub: Settings > Pages > Build and deployment > Source: Deploy from a branch.
+- Sélectionner la branche et le dossier `/ (root)`.
+- L'application sera accessible via l'URL GitHub Pages du dépôt.
