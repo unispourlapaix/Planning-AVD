@@ -1,139 +1,17 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { MAX_H, EMPLOYER, MFR, DL, DS, WE_ONLY, ADMIN_DEF, PAL, TIDS, NDEF, STATUTS, ACTS, BULLES } from "./constants.js";
+import { dim, dowD, rgb, tsNow, vCode, buildSched } from "./scheduler.js";
+import { SK, sS, sL, hashCode } from "./storage.js";
 
 // ══════════════════════════════════════════════
 // MODULE CFG-001 · Constantes
 // ══════════════════════════════════════════════
-const MAX_H=151, EMPLOYER="Emmanuel Payet";
-const MFR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const DL=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
-const DS=["L","M","M","J","V","S","D"];
-const WE_ONLY="P4";
-const ADMIN_DEF="00000001A";
 
-// ══════════════════════════════════════════════
-// MODULE CFG-002 · Équipe & pastels
-// ══════════════════════════════════════════════
-const PAL=[
-  {solid:"#7BAFD4",light:"#E6F3FF",pill:"#CCE8FF",text:"#1E5A8A",border:"#A2CCEC",dot:"#5B9DC4"},
-  {solid:"#68C49A",light:"#E4F8F0",pill:"#C6EFE0",text:"#1A6A44",border:"#8ED9BA",dot:"#40A876"},
-  {solid:"#E08A8A",light:"#FFF0F0",pill:"#FFD6D6",text:"#A02828",border:"#EFBBBB",dot:"#CC5858"},
-  {solid:"#9E8ED8",light:"#F0ECFF",pill:"#DDD5FF",text:"#3E2A9E",border:"#C0B2EE",dot:"#7460C8"},
-];
-const TIDS=["P1","P2","P3","P4"];
-const NDEF={P1:{firstName:"Guillaume",lastName:"Picardo"},P2:{firstName:"Romain",lastName:""},P3:{firstName:"Sarah",lastName:""},P4:{firstName:"Marie",lastName:"Payet"}};
-const STATUTS={dispo:{label:"Disponible",icon:"✅",color:"#1A6A44",bg:"#E4F8F0",border:"#8ED9BA"},absent:{label:"Absent",icon:"🚫",color:"#A02828",bg:"#FFF0F0",border:"#EFBBBB"},remplace:{label:"Remplaçant",icon:"🔄",color:"#6B4A00",bg:"#FFF8E6",border:"#F0D070"}};
-
-// ══════════════════════════════════════════════
-// MODULE CFG-003 · Activités
-// ══════════════════════════════════════════════
-const ACTS=[{id:"voyage",l:"Voyage",i:"✈️"},{id:"cinema",l:"Cinéma",i:"🎬"},{id:"rando",l:"Rando",i:"🥾"},{id:"kine",l:"Kiné",i:"💆"},{id:"docteur",l:"Docteur",i:"🏥"},{id:"courses",l:"Courses",i:"🛒"}];
-
-// ══════════════════════════════════════════════
-// MODULE CFG-004 · Bulles de Sagesse
-// ══════════════════════════════════════════════
-const BULLES=[
-  {e:"💪",t:"Genoux fléchis pour les transferts — protégez votre dos !"},
-  {e:"🧤",t:"N'oubliez pas vos gants pour les soins d'hygiène"},
-  {e:"💊",t:"Vérifiez médicaments et horaires avant de partir"},
-  {e:"🚿",t:"Testez la température de l'eau avant la douche"},
-  {e:"📋",t:"Notez les changements d'état pour le prochain intervenant"},
-  {e:"🦺",t:"Vérifiez le matériel de transfert avant chaque déplacement"},
-  {e:"😊",t:"Un sourire change une journée — pour vous et l'aidé"},
-  {e:"🔑",t:"Clé rendue et rapport signé avant de partir"},
-  {e:"📞",t:"En cas de doute : appelez l'infirmière coordinatrice"},
-  {e:"🍽️",t:"Textures et régimes : vérifiez le classeur"},
-  {e:"🌡️",t:"Fièvre > 38.5° → contacter le médecin et prévenir l'équipe"},
-  {e:"🛏️",t:"Position antiescarres : changement toutes les 2h si alitement"},
-];
 
 // ══════════════════════════════════════════════
 // MODULE UTL-001 · Utilitaires
 // ══════════════════════════════════════════════
-const dim=(y,m)=>new Date(y,m+1,0).getDate();
-const dowD=(y,m,d)=>(new Date(y,m,d).getDay()+6)%7;
-const rgb=h=>`${parseInt(h.slice(1,3),16)},${parseInt(h.slice(3,5),16)},${parseInt(h.slice(5,7),16)}`;
-const tsNow=()=>new Date().toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-const vCode=c=>/^\d{8}[A-Za-z]$/.test(c);
 
-// ══════════════════════════════════════════════
-// MODULE BLK-001 · Blocs Lun→Jeu / Ven→Dim
-// ══════════════════════════════════════════════
-const getBlocks=(y,m)=>{
-  const n=dim(y,m);const B=[];let d=1;
-  while(d<=n){const dw=dowD(y,m,d);const t=dw<=3?"wd":"we";let e=d;
-    while(e<n){const nd=dowD(y,m,e+1);if((t==="wd"&&nd>=4)||(t==="we"&&nd<=3))break;e++;}
-    B.push({type:t,start:d,end:e,idx:B.length});d=e+1;}
-  return B;
-};
-
-// ══════════════════════════════════════════════
-// MODULE SCH-001 · Scheduler deux passes
-// PASSE 1 : WE rotation stricte G→R→S→M
-// PASSE 2 : WD rotation stricte G→R→S, 1 doublon toléré
-//   - pas WD+WE même semaine
-//   - qui fait WE → repos WD suivant
-// ══════════════════════════════════════════════
-const buildSched=(y,m,swi,bOv,names,stat,inh=null)=>{
-  const blks=getBlocks(y,m);
-  const team=TIDS.map((id,i)=>({id,...PAL[i],...names[id]}));
-  const wdT=team.filter(t=>t.id!==WE_ONLY);
-  const weT=team;
-  const abs=id=>stat?.[id]==="absent";
-  const avWe=weT.filter(t=>!abs(t.id));
-  const avWd=wdT.filter(t=>!abs(t.id));
-  const fw=dowD(y,m,1)>=5;
-
-  // PASSE 1 WE
-  const weM={};let wri=swi;
-  for(const b of blks.filter(x=>x.type==="we")){
-    if(bOv[b.idx]!=null){weM[b.idx]=bOv[b.idx];const p=weT.findIndex(t=>t.id===bOv[b.idx]);if(p>=0)wri=(p+1)%weT.length;continue;}
-    if(b.idx===0&&fw&&inh){weM[b.idx]=inh;const p=weT.findIndex(t=>t.id===inh);wri=((p>=0?p:wri)+1)%weT.length;continue;}
-    let w=null;for(let i=0;i<weT.length;i++){const c=weT[(wri+i)%weT.length];if(!abs(c.id)){w=c;wri=(weT.indexOf(c)+1)%weT.length;break;}}
-    if(!w){w=weT[wri%weT.length];wri=(wri+1)%weT.length;}
-    weM[b.idx]=w.id;
-  }
-
-  // PASSE 2 WD
-  const wdM={};let wdi=0,skipId=null,prevId=null,dup=0;
-  for(const b of blks.filter(x=>x.type==="wd")){
-    if(bOv[b.idx]!=null){
-      const wid=bOv[b.idx];wdM[b.idx]=wid;
-      const nb=blks[b.idx+1];skipId=(nb&&nb.type==="we"&&weM[nb.idx]!==WE_ONLY)?weM[nb.idx]:null;
-      dup=wid===prevId?dup+1:0;prevId=wid;
-      const p=avWd.findIndex(t=>t.id===wid);if(p>=0)wdi=(p+1)%avWd.length;continue;
-    }
-    const nb=blks[b.idx+1];
-    const sw=(nb&&nb.type==="we")?weM[nb.idx]:null;
-    const hard=new Set([skipId,sw].filter(id=>id&&id!==WE_ONLY));
-    const cur=avWd.length?avWd[wdi%avWd.length]:null;
-    let w=null;
-    if(cur&&!hard.has(cur.id)){w=cur;wdi=(wdi+1)%avWd.length;dup=0;}
-    else{
-      let f=false;
-      for(let i=1;i<avWd.length;i++){const c=avWd[(wdi+i)%avWd.length];if(!hard.has(c.id)){w=c;wdi=(avWd.indexOf(c)+1)%avWd.length;dup=0;f=true;break;}}
-      if(!f){
-        if(dup<1){w=avWd.length?avWd[wdi%avWd.length]:null;if(w){wdi=(wdi+1)%avWd.length;dup++;}}
-        else{for(let i=0;i<avWd.length;i++){const c=avWd[(wdi+i)%avWd.length];if(c.id!==prevId){w=c;wdi=(avWd.indexOf(c)+1)%avWd.length;dup=0;break;}}
-          if(!w){w=avWd.length?avWd[wdi%avWd.length]:wdT[0];wdi=(wdi+1)%Math.max(avWd.length,1);}}
-      }
-    }
-    if(!w)w=avWd.length?avWd[0]:wdT[0];
-    wdM[b.idx]=w.id;prevId=w.id;
-    skipId=(sw&&sw!==WE_ONLY)?sw:null;
-  }
-
-  const asgn=blks.map(b=>({...b,workerId:b.type==="we"?weM[b.idx]:wdM[b.idx],cross:b.idx===0&&fw&&!!inh&&bOv[b.idx]==null}));
-  const sc={};
-  for(const a of asgn)for(let d=a.start;d<=a.end;d++)sc[d]={worker:a.workerId,bi:a.idx,bt:a.type,bs:a.start,be:a.end,cross:a.cross};
-  return{sched:sc,blks:asgn};
-};
-
-// ══════════════════════════════════════════════
-// MODULE STO-001 · Persistance
-// ══════════════════════════════════════════════
-const SK={team:"avq-t",cfg:"avq-c",journal:"avq-j",month:(y,m)=>`avq-m-${y}-${m}`};
-const sS=async(k,v)=>{try{await window.storage.set(k,JSON.stringify(v));}catch{}};
-const sL=async k=>{try{const r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch{return null;}};
 
 // ══════════════════════════════════════════════
 // MODULE EML-001 · Email
@@ -177,7 +55,7 @@ const Sh=({ch})=>(<div style={{width:"100%",maxWidth:430,background:"rgba(252,25
 // ══════════════════════════════════════════════
 function AdminModal({title,adminCode,onOk,onClose}){
   const[v,setV]=useState("");const[err,setErr]=useState(false);
-  const check=()=>{if(v===adminCode){onOk();}else{setErr(true);setTimeout(()=>setErr(false),1200);}};
+  const check=async()=>{const hv=await hashCode(v);if(hv===adminCode){onOk();}else{setErr(true);setTimeout(()=>setErr(false),1200);}};
   return(<Ov onClose={onClose} ch={<Sh ch={<div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:14}}>
     <p style={{fontWeight:900,fontSize:16,color:"#1a2a3a",textAlign:"center"}}>🔒 {title}</p>
     <p style={{fontSize:11,color:"#90AABC",textAlign:"center"}}>Code admin (8 chiffres + 1 lettre)</p>
@@ -391,7 +269,10 @@ export default function App(){
   const[lieux,setLieux]=useState({});
   const[ah,setAh]=useState({P1:0,P2:0,P3:0,P4:0});
   const[stat,setStat]=useState({P1:"dispo",P2:"dispo",P3:"dispo",P4:"dispo"});
-  const[adminCode,setAdminCode]=useState(ADMIN_DEF);
+  const[adminCode,setAdminCode]=useState("");
+  const[adminHash,setAdminHash]=useState("");
+  const[mustChangeAdmin,setMustChangeAdmin]=useState(false);
+  const[adminInput,setAdminInput]=useState("");
   const[adminSess,setAdminSess]=useState(false);
   const[journal,setJournal]=useState([]);
   const[validated,setValidated]=useState(false);
@@ -415,11 +296,11 @@ export default function App(){
   const addJ=useCallback((a,d)=>setJournal(p=>[{ts:tsNow(),action:a,detail:d},...p].slice(0,50)),[]);
   const withAdmin=(title,fn)=>{if(adminSess){fn();return;}setAdminMod({title,fn});};
 
-  useEffect(()=>{(async()=>{const sn=await sL(SK.team);if(sn)setNames(sn);const sc=await sL(SK.cfg);if(sc){if(sc.swi!=null)setSWI(sc.swi);if(sc.adminCode)setAdminCode(sc.adminCode);}const j=await sL(SK.journal);if(j)setJournal(j);setLoaded(true);})();},[]);
+  useEffect(()=>{(async()=>{const sn=await sL(SK.team);if(sn)setNames(sn);const sc=await sL(SK.cfg);if(sc){if(sc.swi!=null)setSWI(sc.swi);if(sc.adminHash){setAdminHash(sc.adminHash);setAdminCode(sc.adminHash);} else if(sc.adminCode){const h=await hashCode(sc.adminCode);setAdminHash(h);setAdminCode(h);setMustChangeAdmin(sc.adminCode===ADMIN_DEF);}} else { const h=await hashCode(ADMIN_DEF); setAdminHash(h); setAdminCode(h); setMustChangeAdmin(true);}const j=await sL(SK.journal);if(j)setJournal(j);setLoaded(true);})();},[]);
   useEffect(()=>{if(!loaded)return;(async()=>{const d=await sL(SK.month(y,m));if(d){setBOv(d.bOv||{});setSpOv(d.spOv||{});setAh(d.ah||{P1:0,P2:0,P3:0,P4:0});setActs(d.acts||{});setLieux(d.lieux||{});setStat(d.stat||{P1:"dispo",P2:"dispo",P3:"dispo",P4:"dispo"});setNBlks(d.nBlks||{});setValidated(d.validated||false);}else{setBOv({});setSpOv({});setAh({P1:0,P2:0,P3:0,P4:0});setActs({});setLieux({});setStat({P1:"dispo",P2:"dispo",P3:"dispo",P4:"dispo"});setNBlks({});setValidated(false);}})();},[y,m,loaded]);
   useEffect(()=>{if(loaded)sS(SK.month(y,m),{bOv,spOv,ah,acts,lieux,stat,nBlks,validated});},[bOv,spOv,ah,acts,lieux,stat,nBlks,validated,y,m,loaded]);
   useEffect(()=>{if(loaded)sS(SK.team,names);},[names,loaded]);
-  useEffect(()=>{if(loaded)sS(SK.cfg,{swi,adminCode});},[swi,adminCode,loaded]);
+  useEffect(()=>{if(loaded)sS(SK.cfg,{swi,adminHash});},[swi,adminHash,loaded]);
   useEffect(()=>{if(loaded)sS(SK.journal,journal);},[journal,loaded]);
 
   const navM=dir=>{let nm=m+dir,ny=y;if(nm>11){nm=0;ny++;}if(nm<0){nm=11;ny--;}setM(nm);setY(ny);};
@@ -585,8 +466,9 @@ export default function App(){
             <p style={{fontSize:10,fontWeight:700,color:"#90AABC",textTransform:"uppercase",letterSpacing:.9,marginBottom:11}}>🔒 Sécurité admin</p>
             <div style={{display:"flex",gap:7,marginBottom:9}}>
               <div style={{flex:1}}><p style={{fontSize:9,color:"#90AABC",marginBottom:4}}>Code (8 chiffres + 1 lettre)</p>
-                <input value={adminCode} onChange={e=>setAdminCode(e.target.value)} maxLength={9} placeholder="12345678A" style={{width:"100%",background:"#F2F8FF",border:`1px solid ${vCode(adminCode)?"rgba(162,204,236,0.35)":"#EFBBBB"}`,borderRadius:10,padding:"8px 10px",fontSize:13,fontFamily:"'DM Mono',monospace",letterSpacing:2,fontWeight:700,color:"#2d3f58"}}/>
-                {!vCode(adminCode)&&<p style={{fontSize:9,color:"#E08A8A",marginTop:2}}>Format invalide</p>}
+                <input value={adminInput} onChange={e=>setAdminInput(e.target.value.toUpperCase())} maxLength={9} placeholder="12345678A" style={{width:"100%",background:"#F2F8FF",border:`1px solid ${adminInput===""||vCode(adminInput)?"rgba(162,204,236,0.35)":"#EFBBBB"}`,borderRadius:10,padding:"8px 10px",fontSize:13,fontFamily:"'DM Mono',monospace",letterSpacing:2,fontWeight:700,color:"#2d3f58"}}/>
+                <button onClick={async()=>{if(!vCode(adminInput))return;const h=await hashCode(adminInput);setAdminHash(h);setAdminCode(h);setMustChangeAdmin(false);setAdminInput("");showT("✅ Code admin mis à jour");}} style={{marginTop:6,padding:"6px 9px",borderRadius:9,fontSize:10,fontWeight:800,background:"#EEF6FF",border:"1px solid rgba(162,204,236,0.26)",color:"#3E2A9E"}}>Enregistrer code</button>
+                {mustChangeAdmin&&<p style={{fontSize:9,color:"#E08A8A",marginTop:2}}>Changez le code admin par défaut.</p>}
               </div>
               <button onClick={()=>setAdminSess(s=>!s)} style={{padding:"8px 11px",borderRadius:12,fontSize:12,fontWeight:800,background:adminSess?"#E4F8F0":"rgba(236,246,255,0.8)",color:adminSess?"#1A6A44":"#7a94b0",border:`1.5px solid ${adminSess?"#8ED9BA":"rgba(162,204,236,0.26)"}`,alignSelf:"flex-end"}}>
                 {adminSess?"🔓 Actif":"🔒 Off"}
