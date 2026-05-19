@@ -14,6 +14,7 @@ L'application Planning-AVD permet de centraliser la planification des tâches d'
 - Gestion d'état: useState
 - Calculs agrégés: useMemo
 - Style: objet JavaScript inline (sans dépendance CSS externe)
+- Compatibilité GitHub Pages: exécution via `index.html` + CDN React/ReactDOM + Babel Standalone (sans étape de build)
 
 4. Normalisation des noms
 - Nom de l'application corrigé: Planning-AVD
@@ -26,3 +27,10 @@ L'application Planning-AVD permet de centraliser la planification des tâches d'
 - Sauvegarde des tâches dans un backend (API REST)
 - Authentification utilisateur
 - Filtrage / recherche avancée
+
+
+7. Déploiement GitHub Pages
+- Publier les fichiers à la racine du dépôt (`index.html`, `planning-avd.jsx`).
+- Dans GitHub: Settings > Pages > Build and deployment > Source: Deploy from a branch.
+- Sélectionner la branche et le dossier `/ (root)`.
+- L'application sera accessible via l'URL GitHub Pages du dépôt.

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+const { useMemo, useState } = React;
 
 const initialTasks = [
   { id: 1, title: 'Définir le périmètre du sprint', owner: 'Équipe Produit', status: 'À faire', dueDate: '2026-05-25' },
@@ -8,7 +8,7 @@ const initialTasks = [
 
 const statusOptions = ['À faire', 'En cours', 'Terminé'];
 
-export default function PlanningAVDApp() {
+function PlanningAVDApp() {
   const [tasks, setTasks] = useState(initialTasks);
   const [newTask, setNewTask] = useState({ title: '', owner: '', dueDate: '', status: 'À faire' });
 
@@ -183,3 +183,9 @@ const styles = {
   td: { borderBottom: '1px solid #e2e8f0', padding: 10 },
   statusSelect: { border: '1px solid #94a3b8', borderRadius: 6, padding: '6px 8px' },
 };
+
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(<PlanningAVDApp />);
+}
