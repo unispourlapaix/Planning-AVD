@@ -96,6 +96,17 @@
     return render;
   };
 
+  const emailOnlyConfigView = `function ConfigView() {
+    const connected = !!window.PlanningAVDAuth?.isConnected;
+    return <div className="su" style={{display:"grid",gap:10}}>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{TIDS.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"✅":s==="absent"?"🚫":"🔄"}</button>)}</div>)}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Rotation + noms prives</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Connexion par email requise pour afficher ou modifier les noms.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[i].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected ? TIDS.map(p=><input key={p} value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : TIDS.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>🔒 {pName(names,p,false)}</div>)}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Connexion</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Email connecte : "+window.PlanningAVDAuth.email : "Utilisez le bouton Connexion email en bas de l'ecran."}</p></div>
+    </div>;
+  }
+
+  function DayModal`;
+
   try {
     const fa = await initFirebase();
     if (fa) await finishEmailLink(fa);
@@ -113,7 +124,9 @@
     source = source
       .replace(/^import\s+\{[^}]+\}\s+from\s+["']react["'];\s*/m, "const { useState, useMemo, useEffect, useCallback } = React;\n")
       .replace("export default function App()", "function App()")
-      .replace("const priv = adminSess;", "const priv = adminSess || !!window.PlanningAVDAuth?.isConnected;");
+      .replace("const priv = adminSess;", "const priv = !!window.PlanningAVDAuth?.isConnected;")
+      .replace("const withAdmin = (title,fn,force=false) => { if (adminSess && !force) fn(); else setAdminMod({title,fn}); };", "const withAdmin = (title,fn,force=false) => { if (window.PlanningAVDAuth?.isConnected) fn(); else alert('Connexion email requise.'); };")
+      .replace(/function ConfigView\(\) \{[\s\S]*?\n  function DayModal/, emailOnlyConfigView);
 
     source += "\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));";
 
