@@ -1,5 +1,9 @@
 window.PLANNING_AVD_AUTH = {
-  supabaseUrl: "",
-  supabaseAnonKey: "",
+  firebaseConfig: {
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    appId: ""
+  },
   allowedEmails: []
 };
