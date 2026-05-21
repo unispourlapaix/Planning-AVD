@@ -171,6 +171,8 @@
     let source = await response.text();
     source = source
       .replace(/^import\s+\{[^}]+\}\s+from\s+["']react["'];\s*/m, "const { useState, useMemo, useEffect, useCallback } = React;\n")
+      .replace(/^import\s+.*?;\s*/gm, "")
+      .replace(/const SUPABASE_URL[\s\S]*?const supabase = [^\n]+;\s*/m, "const ALLOWED_EMAILS = [];\nconst supabase = null;\n")
       .replace("export default function App()", "function App()")
       .replace("const card = {background:\"rgba(255,255,255,.9)\",border:\"1px solid rgba(180,210,235,.72)\",borderRadius:18,boxShadow:\"0 2px 14px rgba(90,150,210,.06)\"};", "const card = {background:\"rgba(255,255,255,.94)\",border:\"1px solid rgba(221,214,202,.9)\",borderRadius:16,boxShadow:\"0 10px 28px rgba(70,58,40,.06)\"};")
       .replace("const btn = (on, c=\"#7BAFD4\") => ({padding:\"9px 11px\",borderRadius:14,background:on?c:\"rgba(255,255,255,.75)\",color:on?\"white\":\"#35546F\",border:`1px solid ${on?c:\"#D6E7F5\"}`,fontWeight:900});", "const btn = (on, c=\"#8B9A7A\") => ({padding:\"10px 12px\",borderRadius:12,background:on?c:\"#FFFDF8\",color:on?\"white\":\"#4F5D4A\",border:`1px solid ${on?c:\"#E5DED2\"}`,fontWeight:900,boxShadow:on?\"0 8px 18px rgba(80,90,65,.16)\":\"0 3px 10px rgba(80,70,50,.04)\",display:\"inline-flex\",alignItems:\"center\",justifyContent:\"center\",gap:6});")
