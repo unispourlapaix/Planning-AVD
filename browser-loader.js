@@ -147,6 +147,7 @@
     const connected = !!window.PlanningAVDAuth?.isConnected;
     return <div className="su" style={{display:"grid",gap:10}}>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{TIDS.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"OK":s==="absent"?"Absent":"Rempl."}</button>)}</div>)}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Regle de roulement</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Le mode essai alterne tous les 2 jours et donne une semaine de repos mensuelle a chaque auxiliaire.</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}><button onClick={()=>setSchedRule("blocks")} style={btn(schedRule==="blocks","#8B9A7A")}>Blocs actuels</button><button onClick={()=>setSchedRule("twoDayRest")} style={btn(schedRule==="twoDayRest","#8B9A7A")}>2j + repos</button></div>{schedRule==="twoDayRest"&&<><p style={{fontSize:12,color:"#667F94",margin:"10px 0 6px"}}>Premiere semaine de repos</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setRestStart(i)} style={btn(restStart===i,PAL[i].solid)}>{pName(names,p,priv)}</button>)}</div></>}</div>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Rotation + noms prives</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Connexion Google requise pour afficher ou modifier les noms. Une fois connecte, la sauvegarde cloud est automatique.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[i].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected ? TIDS.map(p=><input key={p} value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : TIDS.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>Prive - {pName(names,p,false)}</div>)}</div>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Fiches auxiliaires</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Nom, email, telephone et adresse complete restent dans la sauvegarde personnelle du compte admin.</p>{connected ? TIDS.map(p=>{ const c=auxContacts[p]||{}; return <div key={p} style={{marginTop:10,padding:10,border:"1px solid #E5DED2",borderRadius:14,background:"#FFFDF8"}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{...btn(true,PAL[pidIx(p)].solid),width:32,height:32,padding:0}}>+</span><b style={{color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</b></div><input value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:6,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><input type="email" value={c.email||""} onChange={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),email:e.target.value.trim()}}))} placeholder="Email complet" style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><input type="tel" value={c.tel||""} onChange={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),tel:e.target.value}}))} placeholder="Telephone" style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><textarea value={c.address||""} onChange={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),address:e.target.value}}))} placeholder="Adresse complete" style={{width:"100%",boxSizing:"border-box",minHeight:58,marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /></div>; }) : <div style={{...btn(false),width:"100%",textAlign:"left"}}>Connexion Google requise</div>}</div>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Cloud admin</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Sauvegarde admin active pour : "+window.PlanningAVDAuth.email : "Connectez-vous avec Google pour activer la sauvegarde admin."}</p></div>
@@ -169,10 +170,78 @@
     if (!response.ok) throw new Error(`planning-avd.jsx introuvable (${response.status})`);
 
     let source = await response.text();
+    const schedulingSource = `// == MODULE SCH-001 == Scheduler multi-regles
+const buildBlockSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inheritWeWorker=null) => {
+  const blks = getBlocks(y,m).map(b => ({...b, workerId:null, cross:false}));
+  const weTeam = ["P1","P2","P3","P4"], wdTeam = ["P1","P2","P3"];
+  let weIdx = startWeIdx || 0, wdIdx = 0, prevWe = null, prevWd = null, dup = 0;
+  const usable = p => statuts[p] !== "absent";
+  blks.forEach(b => {
+    if (b.type !== "we") return;
+    if (blkOverrides[b.idx]) { b.workerId = blkOverrides[b.idx]; if (usable(b.workerId)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }
+    if (inheritWeWorker && b.start === 1 && dowD(y,m,1) >= 5) { b.workerId = inheritWeWorker; b.cross = true; prevWe = b.workerId; return; }
+    for (let k=0;k<weTeam.length;k++) { const p = weTeam[(weIdx+k)%weTeam.length]; if (usable(p)) { b.workerId = p; weIdx = (weIdx+k+1)%weTeam.length; prevWe = p; return; } }
+    b.workerId = weTeam[weIdx]; prevWe = b.workerId;
+  });
+  blks.forEach((b,i) => {
+    if (b.type !== "wd") return;
+    if (blkOverrides[b.idx] && blkOverrides[b.idx] !== WE_ONLY) { b.workerId = blkOverrides[b.idx]; wdIdx = (wdTeam.indexOf(b.workerId)+1+wdTeam.length)%wdTeam.length; prevWd = b.workerId; return; }
+    const sameWeekWE = blks.find(x => x.type === "we" && x.start > b.start && x.start <= b.end + 3)?.workerId;
+    const prevBlockWe = [...blks].slice(0,i).reverse().find(x => x.type === "we")?.workerId || prevWe;
+    const hardAvoid = new Set([sameWeekWE,prevBlockWe].filter(Boolean));
+    const legal = p => usable(p) && !hardAvoid.has(p);
+    let pick = null, off = 0;
+    for (let k=0;k<wdTeam.length;k++) { const p = wdTeam[(wdIdx+k)%wdTeam.length]; if (legal(p)) { pick = p; off = k; break; } }
+    if (!pick && dup < 1) { pick = wdTeam[wdIdx]; dup += 1; off = 0; }
+    if (!pick) { pick = wdTeam.find(p => usable(p) && p !== prevWd) || wdTeam.find(p => p !== prevWd) || wdTeam[wdIdx]; dup = 0; off = Math.max(0,wdTeam.indexOf(pick)-wdIdx); }
+    if (pick === prevWd) dup += 1; else dup = 0;
+    b.workerId = pick; wdIdx = (wdIdx+off+1)%wdTeam.length; prevWd = pick;
+  });
+  const sched = {};
+  blks.forEach(b => { for(let d=b.start; d<=b.end; d++) sched[d] = {worker:b.workerId,bi:b.idx,bt:b.type,bs:b.start,be:b.end,cross:b.cross}; });
+  return { sched, blks };
+};
+
+const buildTwoDayRestSched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts={},restStart=0) => {
+  const n = dim(y,m), team = ["P1","P2","P3","P4"], blks = [];
+  const usable = p => statuts[p] !== "absent";
+  const restWeek = p => ((team.indexOf(p) - restStart + team.length) % team.length) + 1;
+  const weekOf = d => Math.min(4, Math.floor((d-1)/7)+1);
+  let idx = 0, rot = startIdx || 0, prev = null;
+  for (let d=1; d<=n; d+=2) {
+    const b = { type:"two", start:d, end:Math.min(n,d+1), idx:idx++, workerId:null, cross:false };
+    if (blkOverrides[b.idx]) b.workerId = blkOverrides[b.idx];
+    if (!b.workerId) {
+      for (let k=0;k<team.length;k++) {
+        const p = team[(rot+k)%team.length];
+        const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);
+        if (usable(p) && !inRest && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
+      }
+    }
+    if (!b.workerId) {
+      for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
+    }
+    b.workerId = b.workerId || team[rot%team.length];
+    prev = b.workerId;
+    blks.push(b);
+  }
+  const sched = {};
+  blks.forEach(b => { for(let d=b.start; d<=b.end; d++) sched[d] = {worker:b.workerId,bi:b.idx,bt:b.type,bs:b.start,be:b.end,cross:false}; });
+  return { sched, blks };
+};
+
+const buildSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inheritWeWorker=null,rule="blocks",restStart=0) => {
+  if (rule === "twoDayRest") return buildTwoDayRestSched(y,m,startWeIdx,blkOverrides,names,statuts,restStart);
+  return buildBlockSched(y,m,startWeIdx,blkOverrides,names,statuts,inheritWeWorker);
+};
+
+// == MODULE STO-001`;
     source = source
       .replace(/^import\s+\{[^}]+\}\s+from\s+["']react["'];\s*/m, "const { useState, useMemo, useEffect, useCallback } = React;\n")
       .replace(/^import\s+.*?;\s*/gm, "")
       .replace(/const SUPABASE_URL[\s\S]*?const supabase = [^\n]+;\s*/m, "const ALLOWED_EMAILS = [];\nconst supabase = null;\n")
+      .replace(/\/\/ ══ MODULE SCH-001[\s\S]*?\/\/ ══ MODULE STO-001/, schedulingSource)
+      .replace("const BBtxt = t => t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";", "const BBtxt = t => t === \"two\" ? \"2 jours\" : t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";")
       .replace("export default function App()", "function App()")
       .replace("const card = {background:\"rgba(255,255,255,.9)\",border:\"1px solid rgba(180,210,235,.72)\",borderRadius:18,boxShadow:\"0 2px 14px rgba(90,150,210,.06)\"};", "const card = {background:\"rgba(255,255,255,.94)\",border:\"1px solid rgba(221,214,202,.9)\",borderRadius:16,boxShadow:\"0 10px 28px rgba(70,58,40,.06)\"};")
       .replace("const btn = (on, c=\"#7BAFD4\") => ({padding:\"9px 11px\",borderRadius:14,background:on?c:\"rgba(255,255,255,.75)\",color:on?\"white\":\"#35546F\",border:`1px solid ${on?c:\"#D6E7F5\"}`,fontWeight:900});", "const btn = (on, c=\"#8B9A7A\") => ({padding:\"10px 12px\",borderRadius:12,background:on?c:\"#FFFDF8\",color:on?\"white\":\"#4F5D4A\",border:`1px solid ${on?c:\"#E5DED2\"}`,fontWeight:900,boxShadow:on?\"0 8px 18px rgba(80,90,65,.16)\":\"0 3px 10px rgba(80,70,50,.04)\",display:\"inline-flex\",alignItems:\"center\",justifyContent:\"center\",gap:6});")
@@ -185,11 +254,13 @@
       .replace("return <div style={{minHeight:\"100vh\",maxWidth:430,margin:\"0 auto\",background:\"linear-gradient(155deg, #EBF5FF 0%, #FBFCFF 55%, #F0ECFF 100%)\",fontFamily:\"Nunito, system-ui, sans-serif\",color:\"#294C69\"}}>", "return <div style={{minHeight:\"100vh\",maxWidth:430,margin:\"0 auto\",background:\"linear-gradient(155deg, #F7F4EE 0%, #FFFEFA 48%, #F1EDE4 100%)\",fontFamily:\"Nunito, system-ui, sans-serif\",color:\"#3F4A3A\"}}>")
       .replace("<div style={{...card,padding:10,background:\"linear-gradient(120deg,#FFFFFF,#EEF7FF)\",fontWeight:900,color:\"#31556F\"}}>{bulle}</div>", "<div style={{...card,padding:10,background:\"linear-gradient(120deg,#FFFFFF,#F6F1E8)\",fontWeight:900,color:\"#4F5D4A\"}}>{bulle}</div>")
       .replace("<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:10}}>{[[\"month\",\"📅\"],[\"week\",\"📋\"],[\"hours\",\"⏱\"],[\"config\",\"⚙️\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],\"#7BAFD4\")}>{x[1]}</button>)}</div>", "<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:10}}>{[[\"month\",\"📅\",\"Mois\"],[\"week\",\"📋\",\"Blocs\"],[\"hours\",\"⏱\",\"Heures\"],[\"config\",\"⚙️\",\"Reglages\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={{...btn(view===x[0],\"#8B9A7A\"),minHeight:52,flexDirection:\"column\",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)}</div>")
+      .replace("const [swi,setSWI] = useState(0), [bOv,setBOv] = useState({}), [spOv,setSpOv] = useState({}), [nBlks,setNBlks] = useState({});", "const [swi,setSWI] = useState(0), [bOv,setBOv] = useState({}), [spOv,setSpOv] = useState({}), [nBlks,setNBlks] = useState({});\n  const [schedRule,setSchedRule] = useState(\"blocks\"), [restStart,setRestStart] = useState(0);")
       .replace("const [names,setNames] = useState(NDEF), [stat,setStat] = useState({P1:\"dispo\",P2:\"dispo\",P3:\"dispo\",P4:\"dispo\"}), [ah,setAh] = useState({P1:0,P2:0,P3:0,P4:0});", "const [names,setNames] = useState(NDEF), [stat,setStat] = useState({P1:\"dispo\",P2:\"dispo\",P3:\"dispo\",P4:\"dispo\"}), [ah,setAh] = useState({P1:0,P2:0,P3:0,P4:0});\n  const [auxContacts,setAuxContacts] = useState({P1:{},P2:{},P3:{},P4:{}});")
+      .replace("const { sched, blks } = useMemo(() => buildSched(y,m,swi,bOv,names,stat,inh),[y,m,swi,bOv,names,stat,inh]);", "const { sched, blks } = useMemo(() => buildSched(y,m,swi,bOv,names,stat,inh,schedRule,restStart),[y,m,swi,bOv,names,stat,inh,schedRule,restStart]);")
       .replace("const priv = adminSess;", "const priv = !!window.PlanningAVDAuth?.isConnected;")
       .replace("const withAdmin = (title,fn,force=false) => { if (adminSess && !force) fn(); else setAdminMod({title,fn}); };", "const withAdmin = (title,fn,force=false) => { if (window.PlanningAVDAuth?.isConnected) fn(); else alert('Connexion Google requise.'); };")
-      .replace("if(sc){ setSWI(sc.swi??0); setAdminCode(sc.adminCode||ADMIN_DEF); }", "if(sc){ setSWI(sc.swi??0); setAdminCode(sc.adminCode||ADMIN_DEF); setAuxContacts(sc.auxContacts||Object.fromEntries(TIDS.map(p=>[p,{email:sc.auxEmails?.[p]||\"\",tel:\"\",address:\"\"}]))); }")
-      .replace("if(loaded) sS(SK.cfg,{swi,adminCode}); },[swi,adminCode,loaded]);", "if(loaded) sS(SK.cfg,{swi,adminCode,auxContacts}); },[swi,adminCode,auxContacts,loaded]);")
+      .replace("if(sc){ setSWI(sc.swi??0); setAdminCode(sc.adminCode||ADMIN_DEF); }", "if(sc){ setSWI(sc.swi??0); setAdminCode(sc.adminCode||ADMIN_DEF); setSchedRule(sc.schedRule||\"blocks\"); setRestStart(sc.restStart??0); setAuxContacts(sc.auxContacts||Object.fromEntries(TIDS.map(p=>[p,{email:sc.auxEmails?.[p]||\"\",tel:\"\",address:\"\"}]))); }")
+      .replace("if(loaded) sS(SK.cfg,{swi,adminCode}); },[swi,adminCode,loaded]);", "if(loaded) sS(SK.cfg,{swi,adminCode,auxContacts,schedRule,restStart}); },[swi,adminCode,auxContacts,schedRule,restStart,loaded]);")
       .replace("const txt = mode===\"week\" ? mkWeek(blks,y,m,+ws||1,names,priv) : mkPerson(blks,y,m,pid,acts,lieux,names,det,priv);", "const txt = mode===\"week\" ? mkWeek(blks,y,m,+ws||1,names,priv) : mkPerson(blks,y,m,pid,acts,lieux,names,det,priv);\n    const recipients = mode===\"person\" ? (auxContacts[pid]?.email||\"\") : TIDS.map(p=>auxContacts[p]?.email).filter(Boolean).join(\",\");")
       .replace("href={`mailto:?subject=Planning AVD&body=${encodeURIComponent(txt)}`}", "href={`mailto:${encodeURIComponent(recipients)}?subject=Planning AVD&body=${encodeURIComponent(txt)}`}")
       .replace(/function ConfigView\(\) \{[\s\S]*?\n  function DayModal/, googleConfigView);
