@@ -28,20 +28,78 @@
     return !!(c.apiKey && c.authDomain && c.projectId && c.appId);
   };
 
-  const initFirebase = async () => {
-    if (!firebaseReady()) return null;
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js");
-    if (!firebase.apps.length) firebase.initializeApp(cfg.firebaseConfig);
-    const fa = firebase.auth();
-    fa.useDeviceLanguage();
-    return fa;
-  };
-
   const updateAuth = user => {
     auth.email = user?.email || "";
     auth.name = user?.displayName || "";
     auth.isConnected = !!auth.email && allowed(auth.email);
+  };
+
+  const firstAuthState = fa => new Promise(resolve => {
+    let done = false;
+    const timeout = setTimeout(() => {
+      if (!done) {
+        done = true;
+        resolve(fa.currentUser || null);
+      }
+    }, 1800);
+    const unsub = fa.onAuthStateChanged(user => {
+      if (done) return;
+      done = true;
+      clearTimeout(timeout);
+      unsub();
+      resolve(user || null);
+    });
+  });
+
+  const initFirebase = async () => {
+    if (!firebaseReady()) return { authService: null, db: null };
+    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
+    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js");
+    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js");
+    if (!firebase.apps.length) firebase.initializeApp(cfg.firebaseConfig);
+    const authService = firebase.auth();
+    authService.useDeviceLanguage();
+    const user = await firstAuthState(authService);
+    updateAuth(user);
+    const db = firebase.firestore();
+    return { authService, db };
+  };
+
+  const storageKey = key => String(key || "").replace(/[/.#[\]]/g, "_");
+
+  const mountCloudStorage = db => {
+    const localGet = key => {
+      const raw = localStorage.getItem(key);
+      return raw == null ? null : { value: raw };
+    };
+    const localSet = (key, value) => localStorage.setItem(key, value);
+
+    window.storage = {
+      async get(key) {
+        if (!auth.isConnected || !db) return localGet(key);
+        try {
+          const snap = await db.collection("planning-avd").doc(cfg.cloudDocId || "shared").collection("storage").doc(storageKey(key)).get();
+          return snap.exists ? { value: snap.data().value } : localGet(key);
+        } catch (error) {
+          console.warn("Lecture cloud impossible, repli local.", error);
+          return localGet(key);
+        }
+      },
+      async set(key, value) {
+        localSet(key, value);
+        if (!auth.isConnected || !db) return;
+        try {
+          await db.collection("planning-avd").doc(cfg.cloudDocId || "shared").collection("storage").doc(storageKey(key)).set({
+            key,
+            value,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: auth.email,
+          }, { merge: true });
+        } catch (error) {
+          console.warn("Sauvegarde cloud impossible, conservee en local.", error);
+        }
+      },
+    };
   };
 
   const signInGoogle = async fa => {
@@ -61,7 +119,7 @@
     bar.style.cssText = "position:fixed;right:12px;bottom:12px;z-index:1000;font:700 13px Nunito,system-ui,sans-serif";
     const render = () => {
       bar.innerHTML = auth.isConnected
-        ? `<button style="border:0;border-radius:999px;padding:10px 13px;background:#68C49A;color:white;font-weight:900;box-shadow:0 8px 24px rgba(40,90,120,.22)">Google : ${auth.email} · sortir</button>`
+        ? `<button style="border:0;border-radius:999px;padding:10px 13px;background:#68C49A;color:white;font-weight:900;box-shadow:0 8px 24px rgba(40,90,120,.22)">Cloud actif : ${auth.email} · sortir</button>`
         : '<button style="border:0;border-radius:999px;padding:10px 13px;background:#294C69;color:white;font-weight:900;box-shadow:0 8px 24px rgba(40,90,120,.22)">Connexion Google</button>';
     };
     bar.onclick = async () => {
@@ -87,18 +145,19 @@
   const googleConfigView = `function ConfigView() {
     const connected = !!window.PlanningAVDAuth?.isConnected;
     return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{TIDS.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"✅":s==="absent"?"🚫":"🔄"}</button>)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Rotation + noms prives</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Connexion Google requise pour afficher ou modifier les noms.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[i].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected ? TIDS.map(p=><input key={p} value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : TIDS.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>🔒 {pName(names,p,false)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Connexion</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Compte Google connecte : "+window.PlanningAVDAuth.email : "Utilisez le bouton Connexion Google en bas de l'ecran."}</p></div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{TIDS.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"OK":s==="absent"?"Absent":"Rempl."}</button>)}</div>)}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Rotation + noms prives</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Connexion Google requise pour afficher ou modifier les noms. Une fois connecte, la sauvegarde cloud est automatique.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[i].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected ? TIDS.map(p=><input key={p} value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : TIDS.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>Prive - {pName(names,p,false)}</div>)}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Cloud</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Sauvegarde cloud active pour : "+window.PlanningAVDAuth.email : "Connectez-vous avec Google pour activer la sauvegarde cloud."}</p></div>
     </div>;
   }
 
   function DayModal`;
 
   try {
-    const fa = await initFirebase();
-    const renderAuth = mountAuthBar(fa);
-    if (fa) fa.onAuthStateChanged(user => { updateAuth(user); renderAuth(); });
+    const { authService, db } = await initFirebase();
+    mountCloudStorage(db);
+    const renderAuth = mountAuthBar(authService);
+    if (authService) authService.onAuthStateChanged(user => { updateAuth(user); renderAuth(); });
 
     if (!window.React || !window.ReactDOM || !window.Babel) {
       throw new Error("React ou Babel n'est pas charge.");
