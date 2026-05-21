@@ -1,7 +1,7 @@
 (async () => {
   const root = document.getElementById("root");
   const cfg = window.PLANNING_AVD_AUTH || {};
-  const auth = { email: "", name: "", isConnected: false };
+  const auth = { uid: "", email: "", name: "", isConnected: false };
   window.PlanningAVDAuth = auth;
 
   const fail = error => {
@@ -29,6 +29,7 @@
   };
 
   const updateAuth = user => {
+    auth.uid = user?.uid || "";
     auth.email = user?.email || "";
     auth.name = user?.displayName || "";
     auth.isConnected = !!auth.email && allowed(auth.email);
@@ -76,9 +77,9 @@
 
     window.storage = {
       async get(key) {
-        if (!auth.isConnected || !db) return localGet(key);
+        if (!auth.isConnected || !auth.uid || !db) return localGet(key);
         try {
-          const snap = await db.collection("planning-avd").doc(cfg.cloudDocId || "shared").collection("storage").doc(storageKey(key)).get();
+          const snap = await db.collection("planning-avd-users").doc(auth.uid).collection("storage").doc(storageKey(key)).get();
           return snap.exists ? { value: snap.data().value } : localGet(key);
         } catch (error) {
           console.warn("Lecture cloud impossible, repli local.", error);
@@ -87,9 +88,9 @@
       },
       async set(key, value) {
         localSet(key, value);
-        if (!auth.isConnected || !db) return;
+        if (!auth.isConnected || !auth.uid || !db) return;
         try {
-          await db.collection("planning-avd").doc(cfg.cloudDocId || "shared").collection("storage").doc(storageKey(key)).set({
+          await db.collection("planning-avd-users").doc(auth.uid).collection("storage").doc(storageKey(key)).set({
             key,
             value,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -146,8 +147,8 @@
     const connected = !!window.PlanningAVDAuth?.isConnected;
     return <div className="su" style={{display:"grid",gap:10}}>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{TIDS.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"OK":s==="absent"?"Absent":"Rempl."}</button>)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Rotation + noms prives</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Connexion Google requise pour afficher ou modifier les noms. Une fois connecte, la sauvegarde cloud est automatique.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[i].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected ? TIDS.map(p=><input key={p} value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : TIDS.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>Prive - {pName(names,p,false)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Cloud</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Sauvegarde cloud active pour : "+window.PlanningAVDAuth.email : "Connectez-vous avec Google pour activer la sauvegarde cloud."}</p></div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Rotation + noms prives</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Connexion Google requise pour afficher ou modifier les noms. Une fois connecte, la sauvegarde cloud personnelle est automatique.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{TIDS.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[i].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected ? TIDS.map(p=><input key={p} value={names[p]||""} onChange={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : TIDS.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>Prive - {pName(names,p,false)}</div>)}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Cloud personnel</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Sauvegarde personnelle active pour : "+window.PlanningAVDAuth.email : "Connectez-vous avec Google pour activer votre sauvegarde personnelle."}</p></div>
     </div>;
   }
 
