@@ -124,12 +124,6 @@
 
     code = replaceOnce(
       code,
-      'function WeekView() {',
-      weekViewSource.replace('function BlkModal', 'function OldBlockListView')
-    );
-
-    code = replaceOnce(
-      code,
       'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }\n    if (inheritWeWorker',
       'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }\n    if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = am.workerId; prevWe = b.workerId; return; } }\n    if (inheritWeWorker'
     );
