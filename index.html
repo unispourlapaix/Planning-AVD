@@ -51,17 +51,17 @@
     const days = Array.from({length:7},(_,i)=>ws+i);
     const moveWeek = n => setWs(v => Math.max(1, Math.min(Math.max(1, dim(y,m)-6), v + n*7)));
     const dayBox = d => {
-      if (d < 1 || d > dim(y,m)) return <div key={d} style={{minHeight:142,borderRadius:14,background:"rgba(255,255,255,.35)",border:"1px dashed #E5DED2"}} />;
+      if (d < 1 || d > dim(y,m)) return <div key={d} style={{minHeight:172,borderRadius:14,background:"rgba(255,255,255,.35)",border:"1px dashed #E5DED2"}} />;
       const sm=sched[d]?.morning, se=sched[d]?.evening, am=sm?.worker, pmw=se?.worker, a=acts[d]||{}, isToday=today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
-      return <div key={d} style={{...card,minHeight:142,padding:7,display:"grid",gridTemplateRows:"auto 1fr auto",gap:6,background:isToday?"#FFF9EA":"#FFFDF8"}}>
+      return <div key={d} style={{...card,minHeight:172,padding:8,display:"grid",gridTemplateRows:"auto 1fr auto",gap:7,background:isToday?"#FFF9EA":"#FFFDF8"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
           <div style={{minWidth:0}}><div style={{fontSize:10,fontWeight:900,color:"#746D61"}}>{DS[dowD(y,m,d)]}</div><b style={{fontSize:16,color:"#3F4A3A"}}>{d}</b></div>
           <button title="Detail du jour" onClick={()=>setDayMod(d)} style={{...btn(true,"#8B9A7A"),width:28,height:28,padding:0,borderRadius:10,fontSize:18,lineHeight:1}}>+</button>
         </div>
         <div style={{display:"grid",gap:5,alignContent:"start"}}>
-          {[["M",am,"#C99A52"],["S",pmw,"#6F7FA8"]].map(x=><div key={x[0]} style={{display:"grid",gridTemplateColumns:"18px 1fr",gap:4,alignItems:"center",padding:"5px 4px",border:"1px solid #E5DED2",borderRadius:10,background:"#FFFFFF"}}>
-            <b style={{color:"#746D61",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:6,minWidth:14,textAlign:"center",fontSize:10}}>{x[0]}</b>
-            <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11,fontWeight:900,color:PAL[pidIx(x[1])]?.text||"#4F5D4A"}}>{x[1]?pName(names,x[1],priv):"A definir"}</span>
+          {[["Matin",am,"#C99A52"],["Soir",pmw,"#6F7FA8"]].map(x=><div key={x[0]} style={{display:"grid",gap:3,padding:"6px 6px",border:"1px solid #E5DED2",borderRadius:10,background:"#FFFFFF"}}>
+            <b style={{color:x[2],fontSize:10,textTransform:"uppercase",letterSpacing:0,fontWeight:900,lineHeight:1}}>{x[0]}</b>
+            <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12,fontWeight:900,color:PAL[pidIx(x[1])]?.text||"#4F5D4A"}}>{x[1]?pName(names,x[1],priv):"A definir"}</span>
           </div>)}
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4,minHeight:18}}>
@@ -101,7 +101,7 @@
     code = replaceOnce(
       code,
       'source = source\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")',
-      'source = source\n      .replace("const [y,setY] = useState(now.getFullYear()), [m,setM] = useState(now.getMonth()), [view,setView] = useState(\\"month\\");", "const [y,setY] = useState(now.getFullYear()), [m,setM] = useState(now.getMonth()), [view,setView] = useState(\\"week\\");")\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(\'{we?"Ven→Dim":"Lun→Jeu"}\', \'{we?"Sam→Dim":"Lun→Ven"}\')\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
+      'source = source\n      .replace("const [y,setY] = useState(now.getFullYear()), [m,setM] = useState(now.getMonth()), [view,setView] = useState(\\"month\\");", "const [y,setY] = useState(now.getFullYear()), [m,setM] = useState(now.getMonth()), [view,setView] = useState(\\"week\\");")\n      .replace("return <div style={{minHeight:\\"100vh\\",maxWidth:430,margin:\\"0 auto\\",background:\\"linear-gradient(155deg, #EBF5FF 0%, #FBFCFF 55%, #F0ECFF 100%)\\",fontFamily:\\"Nunito, system-ui, sans-serif\\",color:\\"#294C69\\"}}>", "return <div style={{minHeight:\\"100vh\\",maxWidth:1180,margin:\\"0 auto\\",background:\\"linear-gradient(155deg, #F7F4EE 0%, #FFFEFA 48%, #F1EDE4 100%)\\",fontFamily:\\"Nunito, system-ui, sans-serif\\",color:\\"#3F4A3A\\"}}>")\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(\'{we?"Ven→Dim":"Lun→Jeu"}\', \'{we?"Sam→Dim":"Lun→Ven"}\')\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
     );
 
     code = replaceOnce(
