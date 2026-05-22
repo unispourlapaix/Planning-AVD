@@ -39,6 +39,12 @@
       'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,d) && allowedShift(am.workerId,s.id,auxRules)) b.workerId = am.workerId; }\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev)'
     );
 
+    code = replaceOnce(
+      code,
+      '<b>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):"-"}</span>',
+      '<b style={{color:"#746D61",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:6,minWidth:12,textAlign:"center"}}>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):"-"}</span>'
+    );
+
     (0, eval)(code + "\n//# sourceURL=browser-loader.patched.js");
   } catch (error) {
     fail(error);
