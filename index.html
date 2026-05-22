@@ -77,7 +77,7 @@
     </div>;
   }
 
-  function BlkModal`;
+  function ConfigView`;
     const weekViewPatch = 'const googleWeekView = `' + weekViewSource + '`;';
 
     code = replaceOnce(
@@ -89,7 +89,7 @@
     code = replaceOnce(
       code,
       '.replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);',
-      '.replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function BlkModal/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
+      '.replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
     );
 
     code = replaceOnce(
