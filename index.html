@@ -44,6 +44,19 @@
     const response = await fetch("./browser-loader.js", { cache: "no-cache" });
     if (!response.ok) throw new Error(`browser-loader.js introuvable (${response.status})`);
     let code = await response.text();
+    const weekViewPatch = 'const googleWeekView = `function WeekView() {\\n    const first = Math.max(1, Math.min(dim(y,m), new Date().getFullYear()===y && new Date().getMonth()===m ? new Date().getDate() : 1));\\n    const [ws,setWs] = useState(Math.max(1, first - dowD(y,m,first)));\\n    const days = Array.from({length:7},(_,i)=>ws+i).filter(d=>d>=1 && d<=dim(y,m));\\n    const moveWeek = n => setWs(v => Math.max(1, Math.min(dim(y,m), v + n*7)));\\n    return <div className="su" style={{display:"grid",gap:10}}>\\n      <div style={{...card,padding:10,display:"grid",gridTemplateColumns:"44px 1fr 44px",gap:8,alignItems:"center"}}><button onClick={()=>moveWeek(-1)} style={btn(false)}>‹</button><b style={{textAlign:"center",color:"#4F5D4A"}}>Semaine du {ws} au {Math.min(dim(y,m),ws+6)} {MFR[m]}</b><button onClick={()=>moveWeek(1)} style={btn(false)}>›</button></div>\\n      <button onClick={()=>setEmailMod(true)} style={btn(true,"#8B9A7A")}>📧 Envoyer cette semaine</button>\\n      {days.map(d=>{ const sm=sched[d]?.morning, se=sched[d]?.evening, am=sm?.worker, pmw=se?.worker, a=acts[d]||{}; return <div key={d} onClick={()=>setDayMod(d)} style={{...card,padding:10,display:"grid",gap:8,cursor:"pointer"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><b style={{color:"#3F4A3A"}}>{DL[dowD(y,m,d)]} {d}</b><span style={{fontSize:12,color:"#746D61"}}>{lieux[d]||"Lieu a preciser"}</span></div>{[["Matin",am,"#C99A52"],["Soir",pmw,"#6F7FA8"]].map(x=><div key={x[0]} style={{display:"grid",gridTemplateColumns:"74px 32px 1fr",gap:8,alignItems:"center",padding:8,border:"1px solid #E5DED2",borderRadius:12,background:"#FFFDF8"}}><span style={{fontSize:12,fontWeight:900,color:x[2]}}>{x[0]}</span><Av t={x[1]} st={stat[x[1]]} names={names} priv={priv}/><b style={{color:PAL[pidIx(x[1])]?.text||"#4F5D4A"}}>{x[1]?pName(names,x[1],priv):"A definir"}</b></div>)}{a?.types?.length>0&&<div style={{fontSize:12,color:"#667F94"}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join(" ")} {a.note||""}</div>}</div>;})}\\n    </div>;\\n  }\\n\\n  function BlkModal`;';
+
+    code = replaceOnce(
+      code,
+      '  function DayModal`;\n\n  try {',
+      '  function DayModal`;\n\n  ' + weekViewPatch + '\n\n  try {'
+    );
+
+    code = replaceOnce(
+      code,
+      '.replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);',
+      '.replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function BlkModal/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
+    );
 
     code = replaceOnce(
       code,
@@ -54,7 +67,7 @@
     code = replaceOnce(
       code,
       'source = source\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")',
-      'source = source\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(\'{we?"Ven→Dim":"Lun→Jeu"}\', \'{we?"Sam→Dim":"Lun→Ven"}\')\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
+      'source = source\n      .replace("const [y,setY] = useState(now.getFullYear()), [m,setM] = useState(now.getMonth()), [view,setView] = useState(\\"month\\");", "const [y,setY] = useState(now.getFullYear()), [m,setM] = useState(now.getMonth()), [view,setView] = useState(\\"week\\");")\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(\'{we?"Ven→Dim":"Lun→Jeu"}\', \'{we?"Sam→Dim":"Lun→Ven"}\')\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
     );
 
     code = replaceOnce(
