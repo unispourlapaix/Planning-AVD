@@ -60,7 +60,7 @@
         </div>
         <div style={{display:"grid",gap:5,alignContent:"start"}}>
           {[["Matin",am,"#C99A52"],["Soir",pmw,"#6F7FA8"]].map(x=><div key={x[0]} style={{display:"grid",gap:3,padding:"6px 6px",border:"1px solid #E5DED2",borderRadius:10,background:"#FFFFFF"}}>
-            <b style={{color:x[2],fontSize:10,textTransform:"uppercase",letterSpacing:0,fontWeight:900,lineHeight:1}}>{x[0]}</b>
+            <b style={{color:x[2],fontSize:11,letterSpacing:0,fontWeight:900,lineHeight:1}}>{x[0]}</b>
             <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12,fontWeight:900,color:PAL[pidIx(x[1])]?.text||"#4F5D4A"}}>{x[1]?pName(names,x[1],priv):"A definir"}</span>
           </div>)}
         </div>
