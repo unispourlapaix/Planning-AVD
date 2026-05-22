@@ -39,6 +39,24 @@
 
     code = replaceOnce(
       code,
+      '[[\\"month\\",\\"📅\\",\\"Mois\\"],[\\"week\\",\\"📋\\",\\"Blocs\\"],[\\"hours\\",\\"⏱\\",\\"Heures\\"],[\\"config\\",\\"⚙️\\",\\"Reglages\\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:52,flexDirection:\\"column\\",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)',
+      '[[\\"week\\",\\"📋\\",\\"Semaine\\",\\"view\\"],[\\"month\\",\\"📅\\",\\"Mois\\",\\"view\\"],[\\"me\\",\\"👤\\",\\"Pour moi\\",\\"email\\"],[\\"year\\",\\"🗓\\",\\"Annee\\",\\"year\\"],[\\"config\\",\\"⚙️\\",\\"Reglages\\",\\"view\\"]].map(x=><button key={x[0]} onClick={()=>x[3]===\\"year\\"?setYearMod(true):x[3]===\\"email\\"?setEmailMod(true):setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:52,flexDirection:\\"column\\",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)'
+    );
+
+    code = replaceOnce(
+      code,
+      'gridTemplateColumns:\\"repeat(4,1fr)\\",gap:7,marginTop:10',
+      'gridTemplateColumns:\\"repeat(5,1fr)\\",gap:6,marginTop:10'
+    );
+
+    code = replaceOnce(
+      code,
+      '<button title=\\"Vue annuelle\\" onClick={()=>setYearMod(true)} style={btn(false)}>📅 Annee</button><button title=\\"Rapport\\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄 Rapport</button>',
+      '<button title=\\"Rapport\\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄 Rapport</button>'
+    );
+
+    code = replaceOnce(
+      code,
       'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }\n    if (inheritWeWorker',
       'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }\n    if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = am.workerId; prevWe = b.workerId; return; } }\n    if (inheritWeWorker'
     );
