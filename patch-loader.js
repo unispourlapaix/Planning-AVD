@@ -28,7 +28,7 @@
     code = replaceOnce(
       code,
       'source = source\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")',
-      'source = source\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
+      'source = source\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(\'{we?"Ven→Dim":"Lun→Jeu"}\', \'{we?"Sam→Dim":"Lun→Ven"}\')\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
     );
 
     code = replaceOnce(
