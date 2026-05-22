@@ -39,14 +39,8 @@
 
     code = replaceOnce(
       code,
-      '[[\\"month\\",\\"📅\\",\\"Mois\\"],[\\"week\\",\\"📋\\",\\"Blocs\\"],[\\"hours\\",\\"⏱\\",\\"Heures\\"],[\\"config\\",\\"⚙️\\",\\"Reglages\\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:52,flexDirection:\\"column\\",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)',
-      '[[\\"week\\",\\"📋\\",\\"Semaine\\",\\"view\\"],[\\"month\\",\\"📅\\",\\"Mois\\",\\"view\\"],[\\"me\\",\\"👤\\",\\"Pour moi\\",\\"email\\"],[\\"year\\",\\"🗓\\",\\"Annee\\",\\"year\\"],[\\"config\\",\\"⚙️\\",\\"Reglages\\",\\"view\\"]].map(x=><button key={x[0]} onClick={()=>x[3]===\\"year\\"?setYearMod(true):x[3]===\\"email\\"?setEmailMod(true):setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:52,flexDirection:\\"column\\",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)'
-    );
-
-    code = replaceOnce(
-      code,
-      'gridTemplateColumns:\\"repeat(4,1fr)\\",gap:7,marginTop:10',
-      'gridTemplateColumns:\\"repeat(5,1fr)\\",gap:6,marginTop:10'
+      '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(4,1fr)\\",gap:7,marginTop:10}}>{[[\\"month\\",\\"📅\\"],[\\"week\\",\\"📋\\"],[\\"hours\\",\\"⏱\\"],[\\"config\\",\\"⚙️\\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],\\"#7BAFD4\\")}>{x[1]}</button>)}</div>',
+      '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(5,1fr)\\",gap:6,marginTop:10}}>{[[\\"week\\",\\"📋\\",\\"Semaine\\",\\"view\\"],[\\"month\\",\\"📅\\",\\"Mois\\",\\"view\\"],[\\"me\\",\\"👤\\",\\"Pour moi\\",\\"email\\"],[\\"year\\",\\"🗓\\",\\"Annee\\",\\"year\\"],[\\"config\\",\\"⚙️\\",\\"Reglages\\",\\"view\\"]].map(x=><button key={x[0]} onClick={()=>x[3]===\\"year\\"?setYearMod(true):x[3]===\\"email\\"?setEmailMod(true):setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:52,flexDirection:\\"column\\",lineHeight:1.05,padding:\\"8px 4px\\"}}><span style={{fontSize:16}}>{x[1]}</span><span style={{fontSize:10}}>{x[2]}</span></button>)}</div>'
     );
 
     code = replaceOnce(
