@@ -45,6 +45,12 @@
       '<b style={{color:"#746D61",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:6,minWidth:12,textAlign:"center"}}>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):"-"}</span>'
     );
 
+    code = replaceOnce(
+      code,
+      '<b>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):\\"-\\"}</span>',
+      '<b style={{color:\\"#746D61\\",background:\\"#FFFFFF\\",border:\\"1px solid #E5DED2\\",borderRadius:6,minWidth:12,textAlign:\\"center\\"}}>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):\\"-\\"}</span>'
+    );
+
     (0, eval)(code + "\n//# sourceURL=browser-loader.patched.js");
   } catch (error) {
     fail(error);
