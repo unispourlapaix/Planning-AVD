@@ -21,6 +21,24 @@
 
     code = replaceOnce(
       code,
+      'const ruleDays = r => r?.days === "weekend" ? [4,5,6] : r?.days === "weekdays" ? [0,1,2,3] : r?.days === "custom" ? (r.custom||[]) : [0,1,2,3,4,5,6];',
+      'const ruleDays = r => r?.days === "weekend" ? [5,6] : r?.days === "weekdays" ? [0,1,2,3,4] : r?.days === "custom" ? (r.custom||[]) : [0,1,2,3,4,5,6];'
+    );
+
+    code = replaceOnce(
+      code,
+      'source = source\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")',
+      'source = source\n      .replace("const wd = dowD(y,m,d), type = wd <= 3 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 3 : 6;", "const wd = dowD(y,m,d), type = wd <= 4 ? \\"wd\\" : \\"we\\", endDow = type === \\"wd\\" ? 4 : 6;")\n      .replace(/^import[^\\n]*(?:\\r?\\n|$)/gm, "")'
+    );
+
+    code = replaceOnce(
+      code,
+      't === \\"wd\\" ? \\"Lun-Jeu\\" : \\"Ven-Dim\\"',
+      't === \\"wd\\" ? \\"Lun-Ven\\" : \\"Sam-Dim\\"'
+    );
+
+    code = replaceOnce(
+      code,
       'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }\n    if (inheritWeWorker',
       'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }\n    if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = am.workerId; prevWe = b.workerId; return; } }\n    if (inheritWeWorker'
     );
