@@ -11,6 +11,10 @@
   };
 
   try {
+    const neutralShiftStyle = document.createElement("style");
+    neutralShiftStyle.textContent = '#root button span b{color:#746D61!important;background:#FFFFFF!important;border:1px solid #E5DED2!important;border-radius:6px!important;min-width:12px!important;text-align:center!important}';
+    document.head.appendChild(neutralShiftStyle);
+
     const response = await fetch("./browser-loader.js", { cache: "no-cache" });
     if (!response.ok) throw new Error(`browser-loader.js introuvable (${response.status})`);
     let code = await response.text();
