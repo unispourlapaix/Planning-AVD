@@ -164,7 +164,7 @@
     };
     return <div className="su" style={{display:"grid",gap:10}}>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{activeIds.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"OK":s==="absent"?"Absent":"Rempl."}</button>)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Roulement</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Choisissez la logique du planning mensuel.</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}><button onClick={()=>setSchedRule("blocks")} style={btn(schedRule==="blocks","#8B9A7A")}>Blocs standard</button><button onClick={()=>setSchedRule("twoDayRest")} style={btn(schedRule==="twoDayRest","#8B9A7A")}>2 jours + repos</button></div>{schedRule==="twoDayRest"&&<><p style={{fontSize:12,color:"#667F94",margin:"10px 0 6px"}}>Repos semaine 1</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setRestStart(i)} style={btn(restStart===i,PAL[pidIx(p)].solid)}>{pName(names,p,priv)}</button>)}</div></>}</div>
+      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Roulement</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Choisissez la logique du planning mensuel.</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:8}}><button onClick={()=>setSchedRule("blocks")} style={btn(schedRule==="blocks","#8B9A7A")}>Blocs</button><button onClick={()=>setSchedRule("daily")} style={btn(schedRule==="daily","#8B9A7A")}>Par jour</button><button onClick={()=>setSchedRule("twoDayRest")} style={btn(schedRule==="twoDayRest","#8B9A7A")}>2j + repos</button></div>{schedRule==="twoDayRest"&&<><p style={{fontSize:12,color:"#667F94",margin:"10px 0 6px"}}>Repos semaine 1</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setRestStart(i)} style={btn(restStart===i,PAL[pidIx(p)].solid)}>{pName(names,p,priv)}</button>)}</div></>}</div>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Equipe</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>{activeIds.length} auxiliaire(s) actif(s). Maximum 100.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[pidIx(p)].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected&&<button disabled={!canAddAux} onClick={addAux} style={{...btn(true,"#8B9A7A"),width:"100%",marginBottom:8}}>+ Ajouter un auxiliaire</button>}{connected ? activeIds.map(p=><input key={p} defaultValue={names[p]||""} onBlur={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : activeIds.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>{pName(names,p,false)}</div>)}</div>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Coordonnees</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Completez les informations utiles pour l'envoi et le suivi.</p>{connected ? activeIds.map((p,i)=>{ const c=auxContacts[p]||{}; return <div key={p} style={{marginTop:10,padding:10,border:"1px solid #E5DED2",borderRadius:14,background:"#FFFDF8"}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{...btn(true,PAL[pidIx(p)].solid),width:32,height:32,padding:0}}>+</span><b style={{color:PAL[pidIx(p)].text,flex:1}}>{pName(names,p,priv)}</b>{i>=4&&<button onClick={()=>removeAux(p)} style={btn(false)}>Retirer</button>}</div><input defaultValue={names[p]||""} onBlur={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:6,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><input type="email" defaultValue={c.email||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),email:e.target.value.trim()}}))} placeholder="Email" style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><input type="tel" defaultValue={c.tel||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),tel:e.target.value}}))} placeholder="Telephone" style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><textarea defaultValue={c.address||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),address:e.target.value}}))} placeholder="Adresse complete" style={{width:"100%",boxSizing:"border-box",minHeight:58,marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /></div>; }) : <div style={{...btn(false),width:"100%",textAlign:"left"}}>Connexion Google requise</div>}</div>
       <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Sauvegarde</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Synchronisation active : "+window.PlanningAVDAuth.email : "Connexion Google pour synchroniser."}</p></div>
@@ -249,8 +249,34 @@ const buildTwoDayRestSched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts=
   return { sched, blks };
 };
 
+const buildDailySched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts={},activeIds=TIDS.slice(0,4)) => {
+  const n = dim(y,m), team = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), blks = [];
+  const usable = p => statuts[p] !== "absent";
+  let rot = startIdx || 0, prev = null;
+  for (let d=1; d<=n; d++) {
+    const b = { type:"day", start:d, end:d, idx:d-1, workerId:null, cross:false };
+    if (blkOverrides[b.idx]) b.workerId = blkOverrides[b.idx];
+    if (!b.workerId) {
+      for (let k=0;k<team.length;k++) {
+        const p = team[(rot+k)%team.length];
+        if (usable(p) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
+      }
+    }
+    if (!b.workerId) {
+      for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p)) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
+    }
+    b.workerId = b.workerId || team[rot%team.length];
+    prev = b.workerId;
+    blks.push(b);
+  }
+  const sched = {};
+  blks.forEach(b => { sched[b.start] = {worker:b.workerId,bi:b.idx,bt:b.type,bs:b.start,be:b.end,cross:false}; });
+  return { sched, blks };
+};
+
 const buildSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inheritWeWorker=null,rule="blocks",restStart=0,activeIds=TIDS.slice(0,4)) => {
   if (rule === "twoDayRest") return buildTwoDayRestSched(y,m,startWeIdx,blkOverrides,names,statuts,restStart,activeIds);
+  if (rule === "daily") return buildDailySched(y,m,startWeIdx,blkOverrides,names,statuts,activeIds);
   return buildBlockSched(y,m,startWeIdx,blkOverrides,names,statuts,inheritWeWorker,activeIds);
 };
 
@@ -261,7 +287,7 @@ const buildSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inherit
       .replace("const TIDS = [\"P1\",\"P2\",\"P3\",\"P4\"];\nconst NDEF = { P1:\"Auxiliaire 1\", P2:\"Auxiliaire 2\", P3:\"Auxiliaire 3\", P4:\"Auxiliaire 4\" };", "const TIDS = Array.from({length:100},(_,i)=>`P${i+1}`);\nconst NDEF = Object.fromEntries(TIDS.map((p,i)=>[p,`Auxiliaire ${i+1}`]));")
       .replace("const pidIx = p => Math.max(0,TIDS.indexOf(p));", "const pidIx = p => { const i = Math.max(0,TIDS.indexOf(p)); return PAL.length ? i % PAL.length : 0; };")
       .replace(/\/\/ ══ MODULE SCH-001[\s\S]*?\/\/ ══ MODULE STO-001/, schedulingSource)
-      .replace("const BBtxt = t => t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";", "const BBtxt = t => t === \"two\" ? \"2 jours\" : t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";")
+      .replace("const BBtxt = t => t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";", "const BBtxt = t => t === \"day\" ? \"Jour\" : t === \"two\" ? \"2 jours\" : t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";")
       .replace("export default function App()", "function App()")
       .replace("const card = {background:\"rgba(255,255,255,.9)\",border:\"1px solid rgba(180,210,235,.72)\",borderRadius:18,boxShadow:\"0 2px 14px rgba(90,150,210,.06)\"};", "const card = {background:\"rgba(255,255,255,.94)\",border:\"1px solid rgba(221,214,202,.9)\",borderRadius:16,boxShadow:\"0 10px 28px rgba(70,58,40,.06)\"};")
       .replace("const btn = (on, c=\"#7BAFD4\") => ({padding:\"9px 11px\",borderRadius:14,background:on?c:\"rgba(255,255,255,.75)\",color:on?\"white\":\"#35546F\",border:`1px solid ${on?c:\"#D6E7F5\"}`,fontWeight:900});", "const btn = (on, c=\"#8B9A7A\") => ({padding:\"10px 12px\",borderRadius:12,background:on?c:\"#FFFDF8\",color:on?\"white\":\"#4F5D4A\",border:`1px solid ${on?c:\"#E5DED2\"}`,fontWeight:900,boxShadow:on?\"0 8px 18px rgba(80,90,65,.16)\":\"0 3px 10px rgba(80,70,50,.04)\",display:\"inline-flex\",alignItems:\"center\",justifyContent:\"center\",gap:6});")
