@@ -190,26 +190,43 @@
     let source = await response.text();
     source = "const { useState, useMemo, useEffect, useCallback } = React;\n" + source.replace(/^import[^\n]*(?:\r?\n|$)/gm, "");
     const schedulingSource = `// == MODULE SCH-001 == Scheduler multi-regles
+const SHIFTS = [{id:"morning",label:"Matin"},{id:"evening",label:"Soir"}];
+const shiftLabel = s => s === "morning" ? "Matin" : s === "evening" ? "Soir" : "";
 const ruleDays = r => r?.days === "weekend" ? [4,5,6] : r?.days === "weekdays" ? [0,1,2,3] : r?.days === "custom" ? (r.custom||[]) : [0,1,2,3,4,5,6];
 const allowedOn = (p,y,m,d,auxRules={}) => ruleDays(auxRules[p]).includes(dowD(y,m,d));
-const allowedBlock = (p,b,y,m,auxRules={}) => Array.from({length:b.end-b.start+1},(_,i)=>b.start+i).every(d=>allowedOn(p,y,m,d,auxRules));
+const allowedShift = (p,shift,auxRules={}) => !auxRules[p]?.shift || auxRules[p].shift === "all" || auxRules[p].shift === shift;
+const allowedBlock = (p,b,y,m,auxRules={}) => allowedShift(p,b.shift,auxRules) && Array.from({length:b.end-b.start+1},(_,i)=>b.start+i).every(d=>allowedOn(p,y,m,d,auxRules));
+const splitBlocks = blks => blks.flatMap(b => SHIFTS.map(s => ({...b, baseIdx:b.idx, idx:\`\${b.idx}-\${s.id}\`, shift:s.id, shiftName:s.label, workerId:null, cross:false})));
+const fillSched = blks => {
+  const sched = {};
+  blks.forEach(b => {
+    for(let d=b.start; d<=b.end; d++) {
+      const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};
+      sched[d] = {...(sched[d]||{}), [b.shift]: item};
+      if (!sched[d].worker || b.shift === "morning") sched[d].worker = b.workerId;
+    }
+  });
+  return sched;
+};
 
 const buildBlockSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inheritWeWorker=null,activeIds=TIDS.slice(0,4),auxRules={}) => {
-  const blks = getBlocks(y,m).map(b => ({...b, workerId:null, cross:false}));
+  const blks = splitBlocks(getBlocks(y,m));
   const weTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p));
-  const wdTeam = weTeam.filter(p => p !== WE_ONLY).length ? weTeam.filter(p => p !== WE_ONLY) : weTeam;
+  const wdTeam = weTeam;
   let weIdx = startWeIdx || 0, wdIdx = 0, prevWe = null, prevWd = null, dup = 0;
   const usable = (p,b=null) => statuts[p] !== "absent" && (!b || allowedBlock(p,b,y,m,auxRules));
   blks.forEach(b => {
     if (b.type !== "we") return;
-    if (blkOverrides[b.idx]) { b.workerId = blkOverrides[b.idx]; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }
+    const ov = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
+    if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }
     if (inheritWeWorker && b.start === 1 && dowD(y,m,1) >= 5) { b.workerId = inheritWeWorker; b.cross = true; prevWe = b.workerId; return; }
     for (let k=0;k<weTeam.length;k++) { const p = weTeam[(weIdx+k)%weTeam.length]; if (usable(p,b)) { b.workerId = p; weIdx = (weIdx+k+1)%weTeam.length; prevWe = p; return; } }
     b.workerId = weTeam[weIdx]; prevWe = b.workerId;
   });
   blks.forEach((b,i) => {
     if (b.type !== "wd") return;
-    if (blkOverrides[b.idx] && blkOverrides[b.idx] !== WE_ONLY) { b.workerId = blkOverrides[b.idx]; wdIdx = (wdTeam.indexOf(b.workerId)+1+wdTeam.length)%wdTeam.length; prevWd = b.workerId; return; }
+    const ov = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
+    if (ov && ov !== WE_ONLY) { b.workerId = ov; wdIdx = (wdTeam.indexOf(b.workerId)+1+wdTeam.length)%wdTeam.length; prevWd = b.workerId; return; }
     const sameWeekWE = blks.find(x => x.type === "we" && x.start > b.start && x.start <= b.end + 3)?.workerId;
     const prevBlockWe = [...blks].slice(0,i).reverse().find(x => x.type === "we")?.workerId || prevWe;
     const hardAvoid = new Set([sameWeekWE,prevBlockWe].filter(Boolean));
@@ -221,8 +238,7 @@ const buildBlockSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},in
     if (pick === prevWd) dup += 1; else dup = 0;
     b.workerId = pick; wdIdx = (wdIdx+off+1)%wdTeam.length; prevWd = pick;
   });
-  const sched = {};
-  blks.forEach(b => { for(let d=b.start; d<=b.end; d++) sched[d] = {worker:b.workerId,bi:b.idx,bt:b.type,bs:b.start,be:b.end,cross:b.cross}; });
+  const sched = fillSched(blks);
   return { sched, blks };
 };
 
@@ -233,24 +249,26 @@ const buildTwoDayRestSched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts=
   const weekOf = d => Math.min(4, Math.floor((d-1)/7)+1);
   let idx = 0, rot = startIdx || 0, prev = null;
   for (let d=1; d<=n; d+=2) {
-    const b = { type:"two", start:d, end:Math.min(n,d+1), idx:idx++, workerId:null, cross:false };
-    if (blkOverrides[b.idx]) b.workerId = blkOverrides[b.idx];
-    if (!b.workerId) {
-      for (let k=0;k<team.length;k++) {
-        const p = team[(rot+k)%team.length];
-        const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);
-        if (usable(p,b) && !inRest && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
+    for (const s of SHIFTS) {
+      const b = { type:"two", start:d, end:Math.min(n,d+1), baseIdx:idx, idx:\`\${idx}-\${s.id}\`, shift:s.id, shiftName:s.label, workerId:null, cross:false };
+      if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
+      if (!b.workerId) {
+        for (let k=0;k<team.length;k++) {
+          const p = team[(rot+k)%team.length];
+          const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);
+          if (usable(p,b) && !inRest && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
+        }
       }
+      if (!b.workerId) {
+        for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p,b) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
+      }
+      b.workerId = b.workerId || team[rot%team.length];
+      prev = b.workerId;
+      blks.push(b);
     }
-    if (!b.workerId) {
-      for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p,b) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
-    }
-    b.workerId = b.workerId || team[rot%team.length];
-    prev = b.workerId;
-    blks.push(b);
+    idx++;
   }
-  const sched = {};
-  blks.forEach(b => { for(let d=b.start; d<=b.end; d++) sched[d] = {worker:b.workerId,bi:b.idx,bt:b.type,bs:b.start,be:b.end,cross:false}; });
+  const sched = fillSched(blks);
   return { sched, blks };
 };
 
@@ -259,23 +277,24 @@ const buildDailySched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts={},ac
   const usable = (p,d) => statuts[p] !== "absent" && allowedOn(p,y,m,d,auxRules);
   let rot = startIdx || 0, prev = null;
   for (let d=1; d<=n; d++) {
-    const b = { type:"day", start:d, end:d, idx:d-1, workerId:null, cross:false };
-    if (blkOverrides[b.idx]) b.workerId = blkOverrides[b.idx];
-    if (!b.workerId) {
-      for (let k=0;k<team.length;k++) {
-        const p = team[(rot+k)%team.length];
-        if (usable(p,d) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
+    for (const s of SHIFTS) {
+      const b = { type:"day", start:d, end:d, baseIdx:d-1, idx:\`\${d-1}-\${s.id}\`, shift:s.id, shiftName:s.label, workerId:null, cross:false };
+      if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
+      if (!b.workerId) {
+        for (let k=0;k<team.length;k++) {
+          const p = team[(rot+k)%team.length];
+          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
+        }
       }
+      if (!b.workerId) {
+        for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p,d) && allowedShift(p,s.id,auxRules)) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
+      }
+      b.workerId = b.workerId || team[rot%team.length];
+      prev = b.workerId;
+      blks.push(b);
     }
-    if (!b.workerId) {
-      for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p,d)) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
-    }
-    b.workerId = b.workerId || team[rot%team.length];
-    prev = b.workerId;
-    blks.push(b);
   }
-  const sched = {};
-  blks.forEach(b => { sched[b.start] = {worker:b.workerId,bi:b.idx,bt:b.type,bs:b.start,be:b.end,cross:false}; });
+  const sched = fillSched(blks);
   return { sched, blks };
 };
 
@@ -292,7 +311,8 @@ const buildSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inherit
       .replace("const TIDS = [\"P1\",\"P2\",\"P3\",\"P4\"];\nconst NDEF = { P1:\"Auxiliaire 1\", P2:\"Auxiliaire 2\", P3:\"Auxiliaire 3\", P4:\"Auxiliaire 4\" };", "const TIDS = Array.from({length:100},(_,i)=>`P${i+1}`);\nconst NDEF = Object.fromEntries(TIDS.map((p,i)=>[p,`Auxiliaire ${i+1}`]));")
       .replace("const pidIx = p => Math.max(0,TIDS.indexOf(p));", "const pidIx = p => { const i = Math.max(0,TIDS.indexOf(p)); return PAL.length ? i % PAL.length : 0; };")
       .replace(/\/\/ ══ MODULE SCH-001[\s\S]*?\/\/ ══ MODULE STO-001/, schedulingSource)
-      .replace("const BBtxt = t => t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";", "const BBtxt = t => t === \"day\" ? \"Jour\" : t === \"two\" ? \"2 jours\" : t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";")
+      .replace("const BBtxt = t => t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";", "const BBtxt = (t,shift) => `${t === \"day\" ? \"Jour\" : t === \"two\" ? \"2 jours\" : t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\"}${shift ? \" \" + shiftLabel(shift) : \"\"}`;")
+      .replaceAll("BBtxt(b.type)", "BBtxt(b.type,b.shift)")
       .replace("export default function App()", "function App()")
       .replace("const card = {background:\"rgba(255,255,255,.9)\",border:\"1px solid rgba(180,210,235,.72)\",borderRadius:18,boxShadow:\"0 2px 14px rgba(90,150,210,.06)\"};", "const card = {background:\"rgba(255,255,255,.94)\",border:\"1px solid rgba(221,214,202,.9)\",borderRadius:16,boxShadow:\"0 10px 28px rgba(70,58,40,.06)\"};")
       .replace("const btn = (on, c=\"#7BAFD4\") => ({padding:\"9px 11px\",borderRadius:14,background:on?c:\"rgba(255,255,255,.75)\",color:on?\"white\":\"#35546F\",border:`1px solid ${on?c:\"#D6E7F5\"}`,fontWeight:900});", "const btn = (on, c=\"#8B9A7A\") => ({padding:\"10px 12px\",borderRadius:12,background:on?c:\"#FFFDF8\",color:on?\"white\":\"#4F5D4A\",border:`1px solid ${on?c:\"#E5DED2\"}`,fontWeight:900,boxShadow:on?\"0 8px 18px rgba(80,90,65,.16)\":\"0 3px 10px rgba(80,70,50,.04)\",display:\"inline-flex\",alignItems:\"center\",justifyContent:\"center\",gap:6});")
@@ -310,13 +330,22 @@ const buildSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inherit
       .replace("return [...buildSched(py,pm,swi,{},names,defStat,null).blks].reverse().find(b=>b.type===\"we\")?.workerId || null;", "return [...buildSched(py,pm,swi,{},names,defStat,null,schedRule,restStart,activeIds,auxRules).blks].reverse().find(b=>b.type===\"we\")?.workerId || null;")
       .replace("},[y,m,swi,names]);", "},[y,m,swi,names,schedRule,restStart,activeIds.join('|'),JSON.stringify(auxRules)]);")
       .replace("const { sched, blks } = useMemo(() => buildSched(y,m,swi,bOv,names,stat,inh),[y,m,swi,bOv,names,stat,inh]);", "const { sched, blks } = useMemo(() => buildSched(y,m,swi,bOv,names,stat,inh,schedRule,restStart,activeIds,auxRules),[y,m,swi,bOv,names,stat,inh,schedRule,restStart,activeIds.join('|'),JSON.stringify(auxRules)]);")
-      .replace("const daysByP = useMemo(() => TIDS.reduce((a,p)=>(a[p]=blks.filter(b=>b.workerId===p).reduce((s,b)=>s+b.end-b.start+1,0),a),{}),[blks]);", "const daysByP = useMemo(() => activeIds.reduce((a,p)=>(a[p]=blks.filter(b=>b.workerId===p).reduce((s,b)=>s+b.end-b.start+1,0),a),{}),[blks,activeIds.join('|')]);")
+      .replace("const daysByP = useMemo(() => TIDS.reduce((a,p)=>(a[p]=blks.filter(b=>b.workerId===p).reduce((s,b)=>s+b.end-b.start+1,0),a),{}),[blks]);", "const daysByP = useMemo(() => activeIds.reduce((a,p)=>(a[p]=blks.filter(b=>b.workerId===p).reduce((s,b)=>s+(b.end-b.start+1)*0.5,0),a),{}),[blks,activeIds.join('|')]);")
+      .replace("const s = d && sched[d], p = s && PAL[pidIx(s.worker)], a = d && acts[d], isStart = s && d === s.bs;", "const s = d && sched[d], sm=s?.morning, se=s?.evening, pm=sm&&PAL[pidIx(sm.worker)], pe=se&&PAL[pidIx(se.worker)], a = d && acts[d];")
+      .replace("return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{height:54,borderRadius:12,background:d?(p?.light||\"white\"):\"transparent\",border:d?`1px solid ${p?.border||\"#E7EEF7\"}`:\"none\",padding:5,position:\"relative\",overflow:\"hidden\"}}>", "return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{height:62,borderRadius:12,background:d?\"#FFFDF8\":\"transparent\",border:d?\"1px solid #E5DED2\":\"none\",padding:5,position:\"relative\",overflow:\"hidden\"}}>")
+      .replace("{d && <><span style={{position:\"absolute\",top:5,left:6,fontSize:11,fontFamily:\"DM Mono\",fontWeight:900,color:\"#526A7F\"}}>{d}</span>{isStart ? <span style={{position:\"absolute\",right:5,top:5,width:20,height:20,borderRadius:99,background:p.pill,color:p.text,fontSize:10,fontWeight:900,display:\"grid\",placeItems:\"center\"}}>{initial(names,s.worker,priv)}</span> : <span style={{position:\"absolute\",left:6,right:6,bottom:9,height:8,borderRadius:99,background:p.solid,opacity:.75}} />}{a?.types?.length>0 && <span style={{position:\"absolute\",left:5,bottom:3,fontSize:11}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join(\"\")}</span>}</>}", "{d && <><span style={{position:\"absolute\",top:5,left:6,fontSize:11,fontFamily:\"DM Mono\",fontWeight:900,color:\"#746D61\"}}>{d}</span><div style={{position:\"absolute\",left:5,right:5,top:22,display:\"grid\",gap:3}}>{[[\"M\",sm,pm],[\"S\",se,pe]].map(x=><span key={x[0]} style={{height:14,borderRadius:8,background:x[2]?.pill||\"#F2EDE4\",color:x[2]?.text||\"#746D61\",display:\"flex\",alignItems:\"center\",justifyContent:\"space-between\",padding:\"0 4px\",fontSize:9,fontWeight:900}}><b>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):\"-\"}</span></span>)}</div>{a?.types?.length>0 && <span style={{position:\"absolute\",right:5,bottom:1,fontSize:10}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join(\"\")}</span>}</>}")
+      .replace("<BB type={b.type}/><Av t={b.workerId} st={stat[b.workerId]} names={names} priv={priv}/>", "<BB type={b.type}/><small style={btn(true,b.shift===\"morning\"?\"#C99A52\":\"#6F7FA8\")}>{shiftLabel(b.shift)}</small><Av t={b.workerId} st={stat[b.workerId]} names={names} priv={priv}/>")
+      .replace("<h3 style={{margin:\"0 0 10px\",color:\"#294C69\"}}>Bloc {b.start}-{b.end} <BB type={b.type}/></h3>", "<h3 style={{margin:\"0 0 10px\",color:\"#294C69\"}}>Bloc {b.start}-{b.end} · {shiftLabel(b.shift)} <BB type={b.type}/></h3>")
       .replace("{TIDS.map(p => <div key={p} style={{...card,padding:8,textAlign:\"center\",minWidth:0}}>", "{activeIds.map(p => <div key={p} style={{...card,padding:8,textAlign:\"center\",minWidth:0}}>")
       .replace("return <div className=\"su\" style={{display:\"grid\",gap:10}}>{TIDS.map(p => {", "return <div className=\"su\" style={{display:\"grid\",gap:10}}>{activeIds.map(p => {")
       .replace("{TIDS.map(p=><button disabled={b.type===\"wd\"&&p===WE_ONLY}", "{activeIds.map(p=><button disabled={b.type===\"wd\"&&p===WE_ONLY}")
       .replace("<option value=\"\">2e intervenant</option>{TIDS.map(p=><option key={p} value={p}>{pName(names,p,priv)}</option>)}</select>", "<option value=\"\">2e intervenant</option>{activeIds.map(p=><option key={p} value={p}>{pName(names,p,priv)}</option>)}</select>")
+      .replace("const choose = p => { if (b.type===\"wd\" && p===WE_ONLY) return showT(\"P4 est reservee aux week-ends\"); setBOv", "const choose = p => { setBOv")
+      .replace("disabled={b.type===\"wd\"&&p===WE_ONLY}", "")
+      .replace(",opacity:(b.type===\"wd\"&&p===WE_ONLY) ? .45 : 1", "")
       .replace("<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:8}}>{TIDS.map(p=><button key={p} onClick={()=>setPid(p)}", "<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:8}}>{activeIds.map(p=><button key={p} onClick={()=>setPid(p)}")
       .replace("const bs=buildSched(yy,mi,swi,{},names,stat,null).blks; const c=TIDS.reduce", "const bs=buildSched(yy,mi,swi,{},names,stat,null,schedRule,restStart,activeIds,auxRules).blks; const c=activeIds.reduce")
+      .replaceAll("reduce((s,b)=>s+b.end-b.start+1,0)", "reduce((s,b)=>s+(b.end-b.start+1)*0.5,0)")
       .replace("{TIDS.map(p=><div key={p} style={{display:\"flex\",alignItems:\"center\",gap:5,fontSize:11,marginTop:5}}>", "{activeIds.map(p=><div key={p} style={{display:\"flex\",alignItems:\"center\",gap:5,fontSize:11,marginTop:5}}>")
       .replace("const hrs=TIDS.map(p=>`<tr><td>${pName(names,p,priv)}</td>", "const hrs=activeIds.map(p=>`<tr><td>${pName(names,p,priv)}</td>")
       .replace("const priv = adminSess;", "const priv = !!window.PlanningAVDAuth?.isConnected;")
