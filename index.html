@@ -123,6 +123,48 @@
 
     code = replaceOnce(
       code,
+      'setAuxRules(x => ({...x, [next]: x[next] || {days:"all",shift:"all",custom:[0,1,2,3,4,5,6]}}));',
+      'setAuxRules(x => ({...x, [next]: x[next] || {days:"all",shift:"all",custom:[0,1,2,3,4,5,6],lead:false}}));'
+    );
+
+    code = replaceOnce(
+      code,
+      'r=auxRules[p]||{days:"all",shift:"all",custom:[0,1,2,3,4,5,6]}; const updRule = patch => setAuxRules(x=>({...x,[p]:{...(x[p]||{days:"all",shift:"all",custom:[0,1,2,3,4,5,6]}),...patch}}));',
+      'r=auxRules[p]||{days:"all",shift:"all",custom:[0,1,2,3,4,5,6],lead:false}; const updRule = patch => setAuxRules(x=>({...x,[p]:{...(x[p]||{days:"all",shift:"all",custom:[0,1,2,3,4,5,6],lead:false}),...patch}}));'
+    );
+
+    code = replaceOnce(
+      code,
+      '<textarea defaultValue={c.address||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),address:e.target.value}}))} placeholder="Adresse complete" style={{width:"100%",boxSizing:"border-box",minHeight:58,marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginTop:8}}><select',
+      '<textarea defaultValue={c.address||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),address:e.target.value}}))} placeholder="Adresse complete" style={{width:"100%",boxSizing:"border-box",minHeight:58,marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><label style={{display:"flex",gap:8,alignItems:"center",marginTop:8,padding:9,border:"1px solid #E5DED2",borderRadius:12,background:"#FFFFFF",fontSize:12,fontWeight:900,color:"#4F5D4A"}}><input type="checkbox" checked={!!r.lead} onChange={e=>updRule({lead:e.target.checked})}/> Chef d&apos;equipe prioritaire</label><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginTop:8}}><select'
+    );
+
+    code = replaceOnce(
+      code,
+      'const allowedBlock = (p,b,y,m,auxRules={}) => allowedShift(p,b.shift,auxRules) && Array.from({length:b.end-b.start+1},(_,i)=>b.start+i).every(d=>allowedOn(p,y,m,d,auxRules));\nconst splitBlocks',
+      'const allowedBlock = (p,b,y,m,auxRules={}) => allowedShift(p,b.shift,auxRules) && Array.from({length:b.end-b.start+1},(_,i)=>b.start+i).every(d=>allowedOn(p,y,m,d,auxRules));\nconst rotationTeam = (ids=[],auxRules={}) => { const base = ids.filter(p => TIDS.includes(p)); const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };\nconst splitBlocks'
+    );
+
+    code = replaceOnce(
+      code,
+      'const weTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p));\n  const wdTeam = weTeam;',
+      'const baseTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p));\n  const weTeam = rotationTeam(baseTeam,auxRules);\n  const wdTeam = weTeam;'
+    );
+
+    code = replaceOnce(
+      code,
+      'const n = dim(y,m), team = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), blks = [];',
+      'const n = dim(y,m), baseTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), team = rotationTeam(baseTeam,auxRules), blks = [];'
+    );
+
+    code = replaceOnce(
+      code,
+      'const n = dim(y,m), team = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), blks = [];',
+      'const n = dim(y,m), baseTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), team = rotationTeam(baseTeam,auxRules), blks = [];'
+    );
+
+    code = replaceOnce(
+      code,
       '{schedRule==="twoDayRest"&&<><p style={{fontSize:12,color:"#667F94",margin:"10px 0 6px"}}>Repos semaine 1</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setRestStart(i)} style={btn(restStart===i,PAL[pidIx(p)].solid)}>{pName(names,p,priv)}</button>)}</div></>}',
       ''
     );
