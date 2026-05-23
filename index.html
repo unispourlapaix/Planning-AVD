@@ -114,7 +114,7 @@
             {alerts.length>0 && <div style={{fontSize:12,color:"#9A6A00",fontWeight:900}}>Repos a verifier: {[...new Set(alerts)].slice(0,3).join(" · ")}</div>}
           </div>
           {gap===0 && <div style={{color:"#4F8B5B",fontWeight:900,fontSize:12}}>Quota exact atteint</div>}
-          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}
+          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12,marginTop:0}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}
         </div>;
       })}
     </div>;
