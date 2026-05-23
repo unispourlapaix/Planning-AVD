@@ -139,7 +139,7 @@
     code = replaceOnce(
       code,
       'const fillSched = blks => {',
-      'const shiftRealHours = s => s === "night" ? 12 : 6;\nconst shiftPayHours = s => s === "night" ? 12 : 5.75;\nconst fillSched = blks => {'
+      'const shiftRealHours = s => s === "night" ? 12 : 6;\nconst shiftPayHours = s => s === "night" ? 12 : 5.75;\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\nconst loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\nconst fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };\nconst fillSched = blks => {'
     );
 
     code = replaceOnce(
@@ -204,9 +204,19 @@
 
     code = replaceOnce(
       code,
+      'let weIdx = startWeIdx || 0, wdIdx = 0, prevWe = null, prevWd = null, dup = 0;',
+      'let weIdx = startWeIdx || 0, wdIdx = 0, prevWe = null, prevWd = null, dup = 0;\n  const load = {};'
+    );
+
+    code = replaceOnce(
+      code,
       'const n = dim(y,m), team = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), blks = [];',
       'const n = dim(y,m), baseTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), team = rotationTeam(baseTeam,auxRules), blks = [];'
     );
+
+    code = code
+      .replaceAll('let idx = 0, rot = startIdx || 0, prev = null;', 'let idx = 0, rot = startIdx || 0, prev = null;\n  const load = {};')
+      .replaceAll('let rot = startIdx || 0, prev = null;', 'let rot = startIdx || 0, prev = null;\n  const load = {};');
 
     code = replaceOnce(
       code,
@@ -311,6 +321,80 @@
       '<b>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):\\"-\\"}</span>',
       '<b style={{color:\\"#746D61\\",background:\\"#FFFFFF\\",border:\\"1px solid #E5DED2\\",borderRadius:6,minWidth:12,textAlign:\\"center\\"}}>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):\\"-\\"}</span>'
     );
+
+    code = code
+      .replaceAll(
+        'if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }',
+        'if (ov) { b.workerId = addLoad(load,ov,b); if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }'
+      )
+      .replaceAll(
+        'if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = am.workerId; prevWe = b.workerId; return; } }',
+        'if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = addLoad(load,am.workerId,b); prevWe = b.workerId; return; } }'
+      )
+      .replaceAll(
+        'if (inheritWeWorker && b.start === 1 && dowD(y,m,1) >= 5) { b.workerId = inheritWeWorker; b.cross = true; prevWe = b.workerId; return; }',
+        'if (inheritWeWorker && b.start === 1 && dowD(y,m,1) >= 5) { b.workerId = addLoad(load,inheritWeWorker,b); b.cross = true; prevWe = b.workerId; return; }'
+      )
+      .replaceAll(
+        'for (let k=0;k<weTeam.length;k++) { const p = weTeam[(weIdx+k)%weTeam.length]; if (usable(p,b)) { b.workerId = p; weIdx = (weIdx+k+1)%weTeam.length; prevWe = p; return; } }',
+        'const fairWe = fairPick(weTeam,load,auxRules,p=>usable(p,b),prevWe); if (fairWe) { b.workerId = addLoad(load,fairWe,b); weIdx = (weTeam.indexOf(fairWe)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }'
+      )
+      .replaceAll(
+        'b.workerId = b.shift === "night" ? null : weTeam[weIdx]; prevWe = b.workerId;',
+        'b.workerId = b.shift === "night" ? null : addLoad(load,weTeam[weIdx],b); prevWe = b.workerId;'
+      )
+      .replaceAll(
+        'if (ov && ov !== WE_ONLY) { b.workerId = ov; wdIdx = (wdTeam.indexOf(b.workerId)+1+wdTeam.length)%wdTeam.length; prevWd = b.workerId; return; }',
+        'if (ov && ov !== WE_ONLY) { b.workerId = addLoad(load,ov,b); wdIdx = (wdTeam.indexOf(b.workerId)+1+wdTeam.length)%wdTeam.length; prevWd = b.workerId; return; }'
+      )
+      .replaceAll(
+        'if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = am.workerId; prevWd = b.workerId; return; } }',
+        'if (b.shift === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) { b.workerId = addLoad(load,am.workerId,b); prevWd = b.workerId; return; } }'
+      )
+      .replaceAll(
+        'let pick = null, off = 0;\n    for (let k=0;k<wdTeam.length;k++) { const p = wdTeam[(wdIdx+k)%wdTeam.length]; if (legal(p)) { pick = p; off = k; break; } }',
+        'let pick = fairPick(wdTeam,load,auxRules,legal,prevWd), off = pick ? Math.max(0,wdTeam.indexOf(pick)-wdIdx) : 0;'
+      )
+      .replaceAll(
+        'b.workerId = (b.shift === "night" && !allowedShift(pick,b.shift,auxRules)) ? null : pick; wdIdx = (wdIdx+off+1)%wdTeam.length; prevWd = b.workerId;',
+        'b.workerId = (b.shift === "night" && !allowedShift(pick,b.shift,auxRules)) ? null : addLoad(load,pick,b); wdIdx = (wdIdx+off+1)%wdTeam.length; prevWd = b.workerId;'
+      )
+      .replaceAll(
+        'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];',
+        'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = addLoad(load,blkOverrides[b.idx] || blkOverrides[b.baseIdx],b);'
+      )
+      .replaceAll(
+        'if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) b.workerId = am.workerId; }',
+        'if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) b.workerId = addLoad(load,am.workerId,b); }'
+      )
+      .replaceAll(
+        'if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,d) && allowedShift(am.workerId,s.id,auxRules)) b.workerId = am.workerId; }',
+        'if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,d) && allowedShift(am.workerId,s.id,auxRules)) b.workerId = addLoad(load,am.workerId,b); }'
+      )
+      .replaceAll(
+        'if (usable(p,b) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }',
+        'if (usable(p,b) && p !== prev) { b.workerId = addLoad(load,p,b); rot = (rot+k+1)%team.length; break; }'
+      )
+      .replaceAll(
+        'if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }',
+        'if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev) { b.workerId = addLoad(load,p,b); rot = (rot+k+1)%team.length; break; }'
+      )
+      .replaceAll(
+        'if (usable(p,d) && allowedShift(p,s.id,auxRules)) { b.workerId = p; rot = (rot+k+1)%team.length; break; }',
+        'if (usable(p,d) && allowedShift(p,s.id,auxRules)) { b.workerId = addLoad(load,p,b); rot = (rot+k+1)%team.length; break; }'
+      )
+      .replaceAll(
+        'b.workerId = b.workerId || team.find(p => usable(p,b) && allowedShift(p,s.id,auxRules)) || (s.id === "night" ? null : team[rot%team.length]);',
+        'b.workerId = b.workerId || addLoad(load,fairPick(team,load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev),b) || (s.id === "night" ? null : addLoad(load,team[rot%team.length],b));'
+      )
+      .replaceAll(
+        'b.workerId = b.workerId || team.find(p => usable(p,d) && allowedShift(p,s.id,auxRules)) || (s.id === "night" ? null : team[rot%team.length]);',
+        'b.workerId = b.workerId || addLoad(load,fairPick(team,load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev),b) || (s.id === "night" ? null : addLoad(load,team[rot%team.length],b));'
+      )
+      .replaceAll(
+        'if (nextWorker && usable(nextWorker, {...b, shift:"evening"})) evening.worker = nextWorker;',
+        'if (nextWorker && usable(nextWorker, {...b, shift:"evening"})) { const eb = blks.find(x => x.idx === evening.bi); if (eb) eb.workerId = nextWorker; evening.worker = nextWorker; }'
+      );
 
     (0, eval)(code + "\n//# sourceURL=browser-loader.patched.js");
     const polishNav = () => {
