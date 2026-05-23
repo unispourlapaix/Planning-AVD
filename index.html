@@ -31,21 +31,21 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("./patch-loader.js?v=20260524-accounts", { cache: "no-cache" });
+          const response = await fetch("./patch-loader.js?v=20260524-rotation", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
-          const accountingText = "Le mois est reparti automatiquement sur les jours travailles: 12h jour (matin + soir) ou 12h nuit. Le moteur remplit les quotas de chaque auxiliaire en priorite, sans creer d'heures sup automatiques.";
+          const accountingText = "Le planning se place automatiquement en tour par tour, avec la place du chef gardee. Les heures comptables du mois se calculent ensuite sur les jours travailles: 12h jour (matin + soir) ou 12h nuit.";
           source = source
             .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
             .replace('Le quota vient de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques. Jour complet: 12h reelles, 11h30 paye apres pause. Nuit: 12h.', accountingText)
             .replace('Heures reelles MDPH / paye', 'Planning technique comptable')
             .replace('const SHIFTS = [{id:"morning",label:"Matin",real:6,pay:5.75},{id:"evening",label:"Soir",real:6,pay:5.75},{id:"night",label:"Nuit",real:12,pay:12}];', 'const SHIFTS = [{id:"morning",label:"Jour matin",real:6,pay:6},{id:"evening",label:"Jour soir",real:6,pay:6},{id:"night",label:"Nuit",real:12,pay:12}];')
             .replace('const shiftPayHours = s => s === "night" ? 12 : 5.75;', 'const shiftPayHours = s => s === "night" ? 12 : 6;')
-            .replace('const loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };', 'const remainingHours = (p,load={},auxRules={}) => quotaHours(p,auxRules) - (load[p]||0);\\nconst loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null,b=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,bp)=>{ const ar=remainingHours(a,load,auxRules), br=remainingHours(bp,load,auxRules), au=ar>0, bu=br>0; if (au!==bu) return au?-1:1; const sr=loadScore(a,load,auxRules)-loadScore(bp,load,auxRules); return sr || br-ar; })[0]; };')
-            .replaceAll('fairPick(weTeam,load,auxRules,p=>usable(p,b),prevWe)', 'fairPick(weTeam,load,auxRules,p=>usable(p,b),prevWe,b)')
-            .replaceAll('fairPick(wdTeam,load,auxRules,legal,prevWd)', 'fairPick(wdTeam,load,auxRules,legal,prevWd,b)')
-            .replaceAll('fairPick(team,load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev)', 'fairPick(team,load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev,b)')
-            .replaceAll('fairPick(team,load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev)', 'fairPick(team,load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev,b)')
+            .replace('const loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };', 'const addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => team.find(p => p && p !== prev && ok(p)) || team.find(p => p && ok(p)) || null;')
+            .replaceAll('const fairWe = fairPick(weTeam,load,auxRules,p=>usable(p,b),prevWe);', 'const weOrder = weTeam.slice(weIdx).concat(weTeam.slice(0,weIdx)); const fairWe = fairPick(weOrder,load,auxRules,p=>usable(p,b),prevWe);')
+            .replaceAll('let pick = fairPick(wdTeam,load,auxRules,legal,prevWd), off = pick ? Math.max(0,wdTeam.indexOf(pick)-wdIdx) : 0;', 'const wdOrder = wdTeam.slice(wdIdx).concat(wdTeam.slice(0,wdIdx)); let pick = fairPick(wdOrder,load,auxRules,legal,prevWd), off = pick ? Math.max(0,wdTeam.indexOf(pick)-wdIdx) : 0;')
+            .replaceAll('fairPick(team,load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev)', 'fairPick(team.slice(rot).concat(team.slice(0,rot)),load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev)')
+            .replaceAll('fairPick(team,load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev)', 'fairPick(team.slice(rot).concat(team.slice(0,rot)),load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev)')
             .replaceAll('<br/>Reelles', '<br/>Faites')
             .replaceAll('<br/>Paye', '<br/>Comptable')
             .replaceAll('<br/>Jours</span>', '<br/>Jours 12h</span>');
