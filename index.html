@@ -85,21 +85,7 @@
 
   function ConfigView`;
     const teamMiniSource = String.raw`function TeamMini() {
-    const shown = activeIds.slice(0,8);
-    return <div style={{...card,padding:10,margin:"10px 0",display:"grid",gap:8,background:"#FFFDF8"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-        <b style={{color:"#3F4A3A"}}>Equipe</b>
-        <span style={{fontSize:12,color:"#746D61",fontWeight:900}}>{activeIds.length} auxiliaire(s)</span>
-      </div>
-      <div style={{display:"flex",gap:6,overflow:"hidden"}}>
-        {shown.map(p => <div key={p} title={pName(names,p,priv)} style={{display:"flex",alignItems:"center",gap:5,minWidth:0,padding:"6px 8px",border:"1px solid #E5DED2",borderRadius:12,background:"#FFFFFF"}}>
-          <Av t={p} sz={24} st={stat[p]} names={names} priv={priv}/>
-          <span style={{maxWidth:92,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>
-          <small style={{color:"#746D61",fontWeight:900}}>{daysByP[p]||0}j</small>
-        </div>)}
-        {activeIds.length>shown.length && <div style={{padding:"6px 8px",border:"1px solid #E5DED2",borderRadius:12,background:"#FFFFFF",fontSize:12,fontWeight:900,color:"#746D61"}}>+{activeIds.length-shown.length}</div>}
-      </div>
-    </div>;
+    return null;
   }
 
   function MonthView`;
@@ -137,6 +123,12 @@
 
     code = replaceOnce(
       code,
+      '{schedRule==="twoDayRest"&&<><p style={{fontSize:12,color:"#667F94",margin:"10px 0 6px"}}>Repos semaine 1</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setRestStart(i)} style={btn(restStart===i,PAL[pidIx(p)].solid)}>{pName(names,p,priv)}</button>)}</div></>}',
+      ''
+    );
+
+    code = replaceOnce(
+      code,
       '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(4,1fr)\\",gap:7,marginTop:10}}>{[[\\"month\\",\\"📅\\"],[\\"week\\",\\"📋\\"],[\\"hours\\",\\"⏱\\"],[\\"config\\",\\"⚙️\\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],\\"#7BAFD4\\")}>{x[1]}</button>)}</div>',
       '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(5,minmax(0,1fr))\\",gap:8,marginTop:10}}>{[[\\"week\\",\\"Semaine\\",\\"Planning\\",\\"view\\"],[\\"month\\",\\"Mois\\",\\"Vue globale\\",\\"view\\"],[\\"me\\",\\"Envoyer\\",\\"Equipe\\",\\"email\\"],[\\"year\\",\\"Annee\\",\\"Recap\\",\\"year\\"],[\\"config\\",\\"Reglages\\",\\"Equipe\\",\\"view\\"]].map(x=><button key={x[0]} onClick={()=>x[3]===\\"year\\"?setYearMod(true):x[3]===\\"email\\"?setEmailMod(true):setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:54,flexDirection:\\"column\\",alignItems:\\"flex-start\\",lineHeight:1.15,padding:\\"9px 10px\\"}}><span style={{fontSize:13,fontWeight:900}}>{x[1]}</span><span style={{fontSize:10,color:view===x[0]?\\"rgba(255,255,255,.82)\\":\\"#746D61\\"}}>{x[2]}</span></button>)}</div>'
     );
@@ -169,6 +161,12 @@
       code,
       'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);',
       'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) b.workerId = am.workerId; }\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);'
+    );
+
+    code = replaceOnce(
+      code,
+      'const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);\n          if (usable(p,b) && !inRest && p !== prev)',
+      'if (usable(p,b) && p !== prev)'
     );
 
     code = replaceOnce(
