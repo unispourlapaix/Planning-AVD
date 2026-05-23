@@ -196,6 +196,30 @@
     );
 
     (0, eval)(code + "\n//# sourceURL=browser-loader.patched.js");
+    const polishNav = () => {
+      const root = document.getElementById("root");
+      if (!root) return;
+      const iconButtons = [...root.querySelectorAll("button")].filter(b => ["📅","📋","⏱","⚙️"].includes(b.textContent.trim()));
+      if (iconButtons.length < 4) return;
+      const parent = iconButtons[0].parentElement;
+      const labels = [
+        { old:"📋", main:"Semaine", sub:"Planning" },
+        { old:"📅", main:"Mois", sub:"Vue globale" },
+        { old:"⏱", main:"Heures", sub:"Suivi" },
+        { old:"⚙️", main:"Reglages", sub:"Equipe" }
+      ];
+      labels.forEach(item => {
+        const b = iconButtons.find(x => x.textContent.trim() === item.old);
+        if (!b) return;
+        b.innerHTML = `<span style="font-size:13px;font-weight:900">${item.main}</span><span style="font-size:10px;color:#746D61">${item.sub}</span>`;
+        Object.assign(b.style, { minHeight:"54px", flexDirection:"column", alignItems:"flex-start", lineHeight:"1.15", padding:"9px 10px" });
+        parent?.appendChild(b);
+      });
+      if (parent) Object.assign(parent.style, { gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:"8px" });
+    };
+    polishNav();
+    const navTimer = setInterval(polishNav, 500);
+    setTimeout(() => clearInterval(navTimer), 5000);
   } catch (error) {
     fail(error);
   }
