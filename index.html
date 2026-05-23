@@ -31,10 +31,98 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-rotation", { cache: "no-cache" });
+          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-quota", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
           const accountingText = "Le planning se place automatiquement en tour par tour, avec la place du chef gardee. Les heures comptables du mois se calculent ensuite sur les jours travailles: 12h jour (matin + soir) ou 12h nuit.";
+          const quotaHoursView = String.raw`function HoursView() {
+    const quotaFor = p => Math.max(0,+auxRules[p]?.quota||MAX_H);
+    const correctionFor = p => +ah[p]||0;
+    const unitFor = p => {
+      const r = auxRules[p] || {};
+      if (r.shift === "morning" || r.shift === "evening") return 6;
+      return 12;
+    };
+    const technicalRows = activeIds.reduce((a,p)=>(a[p]=[],a),{});
+    const remaining = activeIds.reduce((a,p)=>(a[p]=Math.max(0,quotaFor(p)-correctionFor(p)),a),{});
+    const days = Array.from({length:dim(y,m)},(_,i)=>i+1);
+    let guard = 0, cursor = 0;
+    while (activeIds.some(p => remaining[p] > 0) && guard < dim(y,m) * Math.max(1,activeIds.length) * 8) {
+      const d = days[guard % days.length];
+      const order = activeIds.slice(cursor).concat(activeIds.slice(0,cursor));
+      order.forEach(p => {
+        if (remaining[p] <= 0 || !allowedOn(p,y,m,d,auxRules)) return;
+        const r = auxRules[p] || {};
+        const nightOk = allowedShift(p,"night",auxRules);
+        const dayOk = allowedShift(p,"morning",auxRules) || allowedShift(p,"evening",auxRules);
+        const useNight = nightOk && (r.shift === "night" || r.night) && (technicalRows[p].length % 2 === 0 || !dayOk);
+        const shift = useNight ? "night" : "day";
+        if (shift === "day" && !dayOk) return;
+        const max = shift === "night" ? 12 : unitFor(p);
+        const hours = Math.min(max,remaining[p]);
+        if (hours <= 0) return;
+        technicalRows[p].push({d,shift,hours});
+        remaining[p] = Math.round((remaining[p]-hours)*100)/100;
+      });
+      cursor = (cursor + 1) % Math.max(1,activeIds.length);
+      guard++;
+    }
+    const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,rows:technicalRows[p]||[],byDay:{}},a),{});
+    activeIds.forEach(p => {
+      (technicalRows[p]||[]).forEach(row => {
+        calc[p].real += row.hours;
+        calc[p].pay += row.hours;
+        if (!calc[p].byDay[row.d]) calc[p].byDay[row.d] = [];
+        calc[p].byDay[row.d].push(row);
+        if (row.shift === "night") calc[p].nights += row.hours / 12;
+        else calc[p].days += row.hours / 12;
+      });
+    });
+    return <div className="su" style={{display:"grid",gap:10}}>
+      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Les heures techniques se placent automatiquement jusqu'au quota exact de chaque auxiliaire. Une meme journee peut recevoir plusieurs auxiliaires, avec des lignes jour ou nuit selon les options.</p></div>
+      {activeIds.map(p => {
+        const r = calc[p] || {real:0,pay:0,nights:0,days:0,rows:[],byDay:{}}, rule=auxRules[p]||{}, quota=quotaFor(p), add=correctionFor(p), special=+rule.special||0, pay=Math.round((r.pay+add)*100)/100, gap=Math.round((pay-quota)*100)/100, c=gap===0?"#4F8B5B":gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;
+        const rows = Object.keys(r.byDay).map(Number).sort((a,b)=>a-b).map(d => {
+          const items = r.byDay[d] || [], dayHours = items.filter(x=>x.shift==="day").reduce((s,x)=>s+x.hours,0), nightHours = items.filter(x=>x.shift==="night").reduce((s,x)=>s+x.hours,0);
+          return {d, label:(dayHours?("Jour "+dayHours+"h"):"")+(dayHours&&nightHours?" + ":"")+(nightHours?("Nuit "+nightHours+"h"):""), hours:dayHours+nightHours, night:nightHours>0};
+        });
+        const alerts = [];
+        rows.forEach((row,i) => {
+          if (row.night && (r.byDay[row.d+1]||[]).some(x=>x.shift==="day")) alerts.push("Repos a verifier apres la nuit du "+row.d);
+          const seven = rows.slice(i,i+7);
+          if (seven.length===7 && seven[6].d-seven[0].d===6) alerts.push("7 jours consecutifs a verifier a partir du "+row.d);
+        });
+        return <div key={p} style={{...card,padding:12,display:"grid",gap:9,background:"#FFFDF8"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><Av t={p} st={stat[p]} names={names} priv={priv}/><b style={{flex:1,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</b><input type="number" value={ah[p]||""} onChange={e=>setAh(x=>({...x,[p]:e.target.value}))} placeholder="+/- h" title="Correction ponctuelle" style={{width:78,padding:8,borderRadius:12,border:"1px solid #E5DED2",fontFamily:"DM Mono",fontWeight:900}} /></div>
+          <HBar v={pay} c={c}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,fontSize:12,color:"#4F5D4A"}}>
+            <span><b>{Math.round(r.real*100)/100}h</b><br/>Faites</span>
+            <span><b>{Math.round(pay*100)/100}h</b><br/>Comptable</span>
+            <span><b>{quota}h</b><br/>Quota</span>
+            <span><b>{Math.round((quota-pay)*100)/100}h</b><br/>Reste</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,fontSize:12,color:"#746D61"}}>
+            <span><b>{Math.round(r.nights*100)/100}</b><br/>Nuits</span>
+            <span><b>{Math.round(r.days*100)/100}</b><br/>Jours</span>
+            <span><b>{special}h</b><br/>Cas special</span>
+          </div>
+          <div style={{display:"grid",gap:6,borderTop:"1px solid #EEE7DC",paddingTop:8}}>
+            <b style={{fontSize:12,color:"#4F5D4A"}}>Placement du mois</b>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {rows.length ? rows.map(row=><span key={row.d} title={row.label} style={{fontSize:11,fontWeight:900,color:"#4F5D4A",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:999,padding:"5px 8px"}}>{row.d} · {row.hours}h</span>) : <span style={{fontSize:12,color:"#746D61"}}>Aucun jour place ce mois</span>}
+            </div>
+            {alerts.length>0 && <div style={{fontSize:12,color:"#9A6A00",fontWeight:900}}>Repos a verifier: {[...new Set(alerts)].slice(0,3).join(" · ")}</div>}
+          </div>
+          {gap===0 && <div style={{color:"#4F8B5B",fontWeight:900,fontSize:12}}>Quota exact atteint</div>}
+          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}
+        </div>;
+      })}
+    </div>;
+  }`;
+          source = source.replace(
+            /const hoursViewSource = String\.raw`function HoursView\(\) \{[\s\S]*?\n  function ConfigView`;/,
+            () => 'const hoursViewSource = String.raw`' + quotaHoursView + '`;\n\n  function ConfigView`;'
+          );
           source = source
             .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
             .replace('Le quota vient de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques. Jour complet: 12h reelles, 11h30 paye apres pause. Nuit: 12h.', accountingText)
