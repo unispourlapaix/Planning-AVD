@@ -49,6 +49,23 @@
             .replaceAll('<br/>Reelles', '<br/>Faites')
             .replaceAll('<br/>Paye', '<br/>Comptable')
             .replaceAll('<br/>Jours</span>', '<br/>Jours 12h</span>');
+          source = source
+            .replace(
+              'const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0},a),{});',
+              'const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,byDay:{}},a),{});'
+            )
+            .replace(
+              'else calc[b.workerId].days += n * .5;\\n    });',
+              'else calc[b.workerId].days += n * .5;\\n      for (let d=b.start; d<=b.end; d++) {\\n        if (!calc[b.workerId].byDay[d]) calc[b.workerId].byDay[d] = [];\\n        calc[b.workerId].byDay[d].push(b.shift);\\n      }\\n    });'
+            )
+            .replace(
+              'const r = calc[p] || {real:0,pay:0,nights:0,days:0}, rule=auxRules[p]||{}, quota=+rule.quota||MAX_H, add=+ah[p]||0, special=+rule.special||0, pay=r.pay+add, gap=Math.round((pay-quota)*100)/100, c=gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;',
+              'const r = calc[p] || {real:0,pay:0,nights:0,days:0,byDay:{}}, rule=auxRules[p]||{}, quota=+rule.quota||MAX_H, add=+ah[p]||0, special=+rule.special||0, pay=r.pay+add, gap=Math.round((pay-quota)*100)/100, c=gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;\\n        const rows = Object.keys(r.byDay).map(Number).sort((a,b)=>a-b).map(d => { const shifts = r.byDay[d] || [], hasDay = shifts.includes("morning") || shifts.includes("evening"), hasNight = shifts.includes("night"); return {d, label:(hasDay?"Jour 12h":"")+(hasDay&&hasNight?" + ":"")+(hasNight?"Nuit 12h":""), hours:(hasDay?12:0)+(hasNight?12:0), night:hasNight}; });\\n        const alerts = [];\\n        rows.forEach((row,i) => { if (row.night && r.byDay[row.d+1]?.includes("morning")) alerts.push("Repos a verifier apres la nuit du "+row.d); const seven = rows.slice(i,i+7); if (seven.length===7 && seven[6].d-seven[0].d===6) alerts.push("7 jours consecutifs a verifier a partir du "+row.d); });'
+            )
+            .replace(
+              '          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}',
+              '          <div style={{display:"grid",gap:6,borderTop:"1px solid #EEE7DC",paddingTop:8}}>\\n            <b style={{fontSize:12,color:"#4F5D4A"}}>Placement du mois</b>\\n            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>\\n              {rows.length ? rows.map(row=><span key={row.d} title={row.label} style={{fontSize:11,fontWeight:900,color:"#4F5D4A",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:999,padding:"5px 8px"}}>{row.d} · {row.hours}h</span>) : <span style={{fontSize:12,color:"#746D61"}}>Aucun jour place ce mois</span>}\\n            </div>\\n            {alerts.length>0 && <div style={{fontSize:12,color:"#9A6A00",fontWeight:900}}>Repos a verifier: {[...new Set(alerts)].slice(0,3).join(" · ")}</div>}\\n          </div>\\n          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}'
+            );
           (0, eval)(source + "\n//# sourceURL=patch-loader.accounts.js");
         } catch (error) {
           fail(error);
