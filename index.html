@@ -31,7 +31,10 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("./patch-loader.js?v=20260524-rotation", { cache: "no-cache" });
+          let response = await fetch("./patch-loader.js?v=20260524-rotation", { cache: "no-cache" });
+          if (!response.ok) {
+            response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-rotation", { cache: "no-cache" });
+          }
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
           const accountingText = "Le planning se place automatiquement en tour par tour, avec la place du chef gardee. Les heures comptables du mois se calculent ensuite sur les jours travailles: 12h jour (matin + soir) ou 12h nuit.";
