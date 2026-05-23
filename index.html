@@ -95,21 +95,21 @@
       else calc[b.workerId].days += n * .5;
     });
     return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Heures reelles MDPH / paye</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Le quota vient de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques. Jour complet: 12h reelles, 11h30 paye apres pause. Nuit: 12h.</p></div>
+      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.</p></div>
       {activeIds.map(p => {
         const r = calc[p] || {real:0,pay:0,nights:0,days:0}, rule=auxRules[p]||{}, quota=+rule.quota||MAX_H, add=+ah[p]||0, special=+rule.special||0, pay=r.pay+add, gap=Math.round((pay-quota)*100)/100, c=gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;
         return <div key={p} style={{...card,padding:12,display:"grid",gap:9,background:"#FFFDF8"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}><Av t={p} st={stat[p]} names={names} priv={priv}/><b style={{flex:1,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</b><input type="number" value={ah[p]||""} onChange={e=>setAh(x=>({...x,[p]:e.target.value}))} placeholder="+/- h" title="Correction ponctuelle" style={{width:78,padding:8,borderRadius:12,border:"1px solid #E5DED2",fontFamily:"DM Mono",fontWeight:900}} /></div>
           <HBar v={pay} c={c}/>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,fontSize:12,color:"#4F5D4A"}}>
-            <span><b>{Math.round(r.real*100)/100}h</b><br/>Reelles</span>
-            <span><b>{Math.round(pay*100)/100}h</b><br/>Paye</span>
+            <span><b>{Math.round(r.real*100)/100}h</b><br/>Faites</span>
+            <span><b>{Math.round(pay*100)/100}h</b><br/>Comptable</span>
             <span><b>{quota}h</b><br/>Quota</span>
             <span><b>{Math.round((quota-pay)*100)/100}h</b><br/>Reste</span>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,fontSize:12,color:"#746D61"}}>
             <span><b>{r.nights}</b><br/>Nuits</span>
-            <span><b>{r.days}</b><br/>Jours</span>
+            <span><b>{r.days}</b><br/>Jours 12h</span>
             <span><b>{special}h</b><br/>Cas special</span>
           </div>
           {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}
@@ -147,7 +147,7 @@
     code = replaceOnce(
       code,
       'const SHIFTS = [{id:"morning",label:"Matin"},{id:"evening",label:"Soir"}];',
-      'const SHIFTS = [{id:"morning",label:"Matin",real:6,pay:5.75},{id:"evening",label:"Soir",real:6,pay:5.75},{id:"night",label:"Nuit",real:12,pay:12}];'
+      'const SHIFTS = [{id:"morning",label:"Jour matin",real:6,pay:6},{id:"evening",label:"Jour soir",real:6,pay:6},{id:"night",label:"Nuit",real:12,pay:12}];'
     );
 
     code = replaceOnce(
@@ -165,7 +165,7 @@
     code = replaceOnce(
       code,
       'const fillSched = blks => {',
-      'const shiftRealHours = s => s === "night" ? 12 : 6;\nconst shiftPayHours = s => s === "night" ? 12 : 5.75;\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\nconst loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\nconst fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };\nconst fillSched = blks => {'
+      'const shiftRealHours = s => s === "night" ? 12 : 6;\nconst shiftPayHours = s => s === "night" ? 12 : 6;\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\nconst loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\nconst fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };\nconst fillSched = blks => {'
     );
 
     code = replaceOnce(
