@@ -127,6 +127,8 @@
       ''
     );
 
+    code = replaceOnce(code, '>2j + repos</button>', '>2 jours</button>');
+
     code = replaceOnce(
       code,
       '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(4,1fr)\\",gap:7,marginTop:10}}>{[[\\"month\\",\\"📅\\"],[\\"week\\",\\"📋\\"],[\\"hours\\",\\"⏱\\"],[\\"config\\",\\"⚙️\\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],\\"#7BAFD4\\")}>{x[1]}</button>)}</div>',
