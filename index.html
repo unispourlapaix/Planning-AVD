@@ -83,7 +83,7 @@
     </div>;
   }
 
-  function ConfigView`;
+  function HoursView`;
     const teamMiniSource = String.raw`function TeamMini() {
     return null;
   }
@@ -100,7 +100,7 @@
     code = replaceOnce(
       code,
       '.replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);',
-      '.replace(/function TeamMini\\(\\) \\{[\\s\\S]*?\\n  function MonthView/, googleTeamMini)\n      .replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
+      '.replace(/function TeamMini\\(\\) \\{[\\s\\S]*?\\n  function MonthView/, googleTeamMini)\n      .replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function HoursView/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
     );
 
     code = replaceOnce(
