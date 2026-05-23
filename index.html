@@ -121,7 +121,7 @@
   }`;
           source = source.replace(
             /const hoursViewSource = String\.raw`function HoursView\(\) \{[\s\S]*?\n  function ConfigView`;/,
-            () => 'const hoursViewSource = String.raw`' + quotaHoursView + '`;\n\n  function ConfigView`;'
+            () => 'const hoursViewSource = String.raw`' + quotaHoursView + '\n\n  function ConfigView`;'
           );
           source = source
             .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
