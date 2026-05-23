@@ -55,8 +55,8 @@
               'const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,byDay:{}},a),{});'
             )
             .replace(
-              'else calc[b.workerId].days += n * .5;\\n    });',
-              'else calc[b.workerId].days += n * .5;\\n      for (let d=b.start; d<=b.end; d++) {\\n        if (!calc[b.workerId].byDay[d]) calc[b.workerId].byDay[d] = [];\\n        calc[b.workerId].byDay[d].push(b.shift);\\n      }\\n    });'
+              'else calc[b.workerId].days += n * .5;\n    });',
+              'else calc[b.workerId].days += n * .5;\n      for (let d=b.start; d<=b.end; d++) {\n        if (!calc[b.workerId].byDay[d]) calc[b.workerId].byDay[d] = [];\n        calc[b.workerId].byDay[d].push(b.shift);\n      }\n    });'
             )
             .replace(
               'const r = calc[p] || {real:0,pay:0,nights:0,days:0}, rule=auxRules[p]||{}, quota=+rule.quota||MAX_H, add=+ah[p]||0, special=+rule.special||0, pay=r.pay+add, gap=Math.round((pay-quota)*100)/100, c=gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;',
