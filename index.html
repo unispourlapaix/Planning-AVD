@@ -142,14 +142,14 @@
 
     code = replaceOnce(
       code,
-      '  const sched = fillSched(blks);\n  return { sched, blks };\n};\n\nconst buildDailySched',
-      '  blks.forEach(b => { if (b.shift === "evening" && !blkOverrides[b.idx]) { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,b)) b.workerId = am.workerId; } });\n  const sched = fillSched(blks);\n  return { sched, blks };\n};\n\nconst buildDailySched'
+      'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev)',
+      'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,d) && allowedShift(am.workerId,s.id,auxRules)) b.workerId = am.workerId; }\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev)'
     );
 
     code = replaceOnce(
       code,
-      'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev)',
-      'if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];\n      if (!b.workerId && s.id === "evening") { const am = blks.find(x => x.baseIdx === b.baseIdx && x.shift === "morning"); if (am?.workerId && usable(am.workerId,d) && allowedShift(am.workerId,s.id,auxRules)) b.workerId = am.workerId; }\n      if (!b.workerId) {\n        for (let k=0;k<team.length;k++) {\n          const p = team[(rot+k)%team.length];\n          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev)'
+      '  const sched = fillSched(blks);\n  return { sched, blks };\n};\n\nconst buildDailySched',
+      '  const sched = fillSched(blks);\n  blks.filter(b => b.type === "two" && b.shift === "morning").forEach(b => {\n    const evening = sched[b.end]?.evening;\n    if (!evening || blkOverrides[evening.bi] || blkOverrides[evening.base]) return;\n    const nextMorning = blks.find(x => x.type === "two" && x.shift === "morning" && x.baseIdx === b.baseIdx + 1);\n    let nextWorker = nextMorning?.workerId;\n    if (!nextWorker && team.length) {\n      const cur = Math.max(0, team.indexOf(b.workerId));\n      nextWorker = team[(cur + 1) % team.length];\n    }\n    if (nextWorker && usable(nextWorker, {...b, shift:"evening"})) evening.worker = nextWorker;\n  });\n  return { sched, blks };\n};\n\nconst buildDailySched'
     );
 
     code = replaceOnce(
