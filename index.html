@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#EBF5FF" />
+    <meta name="theme-color" content="#F7F4EE" />
     <link rel="icon" href="data:," />
     <title>Planning-AVD</title>
     <style>
@@ -50,35 +50,60 @@
     const [ws,setWs] = useState(Math.max(1, first - dowD(y,m,first)));
     const days = Array.from({length:7},(_,i)=>ws+i);
     const moveWeek = n => setWs(v => Math.max(1, Math.min(Math.max(1, dim(y,m)-6), v + n*7)));
+    const rangeEnd = Math.min(dim(y,m),ws+6);
     const dayBox = d => {
-      if (d < 1 || d > dim(y,m)) return <div key={d} style={{minHeight:172,borderRadius:14,background:"rgba(255,255,255,.35)",border:"1px dashed #E5DED2"}} />;
+      if (d < 1 || d > dim(y,m)) return <div key={d} style={{minHeight:196,borderRadius:14,background:"rgba(255,255,255,.35)",border:"1px dashed #E5DED2"}} />;
       const sm=sched[d]?.morning, se=sched[d]?.evening, am=sm?.worker, pmw=se?.worker, a=acts[d]||{}, isToday=today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
-      return <div key={d} style={{...card,minHeight:172,padding:8,display:"grid",gridTemplateRows:"auto 1fr auto",gap:7,background:isToday?"#FFF9EA":"#FFFDF8"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
-          <div style={{minWidth:0}}><div style={{fontSize:10,fontWeight:900,color:"#746D61"}}>{DS[dowD(y,m,d)]}</div><b style={{fontSize:16,color:"#3F4A3A"}}>{d}</b></div>
-          <button title="Detail du jour" onClick={()=>setDayMod(d)} style={{...btn(true,"#8B9A7A"),width:28,height:28,padding:0,borderRadius:10,fontSize:18,lineHeight:1}}>+</button>
+      const shiftRow = (label,pid,color) => <div key={label} style={{display:"grid",gap:4,padding:"8px 9px",border:"1px solid #E7DFD2",borderLeft:"4px solid "+color,borderRadius:10,background:"#FFFFFF"}}>
+        <b style={{color:"#746D61",fontSize:11,letterSpacing:0,fontWeight:900,lineHeight:1}}>{label}</b>
+        <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:13,fontWeight:900,color:PAL[pidIx(pid)]?.text||"#4F5D4A"}}>{pid?pName(names,pid,priv):"A definir"}</span>
+      </div>;
+      return <div key={d} style={{...card,minHeight:196,padding:10,display:"grid",gridTemplateRows:"auto 1fr auto",gap:8,background:isToday?"#FFF9EA":"#FFFDF8",borderColor:isToday?"#E8C878":"#E5DED2"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <div style={{minWidth:0}}><div style={{fontSize:11,fontWeight:900,color:"#746D61"}}>{DS[dowD(y,m,d)]}</div><b style={{fontSize:19,color:"#3F4A3A"}}>{d}</b></div>
+          <button title="Detail du jour" onClick={()=>setDayMod(d)} style={{...btn(false),minWidth:68,height:32,padding:"0 9px",borderRadius:10,fontSize:12,lineHeight:1}}>+ Detail</button>
         </div>
-        <div style={{display:"grid",gap:5,alignContent:"start"}}>
-          {[["Matin",am,"#C99A52"],["Soir",pmw,"#6F7FA8"]].map(x=><div key={x[0]} style={{display:"grid",gap:3,padding:"6px 6px",border:"1px solid #E5DED2",borderRadius:10,background:"#FFFFFF"}}>
-            <b style={{color:x[2],fontSize:11,letterSpacing:0,fontWeight:900,lineHeight:1}}>{x[0]}</b>
-            <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12,fontWeight:900,color:PAL[pidIx(x[1])]?.text||"#4F5D4A"}}>{x[1]?pName(names,x[1],priv):"A definir"}</span>
-          </div>)}
+        <div style={{display:"grid",gap:6,alignContent:"start"}}>
+          {[["Matin",am,"#C99A52"],["Soir",pmw,"#6F7FA8"]].map(x=>shiftRow(x[0],x[1],x[2]))}
         </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4,minHeight:18}}>
-          <span style={{fontSize:10,color:"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lieux[d]||"Lieu"}</span>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,minHeight:20,borderTop:"1px solid #EEE7DC",paddingTop:6}}>
+          <span style={{fontSize:11,color:"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lieux[d]||"Lieu a preciser"}</span>
           {a?.types?.length>0&&<span style={{fontSize:12}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join("")}</span>}
         </div>
       </div>;
     };
-    return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:10,display:"grid",gridTemplateColumns:"44px 1fr 44px",gap:8,alignItems:"center"}}><button onClick={()=>moveWeek(-1)} style={btn(false)}>‹</button><b style={{textAlign:"center",color:"#4F5D4A"}}>Semaine du {ws} au {Math.min(dim(y,m),ws+6)} {MFR[m]}</b><button onClick={()=>moveWeek(1)} style={btn(false)}>›</button></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:6}}>{days.map(dayBox)}</div>
-      <button onClick={()=>setEmailMod(true)} style={btn(true,"#8B9A7A")}>📧 Envoyer cette semaine</button>
+    return <div className="su" style={{display:"grid",gap:12}}>
+      <div style={{...card,padding:12,display:"grid",gridTemplateColumns:"auto 1fr auto",gap:10,alignItems:"center",background:"#FFFDF8"}}>
+        <button onClick={()=>moveWeek(-1)} style={btn(false)}>‹ Semaine</button>
+        <div style={{textAlign:"center",minWidth:0}}><b style={{display:"block",color:"#3F4A3A",fontSize:18}}>Semaine du {ws} au {rangeEnd} {MFR[m]}</b><span style={{fontSize:12,color:"#746D61"}}>{MFR[m]} {y}</span></div>
+        <button onClick={()=>moveWeek(1)} style={btn(false)}>Semaine ›</button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:8}}>{days.map(dayBox)}</div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setEmailMod(true)} style={btn(true,"#8B9A7A")}>Envoyer cette semaine</button></div>
     </div>;
   }
 
   function ConfigView`;
-    const weekViewPatch = 'const googleWeekView = `' + weekViewSource + '`;';
+    const teamMiniSource = String.raw`function TeamMini() {
+    const shown = activeIds.slice(0,8);
+    return <div style={{...card,padding:10,margin:"10px 0",display:"grid",gap:8,background:"#FFFDF8"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+        <b style={{color:"#3F4A3A"}}>Equipe</b>
+        <span style={{fontSize:12,color:"#746D61",fontWeight:900}}>{activeIds.length} auxiliaire(s)</span>
+      </div>
+      <div style={{display:"flex",gap:6,overflow:"hidden"}}>
+        {shown.map(p => <div key={p} title={pName(names,p,priv)} style={{display:"flex",alignItems:"center",gap:5,minWidth:0,padding:"6px 8px",border:"1px solid #E5DED2",borderRadius:12,background:"#FFFFFF"}}>
+          <Av t={p} sz={24} st={stat[p]} names={names} priv={priv}/>
+          <span style={{maxWidth:92,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>
+          <small style={{color:"#746D61",fontWeight:900}}>{daysByP[p]||0}j</small>
+        </div>)}
+        {activeIds.length>shown.length && <div style={{padding:"6px 8px",border:"1px solid #E5DED2",borderRadius:12,background:"#FFFFFF",fontSize:12,fontWeight:900,color:"#746D61"}}>+{activeIds.length-shown.length}</div>}
+      </div>
+    </div>;
+  }
+
+  function MonthView`;
+    const weekViewPatch = 'const googleWeekView = `' + weekViewSource + '`;\n  const googleTeamMini = `' + teamMiniSource + '`;';
 
     code = replaceOnce(
       code,
@@ -89,7 +114,7 @@
     code = replaceOnce(
       code,
       '.replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);',
-      '.replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
+      '.replace(/function TeamMini\\(\\) \\{[\\s\\S]*?\\n  function MonthView/, googleTeamMini)\n      .replace(/function WeekView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, googleWeekView)\n      .replace(/function ConfigView\\(\\) \\{[\\s\\S]*?\\n  function DayModal/, googleConfigView);'
     );
 
     code = replaceOnce(
@@ -113,7 +138,13 @@
     code = replaceOnce(
       code,
       '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(4,1fr)\\",gap:7,marginTop:10}}>{[[\\"month\\",\\"📅\\"],[\\"week\\",\\"📋\\"],[\\"hours\\",\\"⏱\\"],[\\"config\\",\\"⚙️\\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],\\"#7BAFD4\\")}>{x[1]}</button>)}</div>',
-      '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(5,1fr)\\",gap:6,marginTop:10}}>{[[\\"week\\",\\"📋\\",\\"Semaine\\",\\"view\\"],[\\"month\\",\\"📅\\",\\"Mois\\",\\"view\\"],[\\"me\\",\\"👤\\",\\"Pour moi\\",\\"email\\"],[\\"year\\",\\"🗓\\",\\"Annee\\",\\"year\\"],[\\"config\\",\\"⚙️\\",\\"Reglages\\",\\"view\\"]].map(x=><button key={x[0]} onClick={()=>x[3]===\\"year\\"?setYearMod(true):x[3]===\\"email\\"?setEmailMod(true):setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:52,flexDirection:\\"column\\",lineHeight:1.05,padding:\\"8px 4px\\"}}><span style={{fontSize:16}}>{x[1]}</span><span style={{fontSize:10}}>{x[2]}</span></button>)}</div>'
+      '<div style={{display:\\"grid\\",gridTemplateColumns:\\"repeat(5,minmax(0,1fr))\\",gap:8,marginTop:10}}>{[[\\"week\\",\\"Semaine\\",\\"Planning\\",\\"view\\"],[\\"month\\",\\"Mois\\",\\"Vue globale\\",\\"view\\"],[\\"me\\",\\"Envoyer\\",\\"Equipe\\",\\"email\\"],[\\"year\\",\\"Annee\\",\\"Recap\\",\\"year\\"],[\\"config\\",\\"Reglages\\",\\"Equipe\\",\\"view\\"]].map(x=><button key={x[0]} onClick={()=>x[3]===\\"year\\"?setYearMod(true):x[3]===\\"email\\"?setEmailMod(true):setView(x[0])} style={{...btn(view===x[0],\\"#8B9A7A\\"),minHeight:54,flexDirection:\\"column\\",alignItems:\\"flex-start\\",lineHeight:1.15,padding:\\"9px 10px\\"}}><span style={{fontSize:13,fontWeight:900}}>{x[1]}</span><span style={{fontSize:10,color:view===x[0]?\\"rgba(255,255,255,.82)\\":\\"#746D61\\"}}>{x[2]}</span></button>)}</div>'
+    );
+
+    code = replaceOnce(
+      code,
+      '<div style={{display:\\"flex\\",gap:7}}><button title={priv?`Connecte : ${authEmail||\\"admin\\"}`:\\"Connexion\\"} onClick={()=>priv?signOut():setLoginMod(true)} style={btn(priv,\\"#8B9A7A\\")}>{priv?\\"🔓 Connecte\\":\\"🔐 Connexion\\"}</button><button title=\\"Vue annuelle\\" onClick={()=>setYearMod(true)} style={btn(false)}>📅 Annee</button><button title=\\"Rapport\\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄 Rapport</button></div>',
+      '<div style={{display:\\"flex\\",gap:7,alignItems:\\"center\\"}}><button title={priv?`Connecte : ${authEmail||\\"admin\\"}`:\\"Connexion Google\\"} onClick={()=>priv?signOut():setLoginMod(true)} style={btn(priv,\\"#8B9A7A\\")}>{priv?\\"Connecte\\":\\"Connexion\\"}</button><button title=\\"Rapport\\" onClick={()=>setPdfMod(true)} style={btn(false)}>Rapport</button></div>'
     );
 
     code = replaceOnce(
