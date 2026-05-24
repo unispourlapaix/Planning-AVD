@@ -166,7 +166,7 @@
           );
           source = source.replace(
             '    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");',
-            '    code = code.replace(/function PdfModal\\\\(\\\\) \\\\{[\\\\s\\\\S]*?\\\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\\n    (0, eval)(code + "\\\\n//# sourceURL=browser-loader.patched.js");'
+            '    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
           );
           source = source
             .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
