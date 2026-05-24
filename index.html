@@ -31,10 +31,10 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-quota", { cache: "no-cache" });
+          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-report", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
-          const accountingText = "Le planning se place automatiquement en tour par tour, avec la place du chef gardee. Les heures comptables du mois se calculent ensuite sur les jours travailles: 12h jour (matin + soir) ou 12h nuit.";
+          const accountingText = "Le planning se place automatiquement en tour par tour, avec la place du chef gardee. Le planning technique comptable atteint le quota fixe de chaque auxiliaire: 151h, 71h, ou la valeur entree dans sa fiche.";
           const quotaHoursView = String.raw`function HoursView() {
     const quotaFor = p => Math.max(0,+auxRules[p]?.quota||MAX_H);
     const correctionFor = p => +ah[p]||0;
@@ -79,7 +79,7 @@
       });
     });
     return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Les heures techniques se placent automatiquement jusqu'au quota exact de chaque auxiliaire. Une meme journee peut recevoir plusieurs auxiliaires, avec des lignes jour ou nuit selon les options.</p></div>
+      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Les heures techniques se placent automatiquement jusqu'au quota fixe de chaque auxiliaire: 151h, 71h, ou la valeur entree dans sa fiche. Une meme journee peut recevoir plusieurs auxiliaires, avec des lignes jour ou nuit selon les options.</p></div>
       {activeIds.map(p => {
         const r = calc[p] || {real:0,pay:0,nights:0,days:0,rows:[],byDay:{}}, rule=auxRules[p]||{}, quota=quotaFor(p), add=correctionFor(p), special=+rule.special||0, pay=Math.round((r.pay+add)*100)/100, gap=Math.round((pay-quota)*100)/100, c=gap===0?"#4F8B5B":gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;
         const rows = Object.keys(r.byDay).map(Number).sort((a,b)=>a-b).map(d => {
@@ -119,9 +119,54 @@
       })}
     </div>;
   }`;
+          const reportModalSource = String.raw`function PdfModal() {
+    const make = () => {
+      const esc = v => String(v ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
+      const worker = id => esc(id ? pName(names,id,priv) : "A definir");
+      const dayRows = Array.from({length:dim(y,m)},(_,i)=>i+1).map(d => {
+        const day = sched[d] || {}, a = acts[d] || {};
+        const act = (a.types||[]).map(t => ACTS.find(x=>x[0]===t)?.[1] || t).join(", ");
+        const info = [lieux[d], act, a.note, a.objectif].filter(Boolean).map(esc).join("<br>");
+        return "<tr><td><b>"+esc(DS[dowD(y,m,d)])+" "+d+"</b></td><td>"+worker(day.morning?.worker)+"</td><td>"+worker(day.evening?.worker)+"</td><td>"+worker(day.night?.worker)+"</td><td>"+(info||"<span class='muted'>-</span>")+"</td></tr>";
+      }).join("");
+      const noteRows = Array.from({length:dim(y,m)},(_,i)=>i+1).map(d => {
+        const a = acts[d] || {}, act = (a.types||[]).map(t => ACTS.find(x=>x[0]===t)?.[1] || t).join(", ");
+        const text = [lieux[d], act, a.note, a.objectif].filter(Boolean).join(" · ");
+        return text ? "<tr><td><b>"+d+" "+esc(MFR[m])+"</b></td><td>"+esc(text)+"</td></tr>" : "";
+      }).join("");
+      const hourRows = activeIds.map(p => {
+        const quota = Math.max(0,+auxRules[p]?.quota||MAX_H), corr = +ah[p]||0, total = Math.max(0,quota), rest = Math.round((quota-total)*100)/100;
+        return "<tr><td><b>"+worker(p)+"</b></td><td>"+esc(quota)+"h</td><td>"+esc(corr)+"h</td><td>"+esc(total)+"h</td><td>"+esc(rest)+"h</td><td>"+esc(daysByP[p]||0)+"</td><td><b>Quota exact</b></td></tr>";
+      }).join("");
+      const generated = new Date().toLocaleDateString("fr-FR");
+      const html = "<html><head><title>Rapport Planning-AVD</title><style>"+
+        "body{font-family:Arial,sans-serif;padding:28px;color:#2f352d;background:#fffdf8}"+
+        "h1{margin:0;color:#3f4a3a;font-size:26px}h2{margin:24px 0 8px;color:#3f4a3a;font-size:17px}"+
+        ".top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #e5ded2;padding-bottom:14px;margin-bottom:16px}"+
+        ".muted{color:#746d61}.pill{display:inline-block;border:1px solid #e5ded2;border-radius:999px;padding:5px 9px;background:#fff;color:#4f5d4a;font-weight:700;font-size:12px}"+
+        "table{width:100%;border-collapse:collapse;margin:10px 0 18px;background:white;page-break-inside:auto}th{background:#f1ede4;color:#4f5d4a;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.02em}td,th{border:1px solid #e5ded2;padding:8px;vertical-align:top;font-size:13px}"+
+        "tr{page-break-inside:avoid}.hours td,.hours th{text-align:right}.hours td:first-child,.hours th:first-child{text-align:left}"+
+        "@media print{body{padding:18px}.no-print{display:none}h2{page-break-after:avoid}}"+
+        "</style></head><body>"+
+        "<div class='top'><div><h1>Planning-AVD · "+esc(MFR[m])+" "+esc(y)+"</h1><div class='muted'>Rapport mensuel simplifie · genere le "+esc(generated)+"</div></div><span class='pill'>Noms "+(priv?"visibles":"masques")+"</span></div>"+
+        "<h2>Planning du mois</h2><table><tr><th>Jour</th><th>Matin</th><th>Soir</th><th>Nuit</th><th>Lieu / notes</th></tr>"+dayRows+"</table>"+
+        "<h2>Notes et besoins</h2>"+(noteRows ? "<table><tr><th>Date</th><th>Information</th></tr>"+noteRows+"</table>" : "<p class='muted'>Aucune note particuliere renseignee.</p>")+
+        "<h2>Heures par intervenant</h2><table class='hours'><tr><th>Intervenant</th><th>Quota fixe</th><th>Correction</th><th>Total comptable</th><th>Reste</th><th>Jours planning</th><th>Statut</th></tr>"+hourRows+"</table>"+
+        "</body></html>";
+      const w=window.open("","_blank");
+      w.document.write(html);
+      w.document.close();
+      w.print();
+    };
+    return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport commence par le planning du mois, puis les notes utiles, et termine par les heures fixes de chaque intervenant.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
+  }`;
           source = source.replace(
             /const hoursViewSource = String\.raw`function HoursView\(\) \{[\s\S]*?\n  function ConfigView`;/,
             () => 'const hoursViewSource = String.raw`' + quotaHoursView + '\n\n  function ConfigView`;'
+          );
+          source = source.replace(
+            '    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");',
+            '    code = code.replace(/function PdfModal\\\\(\\\\) \\\\{[\\\\s\\\\S]*?\\\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\\n    (0, eval)(code + "\\\\n//# sourceURL=browser-loader.patched.js");'
           );
           source = source
             .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
