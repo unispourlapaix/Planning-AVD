@@ -166,7 +166,7 @@
           );
           source = source.replace(
             /\s*\(0, eval\)\(code \+ "\\n\/\/# sourceURL=browser-loader\.patched\.js"\);/,
-            '\n    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
+            '\n    code = code.replace("const fillSched = blks => {", "const syncNightWorkers = blks => { blks.filter(b => b.shift === \\"night\\" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === \\"evening\\" || x.shift === \\"morning\\") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };\\nconst fillSched = blks => {").replaceAll("const sched = fillSched(blks);", "syncNightWorkers(blks);\\n  const sched = fillSched(blks);");\n    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
           );
           source = source
             .replace(
