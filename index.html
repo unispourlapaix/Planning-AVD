@@ -72,6 +72,12 @@
     };
     return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel paysage</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport genere un calendrier detaille du mois en paysage, puis le total des heures reparties par intervenant.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
   }`;
+          const reportPrefix = 'const reportModalSource = String.raw`function PdfModal() {';
+          const reportStart = source.indexOf(reportPrefix);
+          const reportEnd = reportStart >= 0 ? source.indexOf('`;\n    code = code.replace(/function PdfModal', reportStart) : -1;
+          if (reportStart >= 0 && reportEnd > reportStart) {
+            source = source.slice(0, reportStart + reportPrefix.length) + reportSource.slice('function PdfModal() {'.length) + source.slice(reportEnd);
+          }
           source = source.replace(
             /\s*\(0, eval\)\(code \+ "\\n\/\/# sourceURL=browser-loader\.patched\.js"\);/,
             '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (sched[d]?.evening?.worker || b.workerId) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker").replaceAll("[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Soir\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]", "[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Après-midi\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]").replaceAll("label:\\"Jour soir\\"", "label:\\"Après-midi\\"").replaceAll("label:\\"Soir\\"", "label:\\"Après-midi\\"").replaceAll("s === \\\"evening\\\" ? \\\"Soir\\\"", "s === \\\"evening\\\" ? \\\"Après-midi\\\"").replaceAll(">Soir<", ">Après-midi<");\n    { const ps = code.indexOf("function PdfModal() {"), pe = code.indexOf("\\n  function AdminModal", ps); if (ps >= 0 && pe > ps) code = code.slice(0, ps) + ' + JSON.stringify(reportSource) + ' + code.slice(pe); }\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
