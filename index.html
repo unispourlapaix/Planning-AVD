@@ -1,22 +1,6 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F7F4EE" />
-    <link rel="icon" href="data:," />
-    <title>Planning-AVD</title>
-    <style>
-      #root button span b {
-        color: #746D61 !important;
-        background: #FFFFFF !important;
-        border: 1px solid #E5DED2 !important;
-        border-radius: 6px !important;
-        min-width: 12px !important;
-        text-align: center !important;
-      }
-    </style>
-  </head>
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="theme-color" content="#F7F4EE" /><link rel="icon" href="data:," /><title>Planning-AVD</title><style>#root button span b{color:#746D61!important;background:#FFFFFF!important;border:1px solid #E5DED2!important;border-radius:6px!important;min-width:12px!important;text-align:center!important}</style></head>
   <body>
     <div id="root"></div>
     <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -31,185 +15,15 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-report", { cache: "no-cache" });
+          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-night-default", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
-          const accountingText = "Le planning se place automatiquement en tour par tour, avec la place du chef gardee. Le planning technique comptable atteint le quota fixe de chaque auxiliaire: 151h, 71h, ou la valeur entree dans sa fiche.";
-          const quotaHoursView = String.raw`function HoursView() {
-    const quotaFor = p => Math.max(0,+auxRules[p]?.quota||MAX_H);
-    const correctionFor = p => +ah[p]||0;
-    const unitFor = p => {
-      const r = auxRules[p] || {};
-      if (r.shift === "morning" || r.shift === "evening") return 6;
-      return 12;
-    };
-    const technicalRows = activeIds.reduce((a,p)=>(a[p]=[],a),{});
-    const remaining = activeIds.reduce((a,p)=>(a[p]=Math.max(0,quotaFor(p)-correctionFor(p)),a),{});
-    const days = Array.from({length:dim(y,m)},(_,i)=>i+1);
-    let guard = 0, cursor = 0;
-    while (activeIds.some(p => remaining[p] > 0) && guard < dim(y,m) * Math.max(1,activeIds.length) * 8) {
-      const d = days[guard % days.length];
-      const order = activeIds.slice(cursor).concat(activeIds.slice(0,cursor));
-      order.forEach(p => {
-        if (remaining[p] <= 0 || !allowedOn(p,y,m,d,auxRules)) return;
-        const r = auxRules[p] || {};
-        const nightOk = allowedShift(p,"night",auxRules);
-        const dayOk = allowedShift(p,"morning",auxRules) || allowedShift(p,"evening",auxRules);
-        const useNight = nightOk && (r.shift === "night" || r.night) && (technicalRows[p].length % 2 === 0 || !dayOk);
-        const shift = useNight ? "night" : "day";
-        if (shift === "day" && !dayOk) return;
-        const max = shift === "night" ? 12 : unitFor(p);
-        const hours = Math.min(max,remaining[p]);
-        if (hours <= 0) return;
-        technicalRows[p].push({d,shift,hours});
-        remaining[p] = Math.round((remaining[p]-hours)*100)/100;
-      });
-      cursor = (cursor + 1) % Math.max(1,activeIds.length);
-      guard++;
-    }
-    const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,rows:technicalRows[p]||[],byDay:{}},a),{});
-    activeIds.forEach(p => {
-      (technicalRows[p]||[]).forEach(row => {
-        calc[p].real += row.hours;
-        calc[p].pay += row.hours;
-        if (!calc[p].byDay[row.d]) calc[p].byDay[row.d] = [];
-        calc[p].byDay[row.d].push(row);
-        if (row.shift === "night") calc[p].nights += row.hours / 12;
-        else calc[p].days += row.hours / 12;
-      });
-    });
-    return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Les heures techniques se placent automatiquement jusqu'au quota fixe de chaque auxiliaire: 151h, 71h, ou la valeur entree dans sa fiche. Une meme journee peut recevoir plusieurs auxiliaires, avec des lignes jour ou nuit selon les options.</p></div>
-      {activeIds.map(p => {
-        const r = calc[p] || {real:0,pay:0,nights:0,days:0,rows:[],byDay:{}}, rule=auxRules[p]||{}, quota=quotaFor(p), add=correctionFor(p), special=+rule.special||0, pay=Math.round((r.pay+add)*100)/100, gap=Math.round((pay-quota)*100)/100, c=gap===0?"#4F8B5B":gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;
-        const rows = Object.keys(r.byDay).map(Number).sort((a,b)=>a-b).map(d => {
-          const items = r.byDay[d] || [], dayHours = items.filter(x=>x.shift==="day").reduce((s,x)=>s+x.hours,0), nightHours = items.filter(x=>x.shift==="night").reduce((s,x)=>s+x.hours,0);
-          return {d, label:(dayHours?("Jour "+dayHours+"h"):"")+(dayHours&&nightHours?" + ":"")+(nightHours?("Nuit "+nightHours+"h"):""), hours:dayHours+nightHours, night:nightHours>0};
-        });
-        const alerts = [];
-        rows.forEach((row,i) => {
-          if (row.night && (r.byDay[row.d+1]||[]).some(x=>x.shift==="day")) alerts.push("Repos a verifier apres la nuit du "+row.d);
-          const seven = rows.slice(i,i+7);
-          if (seven.length===7 && seven[6].d-seven[0].d===6) alerts.push("7 jours consecutifs a verifier a partir du "+row.d);
-        });
-        return <div key={p} style={{...card,padding:12,display:"grid",gap:9,background:"#FFFDF8"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}><Av t={p} st={stat[p]} names={names} priv={priv}/><b style={{flex:1,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</b><input type="number" value={ah[p]||""} onChange={e=>setAh(x=>({...x,[p]:e.target.value}))} placeholder="+/- h" title="Correction ponctuelle" style={{width:78,padding:8,borderRadius:12,border:"1px solid #E5DED2",fontFamily:"DM Mono",fontWeight:900}} /></div>
-          <HBar v={pay} c={c}/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,fontSize:12,color:"#4F5D4A"}}>
-            <span><b>{Math.round(r.real*100)/100}h</b><br/>Faites</span>
-            <span><b>{Math.round(pay*100)/100}h</b><br/>Comptable</span>
-            <span><b>{quota}h</b><br/>Quota</span>
-            <span><b>{Math.round((quota-pay)*100)/100}h</b><br/>Reste</span>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,fontSize:12,color:"#746D61"}}>
-            <span><b>{Math.round(r.nights*100)/100}</b><br/>Nuits</span>
-            <span><b>{Math.round(r.days*100)/100}</b><br/>Jours</span>
-            <span><b>{special}h</b><br/>Cas special</span>
-          </div>
-          <div style={{display:"grid",gap:6,borderTop:"1px solid #EEE7DC",paddingTop:8}}>
-            <b style={{fontSize:12,color:"#4F5D4A"}}>Placement du mois</b>
-            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {rows.length ? rows.map(row=><span key={row.d} title={row.label} style={{fontSize:11,fontWeight:900,color:"#4F5D4A",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:999,padding:"5px 8px"}}>{row.d} · {row.hours}h</span>) : <span style={{fontSize:12,color:"#746D61"}}>Aucun jour place ce mois</span>}
-            </div>
-            {alerts.length>0 && <div style={{fontSize:12,color:"#9A6A00",fontWeight:900}}>Repos a verifier: {[...new Set(alerts)].slice(0,3).join(" · ")}</div>}
-          </div>
-          {gap===0 && <div style={{color:"#4F8B5B",fontWeight:900,fontSize:12}}>Quota exact atteint</div>}
-          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12,marginTop:0}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}
-        </div>;
-      })}
-    </div>;
-  }`;
-          const reportModalSource = String.raw`function PdfModal() {
-    const make = () => {
-      const esc = v => String(v ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
-      const worker = id => esc(id ? pName(names,id,priv) : "A definir");
-      const dayRows = Array.from({length:dim(y,m)},(_,i)=>i+1).map(d => {
-        const day = sched[d] || {}, a = acts[d] || {};
-        const act = (a.types||[]).map(t => ACTS.find(x=>x[0]===t)?.[1] || t).join(", ");
-        const info = [lieux[d], act, a.note, a.objectif].filter(Boolean).map(esc).join("<br>");
-        return "<tr><td><b>"+esc(DS[dowD(y,m,d)])+" "+d+"</b></td><td>"+worker(day.morning?.worker)+"</td><td>"+worker(day.evening?.worker)+"</td><td>"+worker(day.night?.worker)+"</td><td>"+(info||"<span class='muted'>-</span>")+"</td></tr>";
-      }).join("");
-      const noteRows = Array.from({length:dim(y,m)},(_,i)=>i+1).map(d => {
-        const a = acts[d] || {}, act = (a.types||[]).map(t => ACTS.find(x=>x[0]===t)?.[1] || t).join(", ");
-        const text = [lieux[d], act, a.note, a.objectif].filter(Boolean).join(" · ");
-        return text ? "<tr><td><b>"+d+" "+esc(MFR[m])+"</b></td><td>"+esc(text)+"</td></tr>" : "";
-      }).join("");
-      const hourRows = activeIds.map(p => {
-        const quota = Math.max(0,+auxRules[p]?.quota||MAX_H), corr = +ah[p]||0, total = Math.max(0,quota), rest = Math.round((quota-total)*100)/100;
-        return "<tr><td><b>"+worker(p)+"</b></td><td>"+esc(quota)+"h</td><td>"+esc(corr)+"h</td><td>"+esc(total)+"h</td><td>"+esc(rest)+"h</td><td>"+esc(daysByP[p]||0)+"</td><td><b>Quota exact</b></td></tr>";
-      }).join("");
-      const generated = new Date().toLocaleDateString("fr-FR");
-      const html = "<html><head><title>Rapport Planning-AVD</title><style>"+
-        "body{font-family:Arial,sans-serif;padding:28px;color:#2f352d;background:#fffdf8}"+
-        "h1{margin:0;color:#3f4a3a;font-size:26px}h2{margin:24px 0 8px;color:#3f4a3a;font-size:17px}"+
-        ".top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:3px solid #e5ded2;padding-bottom:14px;margin-bottom:16px}"+
-        ".muted{color:#746d61}.pill{display:inline-block;border:1px solid #e5ded2;border-radius:999px;padding:5px 9px;background:#fff;color:#4f5d4a;font-weight:700;font-size:12px}"+
-        "table{width:100%;border-collapse:collapse;margin:10px 0 18px;background:white;page-break-inside:auto}th{background:#f1ede4;color:#4f5d4a;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.02em}td,th{border:1px solid #e5ded2;padding:8px;vertical-align:top;font-size:13px}"+
-        "tr{page-break-inside:avoid}.hours td,.hours th{text-align:right}.hours td:first-child,.hours th:first-child{text-align:left}"+
-        "@media print{body{padding:18px}.no-print{display:none}h2{page-break-after:avoid}}"+
-        "</style></head><body>"+
-        "<div class='top'><div><h1>Planning-AVD · "+esc(MFR[m])+" "+esc(y)+"</h1><div class='muted'>Rapport mensuel simplifie · genere le "+esc(generated)+"</div></div><span class='pill'>Noms "+(priv?"visibles":"masques")+"</span></div>"+
-        "<h2>Planning du mois</h2><table><tr><th>Jour</th><th>Matin</th><th>Soir</th><th>Nuit</th><th>Lieu / notes</th></tr>"+dayRows+"</table>"+
-        "<h2>Notes et besoins</h2>"+(noteRows ? "<table><tr><th>Date</th><th>Information</th></tr>"+noteRows+"</table>" : "<p class='muted'>Aucune note particuliere renseignee.</p>")+
-        "<h2>Heures par intervenant</h2><table class='hours'><tr><th>Intervenant</th><th>Quota fixe</th><th>Correction</th><th>Total comptable</th><th>Reste</th><th>Jours planning</th><th>Statut</th></tr>"+hourRows+"</table>"+
-        "</body></html>";
-      const w=window.open("","_blank");
-      w.document.write(html);
-      w.document.close();
-      w.print();
-    };
-    return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport commence par le planning du mois, puis les notes utiles, et termine par les heures fixes de chaque intervenant.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
-  }`;
-          source = source.replace(
-            /const hoursViewSource = String\.raw`function HoursView\(\) \{[\s\S]*?\n  function ConfigView`;/,
-            () => 'const hoursViewSource = String.raw`' + quotaHoursView + '\n\n  function ConfigView`;'
-          );
           source = source.replace(
             /\s*\(0, eval\)\(code \+ "\\n\/\/# sourceURL=browser-loader\.patched\.js"\);/,
-            '\n    code = code.replace("const fillSched = blks => {", "const syncNightWorkers = blks => { blks.filter(b => b.shift === \\"night\\" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === \\"evening\\" || x.shift === \\"morning\\") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };\\nconst fillSched = blks => {").replaceAll("const sched = fillSched(blks);", "syncNightWorkers(blks);\\n  const sched = fillSched(blks);");\n    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
+            '\n    code = code.replace("const fillSched = blks => {", "const syncNightWorkers = blks => { blks.filter(b => b.shift === \\"night\\" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === \\"evening\\" || x.shift === \\"morning\\") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };\\nconst fillSched = blks => {").replaceAll("const sched = fillSched(blks);", "syncNightWorkers(blks);\\n  const sched = fillSched(blks);");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
           );
-          source = source
-            .replace(
-              'const shiftRealHours = s => s === "night" ? 12 : 6;\\nconst shiftPayHours = s => s === "night" ? 12 : 6;\\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => team.find(p => p && p !== prev && ok(p)) || team.find(p => p && ok(p)) || null;\\nconst fillSched = blks => {',
-              'const shiftRealHours = s => s === "night" ? 12 : 6;\\nconst shiftPayHours = s => s === "night" ? 12 : 6;\\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => team.find(p => p && p !== prev && ok(p)) || team.find(p => p && ok(p)) || null;\\nconst syncNightWorkers = blks => { blks.filter(b => b.shift === "night" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === "evening" || x.shift === "morning") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };\\nconst fillSched = blks => {'
-            )
-            .replaceAll('const sched = fillSched(blks);', 'syncNightWorkers(blks);\\n  const sched = fillSched(blks);')
-            .replaceAll('return { sched: fillSched(blks), blks };', 'syncNightWorkers(blks); return { sched: fillSched(blks), blks };');
-          source = source
-            .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
-            .replace('Le quota vient de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques. Jour complet: 12h reelles, 11h30 paye apres pause. Nuit: 12h.', accountingText)
-            .replace('Heures reelles MDPH / paye', 'Planning technique comptable')
-            .replace('const SHIFTS = [{id:"morning",label:"Matin",real:6,pay:5.75},{id:"evening",label:"Soir",real:6,pay:5.75},{id:"night",label:"Nuit",real:12,pay:12}];', 'const SHIFTS = [{id:"morning",label:"Jour matin",real:6,pay:6},{id:"evening",label:"Jour soir",real:6,pay:6},{id:"night",label:"Nuit",real:12,pay:12}];')
-            .replace('const shiftPayHours = s => s === "night" ? 12 : 5.75;', 'const shiftPayHours = s => s === "night" ? 12 : 6;')
-            .replace('const loadScore = (p,load={},auxRules={}) => ((load[p]||0)/quotaHours(p,auxRules));\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };', 'const addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => team.find(p => p && p !== prev && ok(p)) || team.find(p => p && ok(p)) || null;')
-            .replaceAll('const fairWe = fairPick(weTeam,load,auxRules,p=>usable(p,b),prevWe);', 'const weOrder = weTeam.slice(weIdx).concat(weTeam.slice(0,weIdx)); const fairWe = fairPick(weOrder,load,auxRules,p=>usable(p,b),prevWe);')
-            .replaceAll('let pick = fairPick(wdTeam,load,auxRules,legal,prevWd), off = pick ? Math.max(0,wdTeam.indexOf(pick)-wdIdx) : 0;', 'const wdOrder = wdTeam.slice(wdIdx).concat(wdTeam.slice(0,wdIdx)); let pick = fairPick(wdOrder,load,auxRules,legal,prevWd), off = pick ? Math.max(0,wdTeam.indexOf(pick)-wdIdx) : 0;')
-            .replaceAll('fairPick(team,load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev)', 'fairPick(team.slice(rot).concat(team.slice(0,rot)),load,auxRules,p => usable(p,b) && allowedShift(p,s.id,auxRules),prev)')
-            .replaceAll('fairPick(team,load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev)', 'fairPick(team.slice(rot).concat(team.slice(0,rot)),load,auxRules,p => usable(p,d) && allowedShift(p,s.id,auxRules),prev)')
-            .replaceAll('<br/>Reelles', '<br/>Faites')
-            .replaceAll('<br/>Paye', '<br/>Comptable')
-            .replaceAll('<br/>Jours</span>', '<br/>Jours 12h</span>');
-          source = source
-            .replace(
-              'const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0},a),{});',
-              'const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,byDay:{}},a),{});'
-            )
-            .replace(
-              'else calc[b.workerId].days += n * .5;\n    });',
-              'else calc[b.workerId].days += n * .5;\n      for (let d=b.start; d<=b.end; d++) {\n        if (!calc[b.workerId].byDay[d]) calc[b.workerId].byDay[d] = [];\n        calc[b.workerId].byDay[d].push(b.shift);\n      }\n    });'
-            )
-            .replace(
-              'const r = calc[p] || {real:0,pay:0,nights:0,days:0}, rule=auxRules[p]||{}, quota=+rule.quota||MAX_H, add=+ah[p]||0, special=+rule.special||0, pay=r.pay+add, gap=Math.round((pay-quota)*100)/100, c=gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;',
-              'const r = calc[p] || {real:0,pay:0,nights:0,days:0,byDay:{}}, rule=auxRules[p]||{}, quota=+rule.quota||MAX_H, add=+ah[p]||0, special=+rule.special||0, pay=r.pay+add, gap=Math.round((pay-quota)*100)/100, c=gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;\\n        const rows = Object.keys(r.byDay).map(Number).sort((a,b)=>a-b).map(d => { const shifts = r.byDay[d] || [], hasDay = shifts.includes("morning") || shifts.includes("evening"), hasNight = shifts.includes("night"); return {d, label:(hasDay?"Jour 12h":"")+(hasDay&&hasNight?" + ":"")+(hasNight?"Nuit 12h":""), hours:(hasDay?12:0)+(hasNight?12:0), night:hasNight}; });\\n        const alerts = [];\\n        rows.forEach((row,i) => { if (row.night && r.byDay[row.d+1]?.includes("morning")) alerts.push("Repos a verifier apres la nuit du "+row.d); const seven = rows.slice(i,i+7); if (seven.length===7 && seven[6].d-seven[0].d===6) alerts.push("7 jours consecutifs a verifier a partir du "+row.d); });'
-            )
-            .replace(
-              '          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}',
-              '          <div style={{display:"grid",gap:6,borderTop:"1px solid #EEE7DC",paddingTop:8}}>\\n            <b style={{fontSize:12,color:"#4F5D4A"}}>Placement du mois</b>\\n            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>\\n              {rows.length ? rows.map(row=><span key={row.d} title={row.label} style={{fontSize:11,fontWeight:900,color:"#4F5D4A",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:999,padding:"5px 8px"}}>{row.d} · {row.hours}h</span>) : <span style={{fontSize:12,color:"#746D61"}}>Aucun jour place ce mois</span>}\\n            </div>\\n            {alerts.length>0 && <div style={{fontSize:12,color:"#9A6A00",fontWeight:900}}>Repos a verifier: {[...new Set(alerts)].slice(0,3).join(" · ")}</div>}\\n          </div>\\n          {gap>0 && <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>+{gap}h au-dessus du quota, a valider sans majoration automatique</div>}'
-            );
           (0, eval)(source + "\n//# sourceURL=patch-loader.accounts.js");
-        } catch (error) {
-          fail(error);
-        }
+        } catch (error) { fail(error); }
       })();
     </script>
   </body>
