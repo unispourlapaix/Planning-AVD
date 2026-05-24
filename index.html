@@ -15,12 +15,12 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-couche-soir", { cache: "no-cache" });
+          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-matin-aprem-nuit", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
           source = source.replace(
             /\s*\(0, eval\)\(code \+ "\\n\/\/# sourceURL=browser-loader\.patched\.js"\);/,
-            '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "if (b.shift === \\"night\\") { const sameDay = sched[d]?.evening?.worker; if (sameDay) b.workerId = sameDay; }\\n      const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replaceAll("[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Soir\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]", "[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Soir\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Couché\\\",nw,\\\"#44506F\\\"]").replaceAll("label:\\"Nuit\\"", "label:\\"Couché\\"").replaceAll("s === \\\"night\\\" ? \\\"Nuit\\\"", "s === \\\"night\\\" ? \\\"Couché\\\"");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
+            '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "if (b.shift === \\"night\\") { const sameDay = sched[d]?.evening?.worker; if (sameDay) b.workerId = sameDay; }\\n      const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replaceAll("[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Soir\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]", "[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Après-midi\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]").replaceAll("label:\\"Jour soir\\"", "label:\\"Après-midi\\"").replaceAll("label:\\"Soir\\"", "label:\\"Après-midi\\"").replaceAll("s === \\\"evening\\\" ? \\\"Soir\\\"", "s === \\\"evening\\\" ? \\\"Après-midi\\\"").replaceAll(">Soir<", ">Après-midi<");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
           );
           (0, eval)(source + "\n//# sourceURL=patch-loader.accounts.js");
         } catch (error) { fail(error); }
