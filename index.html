@@ -1,6 +1,15 @@
 <!doctype html>
 <html lang="fr">
-  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="theme-color" content="#F7F4EE" /><link rel="icon" href="data:," /><title>Planning-AVD</title><style>#root button span b{color:#746D61!important;background:#FFFFFF!important;border:1px solid #E5DED2!important;border-radius:6px!important;min-width:12px!important;text-align:center!important}</style></head>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#F7F4EE" />
+    <link rel="icon" href="data:," />
+    <title>Planning-AVD</title>
+    <style>
+      #root button span b{color:#746D61!important;background:#FFFFFF!important;border:1px solid #E5DED2!important;border-radius:6px!important;min-width:12px!important;text-align:center!important}
+    </style>
+  </head>
   <body>
     <div id="root"></div>
     <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -15,15 +24,62 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260524-report-undefined-fix", { cache: "no-cache" });
+          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-landscape-report", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
+          const reportSource = String.raw`function PdfModal() {
+    const make = () => {
+      const clean = v => { const s = String(v ?? ""); return s === "undefined" || s === "null" ? "" : s; };
+      const esc = v => clean(v).replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
+      const worker = id => id ? esc(pName(names,id,priv) || names?.[id] || id) : "A definir";
+      const totals = activeIds.reduce((a,p)=>(a[p]={morning:0,afternoon:0,night:0,total:0,days:0},a),{});
+      const add = (p,k,h) => { if (!p || !totals[p]) return; totals[p][k] += h; totals[p].total += h; };
+      const dayCell = d => {
+        if (d < 1 || d > dim(y,m)) return "<td class='empty'></td>";
+        const day = sched[d] || {}, a = acts[d] || {};
+        const am = day.morning?.worker, ap = day.evening?.worker, nt = ap || day.night?.worker;
+        add(am,"morning",6); add(ap,"afternoon",6); add(nt,"night",12);
+        [am,ap,nt].filter(Boolean).forEach((p,i,arr) => { if (arr.indexOf(p) === i && totals[p]) totals[p].days += 1; });
+        const act = (a.types||[]).map(t => ACTS.find(x=>x[0]===t)?.[1] || t).filter(Boolean).join(", ");
+        const info = [lieux[d],act,a.note,a.objectif].map(clean).filter(Boolean).map(esc).join("<br>");
+        return "<td><div class='num'>"+d+"</div><div class='line'><b>Matin</b><span>"+worker(am)+"</span><em>6h</em></div><div class='line'><b>Apres-midi</b><span>"+worker(ap)+"</span><em>6h</em></div><div class='line night'><b>Nuit</b><span>"+worker(nt)+"</span><em>12h</em></div>"+(info?"<div class='info'>"+info+"</div>":"")+"</td>";
+      };
+      const firstDow = dowD(y,m,1), totalDays = dim(y,m), cells = [];
+      for (let i=0;i<firstDow;i++) cells.push(dayCell(0));
+      for (let d=1; d<=totalDays; d++) cells.push(dayCell(d));
+      while (cells.length % 7) cells.push(dayCell(0));
+      const weeks = [];
+      for (let i=0;i<cells.length;i+=7) weeks.push("<tr>"+cells.slice(i,i+7).join("")+"</tr>");
+      const hourRows = activeIds.map(p => {
+        const r = totals[p] || {morning:0,afternoon:0,night:0,total:0,days:0}, quota=Math.max(0,+auxRules[p]?.quota||MAX_H), corr=+ah[p]||0, total=Math.round((r.total+corr)*100)/100, rest=Math.round((quota-total)*100)/100;
+        return "<tr><td><b>"+worker(p)+"</b></td><td>"+esc(r.days)+"</td><td>"+esc(r.morning)+"h</td><td>"+esc(r.afternoon)+"h</td><td>"+esc(r.night)+"h</td><td><b>"+esc(total)+"h</b></td><td>"+esc(quota)+"h</td><td>"+esc(rest)+"h</td></tr>";
+      }).join("");
+      const generated = new Date().toLocaleDateString("fr-FR");
+      const html = "<html><head><title>Rapport Planning-AVD</title><style>"+
+        "@page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#2f352d;background:#fffdf8;margin:0;padding:0}"+
+        "h1{margin:0;color:#3f4a3a;font-size:21px}h2{margin:10px 0 6px;color:#3f4a3a;font-size:14px}.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;border-bottom:2px solid #e5ded2;padding-bottom:8px;margin-bottom:8px}.muted{color:#746d61;font-size:11px}.pill{border:1px solid #e5ded2;border-radius:999px;padding:4px 8px;background:#fff;color:#4f5d4a;font-weight:700;font-size:11px}"+
+        ".calendar{width:100%;border-collapse:collapse;table-layout:fixed}.calendar th{background:#f1ede4;color:#4f5d4a;font-size:10px;text-transform:uppercase;padding:5px;border:1px solid #e5ded2}.calendar td{height:92px;vertical-align:top;border:1px solid #e5ded2;background:#fff;padding:4px}.calendar td.empty{background:#f6f2ea}.num{font-weight:900;color:#3f4a3a;font-size:13px;margin-bottom:3px}.line{display:grid;grid-template-columns:45px 1fr 24px;gap:3px;align-items:center;font-size:9px;line-height:1.15;margin:2px 0}.line b{color:#746d61}.line span{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.line em{font-style:normal;text-align:right;color:#4f5d4a}.night{border-top:1px solid #eee7dc;padding-top:3px}.info{margin-top:3px;border-top:1px dashed #e5ded2;padding-top:3px;color:#746d61;font-size:8.5px;line-height:1.2}"+
+        ".hours{width:100%;border-collapse:collapse;margin-top:6px}.hours th{background:#f1ede4;color:#4f5d4a;text-align:left;font-size:10px;padding:5px;border:1px solid #e5ded2}.hours td{font-size:11px;padding:5px;border:1px solid #e5ded2;background:#fff}.hours td:not(:first-child),.hours th:not(:first-child){text-align:right}"+
+        "</style></head><body>"+
+        "<div class='top'><div><h1>Planning-AVD · "+esc(MFR[m])+" "+esc(y)+"</h1><div class='muted'>Rapport mensuel paysage · genere le "+esc(generated)+"</div></div><span class='pill'>Noms "+(priv?"visibles":"masques")+"</span></div>"+
+        "<h2>Planning detaille du mois</h2><table class='calendar'><thead><tr><th>Lundi</th><th>Mardi</th><th>Mercredi</th><th>Jeudi</th><th>Vendredi</th><th>Samedi</th><th>Dimanche</th></tr></thead><tbody>"+weeks.join("")+"</tbody></table>"+
+        "<h2>Heures reparties par intervenant</h2><table class='hours'><tr><th>Intervenant</th><th>Jours</th><th>Matin</th><th>Apres-midi</th><th>Nuit</th><th>Total reparti</th><th>Quota</th><th>Reste</th></tr>"+hourRows+"</table>"+
+        "</body></html>";
+      const w=window.open("","_blank");
+      w.document.write(html.replaceAll("undefined","").replaceAll("null",""));
+      w.document.close();
+      w.print();
+    };
+    return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel paysage</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport genere un calendrier detaille du mois en paysage, puis le total des heures reparties par intervenant.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
+  }`;
           source = source.replace(
             /\s*\(0, eval\)\(code \+ "\\n\/\/# sourceURL=browser-loader\.patched\.js"\);/,
-            '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (sched[d]?.evening?.worker || b.workerId) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker").replaceAll("[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Soir\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]", "[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Après-midi\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]").replaceAll("label:\\"Jour soir\\"", "label:\\"Après-midi\\"").replaceAll("label:\\"Soir\\"", "label:\\"Après-midi\\"").replaceAll("s === \\\"evening\\\" ? \\\"Soir\\\"", "s === \\\"evening\\\" ? \\\"Après-midi\\\"").replaceAll(">Soir<", ">Après-midi<");\n    code = code.replaceAll("${pName(names,b.workerId,priv)}", "${b.workerId ? (pName(names,b.workerId,priv)||\\\"A definir\\\") : \\\"A definir\\\"}").replaceAll("${pName(names,p,priv)}", "${pName(names,p,priv)||p}").replace("w.document.write(`<html", "w.document.write(String(`<html").replace("</body></html>`); w.document.close(); w.print();", "</body></html>`).replaceAll(\\\"undefined\\\",\\\"\\\").replaceAll(\\\"null\\\",\\\"\\\")); w.document.close(); w.print();");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
+            '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (sched[d]?.evening?.worker || b.workerId) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker").replaceAll("[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Soir\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]", "[\\\"Matin\\\",am,\\\"#C99A52\\\"],[\\\"Après-midi\\\",pmw,\\\"#6F7FA8\\\"],[\\\"Nuit\\\",nw,\\\"#44506F\\\"]").replaceAll("label:\\"Jour soir\\"", "label:\\"Après-midi\\"").replaceAll("label:\\"Soir\\"", "label:\\"Après-midi\\"").replaceAll("s === \\\"evening\\\" ? \\\"Soir\\\"", "s === \\\"evening\\\" ? \\\"Après-midi\\\"").replaceAll(">Soir<", ">Après-midi<");\n    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
           );
           (0, eval)(source + "\n//# sourceURL=patch-loader.accounts.js");
-        } catch (error) { fail(error); }
+        } catch (error) {
+          fail(error);
+        }
       })();
     </script>
   </body>
