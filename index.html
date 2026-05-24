@@ -165,9 +165,16 @@
             () => 'const hoursViewSource = String.raw`' + quotaHoursView + '\n\n  function ConfigView`;'
           );
           source = source.replace(
-            '    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");',
-            '    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
+            /\s*\(0, eval\)\(code \+ "\\n\/\/# sourceURL=browser-loader\.patched\.js"\);/,
+            '\n    code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportModalSource) + ' + "\\n\\n  function AdminModal");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");'
           );
+          source = source
+            .replace(
+              'const shiftRealHours = s => s === "night" ? 12 : 6;\\nconst shiftPayHours = s => s === "night" ? 12 : 6;\\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => team.find(p => p && p !== prev && ok(p)) || team.find(p => p && ok(p)) || null;\\nconst fillSched = blks => {',
+              'const shiftRealHours = s => s === "night" ? 12 : 6;\\nconst shiftPayHours = s => s === "night" ? 12 : 6;\\nconst quotaHours = (p,auxRules={}) => Math.max(1,+auxRules[p]?.quota||MAX_H);\\nconst blockHours = b => Math.max(1,b.end-b.start+1)*shiftPayHours(b.shift);\\nconst addLoad = (load,p,b) => { if (p) load[p] = (load[p]||0) + blockHours(b); return p; };\\nconst fairPick = (team,load,auxRules,ok,prev=null) => team.find(p => p && p !== prev && ok(p)) || team.find(p => p && ok(p)) || null;\\nconst syncNightWorkers = blks => { blks.filter(b => b.shift === "night" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === "evening" || x.shift === "morning") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };\\nconst fillSched = blks => {'
+            )
+            .replaceAll('const sched = fillSched(blks);', 'syncNightWorkers(blks);\\n  const sched = fillSched(blks);')
+            .replaceAll('return { sched: fillSched(blks), blks };', 'syncNightWorkers(blks); return { sched: fillSched(blks), blks };');
           source = source
             .replace('On couvre 24h par jour: 12h jour et 12h nuit. Les quotas viennent de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques.', accountingText)
             .replace('Le quota vient de la fiche auxiliaire (ex: 151h, 72h). Les depassements sont des ecarts a valider, pas des heures sup automatiques. Jour complet: 12h reelles, 11h30 paye apres pause. Nuit: 12h.', accountingText)
