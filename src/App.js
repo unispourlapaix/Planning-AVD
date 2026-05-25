@@ -169,7 +169,7 @@ function ConfigView({ auxiliaries, setAuxiliaries }) {
           h("option", { value: "custom" }, "Jours precis"),
         )),
         h(Field, { label: "Creneaux autorises" }, h(Select, { value: aux.shift, onChange: value => patchAux(aux.id, { shift: value }) },
-          h("option", { value: "all" }, "Jour et soir"),
+          h("option", { value: "all" }, "Jour et nuit"),
           h("option", { value: "morning" }, "Matin seulement"),
           h("option", { value: "afternoon" }, "Soir seulement"),
           h("option", { value: "night" }, "Nuits seulement"),
@@ -184,7 +184,7 @@ function ConfigView({ auxiliaries, setAuxiliaries }) {
         }, label);
       })) : null,
       h(Checkbox, { checked: aux.lead, onChange: value => patchAux(aux.id, { lead: value }), label: "Chef d'equipe prioritaire en semaine" }),
-      h(Checkbox, { checked: aux.night, onChange: value => patchAux(aux.id, { night: value }), label: "Peut faire la surveillance de nuit 12h" }),
+      h(Checkbox, { checked: aux.night || aux.shift === "all", onChange: value => patchAux(aux.id, { night: value }), label: aux.shift === "all" ? "Nuit incluse avec Jour et nuit" : "Peut faire la surveillance de nuit 12h" }),
     ))),
   );
 }
