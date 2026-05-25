@@ -50,31 +50,6 @@
         }
         try {
           let source = await loadText("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-stable-loader");
-          source = source
-            .replace(
-              'fetch("./browser-loader.js", { cache: "no-cache" })',
-              'fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/browser-loader.js?v=20260525-chef-fair", { cache: "no-cache" })'
-            )
-            .replace(
-              'const allowedShift = (p,shift,auxRules={}) => shift === "night" ? !!auxRules[p]?.night || auxRules[p]?.shift === "night" : (!auxRules[p]?.shift || auxRules[p].shift === "all" || auxRules[p].shift === shift);',
-              'const allowedShift = (p,shift,auxRules={}) => { const r=auxRules[p]||{}, s=r.shift||"all"; if (shift==="night") return !!r.night || s==="night"; if (s==="night") return false; if (s==="morning") return shift==="morning"; if (s==="evening") return shift==="evening"; return s==="all" || s===shift; };'
-            )
-            .replace(
-              'const shiftPayHours = s => s === "night" ? 12 : 5.75;',
-              'const shiftPayHours = s => s === "night" ? 12 : 6;'
-            )
-            .replace(
-              'const fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };',
-              'const fairPick = (team,load,auxRules,ok,prev=null) => { const pool = team.filter(p => p && ok(p)); const src = pool.filter(p => p !== prev); const list = src.length ? src : pool; return list.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules) || team.indexOf(a)-team.indexOf(b))[0] || null; };'
-            )
-            .replace(
-              'const rotationTeam = (ids=[],auxRules={}) => { const base = ids.filter(p => TIDS.includes(p)); const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };',
-              'const rotationTeam = (ids=[],auxRules={},weekend=false) => { const base = ids.filter(p => TIDS.includes(p)); if (weekend) return base; const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return [lead,...others]; };'
-            )
-            .replace(
-              'const weTeam = rotationTeam(baseTeam,auxRules);\n  const wdTeam = weTeam;',
-              'const weTeam = rotationTeam(baseTeam,auxRules,true);\n  const wdTeam = rotationTeam(baseTeam,auxRules,false);'
-            );
           (0, eval)(source + "\n//# sourceURL=planning-avd-inline-loader.js");
         } catch (error) {
           fail(error);
