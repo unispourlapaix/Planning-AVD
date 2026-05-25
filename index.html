@@ -7,7 +7,61 @@
     <link rel="icon" href="data:," />
     <title>Planning-AVD</title>
     <style>
-      #root button span b{color:#746D61!important;background:#FFFFFF!important;border:1px solid #E5DED2!important;border-radius:6px!important;min-width:12px!important;text-align:center!important}
+      @import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Space+Grotesk:wght@400;600;700&display=swap");
+      :root{
+        --glass:rgba(255,255,255,.58);
+        --glass-strong:rgba(255,255,255,.78);
+        --line:rgba(255,255,255,.92);
+        --ink:#25302c;
+        --muted:#6b746f;
+        --mint:#bff4df;
+        --pink:#ffd2ea;
+        --blue:#c9e9ff;
+        --lilac:#ddd6ff;
+        --sun:#ffe7a8;
+      }
+      html,body{min-height:100%;margin:0;background:
+        radial-gradient(circle at 12% 8%, rgba(191,244,223,.72), transparent 26%),
+        radial-gradient(circle at 86% 10%, rgba(221,214,255,.68), transparent 28%),
+        radial-gradient(circle at 25% 88%, rgba(255,210,234,.65), transparent 30%),
+        linear-gradient(135deg,#fffefa 0%,#f6fbff 45%,#fff8fd 100%)!important;}
+      body{font-family:"Space Grotesk",system-ui,sans-serif;color:var(--ink);letter-spacing:0;}
+      #root{isolation:isolate;}
+      #root *{letter-spacing:0!important;}
+      #root h1,#root h2,#root h3,#root b{font-family:"Orbitron","Space Grotesk",system-ui,sans-serif!important;}
+      #root>div{background:transparent!important;}
+      #root div[style*="background"],#root section,#root article{
+        border-color:rgba(255,255,255,.92)!important;
+      }
+      #root div[style*="border-radius"],#root div[style*="box-shadow"],#root div[style*="background:#FFF"],#root div[style*="background: #FFF"],#root div[style*="background:rgba"],#root div[style*="background: rgba"]{
+        background:linear-gradient(145deg,rgba(255,255,255,.74),rgba(255,255,255,.42))!important;
+        border:1px solid var(--line)!important;
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,.96),
+          inset 0 -1px 0 rgba(120,140,160,.10),
+          0 14px 34px rgba(90,110,130,.16),
+          0 3px 0 rgba(255,255,255,.55)!important;
+        backdrop-filter:blur(18px) saturate(1.18);
+      }
+      #root button,#root a[href^="mailto:"],#root input,#root select,#root textarea{
+        font-family:"Space Grotesk",system-ui,sans-serif!important;
+        border:1px solid rgba(255,255,255,.95)!important;
+        background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(255,255,255,.50))!important;
+        color:#29352f!important;
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 9px 22px rgba(102,122,142,.15),0 2px 0 rgba(255,255,255,.72)!important;
+        backdrop-filter:blur(14px) saturate(1.2);
+      }
+      #root button{font-weight:800!important;text-shadow:0 1px 0 rgba(255,255,255,.55);transition:transform .16s ease,box-shadow .16s ease,filter .16s ease;}
+      #root button:hover{transform:translateY(-1px);filter:saturate(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 14px 28px rgba(92,112,132,.20),0 3px 0 rgba(255,255,255,.78)!important;}
+      #root button:active{transform:translateY(1px);box-shadow:inset 0 2px 8px rgba(90,110,130,.12),0 5px 12px rgba(92,112,132,.12)!important;}
+      #root button:nth-of-type(4n+1){background:linear-gradient(145deg,rgba(191,244,223,.84),rgba(255,255,255,.54))!important;}
+      #root button:nth-of-type(4n+2){background:linear-gradient(145deg,rgba(201,233,255,.84),rgba(255,255,255,.54))!important;}
+      #root button:nth-of-type(4n+3){background:linear-gradient(145deg,rgba(255,210,234,.84),rgba(255,255,255,.54))!important;}
+      #root button:nth-of-type(4n+4){background:linear-gradient(145deg,rgba(221,214,255,.84),rgba(255,255,255,.54))!important;}
+      #root button span b{color:#5d6470!important;background:rgba(255,255,255,.72)!important;border:1px solid rgba(255,255,255,.95)!important;border-radius:8px!important;min-width:12px!important;text-align:center!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 10px rgba(110,120,140,.12)!important}
+      #root input:focus,#root select:focus,#root textarea:focus{outline:2px solid rgba(201,233,255,.92)!important;outline-offset:2px;}
+      #root [style*="color:#294C69"],#root [style*="color: #294C69"],#root [style*="color:#3F4A3A"],#root [style*="color: #3F4A3A"]{color:#25302c!important;}
+      #root [style*="color:#746D61"],#root [style*="color: #746D61"],#root [style*="color:#667F94"],#root [style*="color: #667F94"]{color:var(--muted)!important;}
     </style>
   </head>
   <body>
@@ -80,7 +134,8 @@
           if (reportStart >= 0 && reportEnd > reportStart) {
             source = source.slice(0, reportStart + reportPrefix.length) + reportSource.slice('function PdfModal() {'.length) + source.slice(reportEnd);
           }
-          const beforeEvalPatch = 'code = code.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportSource) + ' + "\\n\\n  function AdminModal").replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
+          const sourceHook = "source += \"\\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));\";";
+          const beforeEvalPatch = 'code = code.replace(' + JSON.stringify(sourceHook) + ', ' + JSON.stringify('source = source.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ') + ' + ' + JSON.stringify(JSON.stringify(reportSource)) + ' + ' + JSON.stringify(' + "\\n\\n  function AdminModal").replaceAll("Soir", "Après-midi");\n    ' + sourceHook) + ').replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
           source = source.split('(0, eval)(code').join(beforeEvalPatch + '(0, eval)(code');
           const evalCall = '(0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
           const evalPatch = '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (sched[d]?.evening?.worker || b.workerId) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker").replaceAll("[\\\\\\\"Matin\\\\\\\",am,\\\\\\\"#C99A52\\\\\\\"],[\\\\\\\"Soir\\\\\\\",pmw,\\\\\\\"#6F7FA8\\\\\\\"],[\\\\\\\"Nuit\\\\\\\",nw,\\\\\\\"#44506F\\\\\\\"]", "[\\\\\\\"Matin\\\\\\\",am,\\\\\\\"#C99A52\\\\\\\"],[\\\\\\\"Après-midi\\\\\\\",pmw,\\\\\\\"#6F7FA8\\\\\\\"],[\\\\\\\"Nuit\\\\\\\",nw,\\\\\\\"#44506F\\\\\\\"]").replaceAll("label:\\\\\\\"Jour soir\\\\\\\"", "label:\\\\\\\"Après-midi\\\\\\\"").replaceAll("label:\\\\\\\"Soir\\\\\\\"", "label:\\\\\\\"Après-midi\\\\\\\"").replaceAll("s === \\\\\\\"evening\\\\\\\" ? \\\\\\\"Soir\\\\\\\"", "s === \\\\\\\"evening\\\\\\\" ? \\\\\\\"Après-midi\\\\\\\"").replaceAll(">Soir<", ">Après-midi<");\n    { const ps = code.indexOf("function PdfModal() {"), pe = code.indexOf("\\n  function AdminModal", ps); if (ps >= 0 && pe > ps) code = code.slice(0, ps) + ' + JSON.stringify(reportSource) + ' + code.slice(pe); }\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
