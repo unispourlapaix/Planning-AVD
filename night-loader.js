@@ -28,7 +28,7 @@
       )
       .replace(
         'const rotationTeam = (ids=[],auxRules={}) => { const base = ids.filter(p => TIDS.includes(p)); const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };',
-        'const rotationTeam = (ids=[],auxRules={},weekend=false) => { const base = ids.filter(p => TIDS.includes(p)); if (weekend) return base; const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };'
+        'const rotationTeam = (ids=[],auxRules={},weekend=false) => { const base = ids.filter(p => TIDS.includes(p)); if (weekend) return base; const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return [lead,...others]; };'
       )
       .replace(
         'const weTeam = rotationTeam(baseTeam,auxRules);\n  const wdTeam = weTeam;',
