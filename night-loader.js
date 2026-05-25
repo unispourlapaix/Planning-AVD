@@ -19,6 +19,14 @@
         'const allowedShift = (p,shift,auxRules={}) => { const r=auxRules[p]||{}, s=r.shift||"all"; if (shift==="night") return !!r.night || s==="night"; if (s==="night") return false; if (s==="morning") return shift==="morning"; if (s==="evening") return shift==="evening"; return s==="all" || s===shift; };'
       )
       .replace(
+        'const shiftPayHours = s => s === "night" ? 12 : 5.75;',
+        'const shiftPayHours = s => s === "night" ? 12 : 6;'
+      )
+      .replace(
+        'const fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };',
+        'const fairPick = (team,load,auxRules,ok,prev=null) => { const pool = team.filter(p => p && ok(p)); const src = pool.filter(p => p !== prev); const list = src.length ? src : pool; return list.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules) || team.indexOf(a)-team.indexOf(b))[0] || null; };'
+      )
+      .replace(
         '<option value="all">Tous les jours</option><option value="weekend">Week-end seulement</option><option value="weekdays">Semaine seulement</option><option value="custom">Jours precis</option>',
         '<option value="all">Tous les jours</option><option value="weekdays">Semaine seulement</option><option value="weekend">Week-end seulement</option><option value="saturday">Samedi seulement</option><option value="sunday">Dimanche seulement</option><option value="custom">Jours precis</option>'
       )
