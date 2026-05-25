@@ -126,6 +126,90 @@
     };
     return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel paysage</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport genere un calendrier detaille du mois en paysage, puis le total des heures reparties par intervenant.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
   }`;
+          const hoursSource = String.raw`function HoursView() {
+    const quotaFor = p => Math.max(0,+auxRules[p]?.quota||MAX_H);
+    const correctionFor = p => +ah[p]||0;
+    const monthDays = Array.from({length:dim(y,m)},(_,i)=>i+1);
+    const rowsByPerson = activeIds.reduce((a,p)=>(a[p]=[],a),{});
+    const byDay = monthDays.reduce((a,d)=>(a[d]=[],a),{});
+    const labelFor = row => row.shift === "night" ? "Nuit" : row.shift === "morning" ? "Matin" : row.shift === "evening" ? "Apres-midi" : "Jour";
+    const canUse = (p,d,shift) => {
+      if (!allowedOn(p,y,m,d,auxRules)) return false;
+      if (shift === "night" && !allowedShift(p,"night",auxRules)) return false;
+      if (shift !== "night" && !(allowedShift(p,"morning",auxRules) || allowedShift(p,"evening",auxRules))) return false;
+      if ((byDay[d]||[]).some(x=>x.p===p)) return false;
+      if (shift !== "night" && (byDay[d-1]||[]).some(x=>x.p===p && x.shift==="night")) return false;
+      if (shift === "night" && (byDay[d+1]||[]).some(x=>x.p===p && x.shift!=="night")) return false;
+      return true;
+    };
+    const nearestDay = (p,wanted,shift) => {
+      for (let off=0; off<dim(y,m); off++) {
+        const tries = off ? [wanted-off,wanted+off] : [wanted];
+        for (const d of tries) if (d>=1 && d<=dim(y,m) && canUse(p,d,shift)) return d;
+      }
+      return monthDays.find(d=>allowedOn(p,y,m,d,auxRules) && !(byDay[d]||[]).some(x=>x.p===p)) || 1;
+    };
+    const shiftsFor = p => {
+      const r = auxRules[p] || {};
+      if (r.shift === "morning") return [{shift:"morning",hours:6}];
+      if (r.shift === "evening") return [{shift:"evening",hours:6}];
+      if (r.shift === "night") return [{shift:"night",hours:12}];
+      if (r.night) return [{shift:"day",hours:12},{shift:"night",hours:12}];
+      return [{shift:"day",hours:12}];
+    };
+    activeIds.forEach((p,personIx) => {
+      let left = Math.max(0,quotaFor(p)-correctionFor(p));
+      const shifts = shiftsFor(p), baseUnit = Math.max(...shifts.map(s=>s.hours)), slots = Math.max(1,Math.ceil(left/baseUnit));
+      for (let i=0; left>0 && i<slots+8; i++) {
+        const pref = shifts[(i + personIx) % shifts.length];
+        const hours = Math.min(pref.hours,left);
+        const wanted = Math.max(1,Math.min(dim(y,m),Math.round(1 + ((i+.5) * dim(y,m) / slots))));
+        const d = nearestDay(p,wanted,pref.shift);
+        const row = {p,d,shift:pref.shift,hours:Math.round(hours*100)/100};
+        rowsByPerson[p].push(row);
+        byDay[d].push(row);
+        left = Math.round((left-hours)*100)/100;
+      }
+      if (left>0) {
+        monthDays.forEach(d => {
+          if (left<=0 || !allowedOn(p,y,m,d,auxRules) || (byDay[d]||[]).some(x=>x.p===p)) return;
+          const hours = Math.min(12,left), row = {p,d,shift:"day",hours:Math.round(hours*100)/100};
+          rowsByPerson[p].push(row); byDay[d].push(row); left = Math.round((left-hours)*100)/100;
+        });
+      }
+    });
+    const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,rows:rowsByPerson[p]||[],byDay:{}},a),{});
+    activeIds.forEach(p => (rowsByPerson[p]||[]).forEach(row => {
+      calc[p].real += row.hours; calc[p].pay += row.hours;
+      if (!calc[p].byDay[row.d]) calc[p].byDay[row.d] = [];
+      calc[p].byDay[row.d].push(row);
+      if (row.shift === "night") calc[p].nights += row.hours / 12;
+      else calc[p].days += row.hours / 12;
+    }));
+    const first = dowD(y,m,1), cells = Array.from({length:first+dim(y,m)},(_,i)=>i<first?null:i-first+1);
+    while (cells.length % 7) cells.push(null);
+    return <div className="su" style={{display:"grid",gap:10}}>
+      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Les quotas sont repartis sur tout le mois. Plusieurs auxiliaires peuvent etre places sur la meme journee pour atteindre les heures de chacun sans concentrer le travail au debut du mois.</p></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:7}}>
+        {cells.map((d,i)=><div key={i} style={{...card,minHeight:96,padding:8,background:d?"#FFFDF8":"rgba(255,255,255,.32)",display:"grid",gap:5,alignContent:"start"}}>
+          {d&&<><b style={{fontSize:13,color:"#3F4A3A"}}>{d}</b>{(byDay[d]||[]).length ? (byDay[d]||[]).map((r,j)=><span key={j} style={{fontSize:10,fontWeight:900,color:PAL[pidIx(r.p)].text,background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:8,padding:"4px 5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{labelFor(r)} · {pName(names,r.p,priv)} · {r.hours}h</span>) : <span style={{fontSize:11,color:"#746D61"}}>Libre</span>}</>}
+        </div>)}
+      </div>
+      {activeIds.map(p => {
+        const r = calc[p] || {real:0,pay:0,nights:0,days:0,rows:[],byDay:{}}, quota=quotaFor(p), pay=Math.round((r.pay+correctionFor(p))*100)/100, gap=Math.round((quota-pay)*100)/100, c=gap===0?"#4F8B5B":gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;
+        const placement = (r.rows||[]).slice().sort((a,b)=>a.d-b.d).map(row => row.d+" "+labelFor(row)+" "+row.hours+"h");
+        return <div key={p} style={{...card,padding:12,display:"grid",gap:9,background:"#FFFDF8"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><Av t={p} st={stat[p]} names={names} priv={priv}/><b style={{flex:1,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</b><input type="number" value={ah[p]||""} onChange={e=>setAh(x=>({...x,[p]:e.target.value}))} placeholder="+/- h" title="Correction ponctuelle" style={{width:78,padding:8,borderRadius:12,border:"1px solid #E5DED2",fontFamily:"DM Mono",fontWeight:900}} /></div>
+          <HBar v={pay} c={c}/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,fontSize:12,color:"#4F5D4A"}}>
+            <span><b>{Math.round(r.real*100)/100}h</b><br/>Placees</span><span><b>{quota}h</b><br/>Quota</span><span><b>{Math.round(r.nights*100)/100}</b><br/>Nuits</span><span><b>{gap}h</b><br/>Ecart</span>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{placement.length ? placement.map(x=><span key={x} style={{fontSize:11,fontWeight:900,color:"#4F5D4A",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:999,padding:"5px 8px"}}>{x}</span>) : <span style={{fontSize:12,color:"#746D61"}}>Aucune heure placee</span>}</div>
+          {gap===0 ? <div style={{color:"#4F8B5B",fontWeight:900,fontSize:12}}>Quota exact atteint</div> : <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>Ecart a verifier: {gap}h</div>}
+        </div>;
+      })}
+    </div>;
+  }`;
           const reportPrefix = 'const reportModalSource = String.raw`function PdfModal() {';
           const reportStart = source.indexOf(reportPrefix);
           const reportReplace = reportStart >= 0 ? source.indexOf('code = code.replace(/function PdfModal', reportStart) : -1;
@@ -135,7 +219,8 @@
             source = source.slice(0, reportStart + reportPrefix.length) + reportSource.slice('function PdfModal() {'.length) + source.slice(reportEnd);
           }
           const sourceHook = "source += \"\\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));\";";
-          const beforeEvalPatch = 'code = code.replace(' + JSON.stringify(sourceHook) + ', ' + JSON.stringify('source = source.replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ') + ' + ' + JSON.stringify(JSON.stringify(reportSource)) + ' + ' + JSON.stringify(' + "\\n\\n  function AdminModal").replaceAll("Soir", "Après-midi");\n    ' + sourceHook) + ').replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
+          const sourcePatch = 'source = source.replace(/function HoursView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, ' + JSON.stringify(hoursSource) + ' + "\\n\\n  function ConfigView").replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportSource) + ' + "\\n\\n  function AdminModal").replaceAll("Soir", "Après-midi");\n    ' + sourceHook;
+          const beforeEvalPatch = 'code = code.replace(' + JSON.stringify(sourceHook) + ', ' + JSON.stringify(sourcePatch) + ').replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
           source = source.split('(0, eval)(code').join(beforeEvalPatch + '(0, eval)(code');
           const evalCall = '(0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
           const evalPatch = '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (sched[d]?.evening?.worker || b.workerId) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker").replaceAll("[\\\\\\\"Matin\\\\\\\",am,\\\\\\\"#C99A52\\\\\\\"],[\\\\\\\"Soir\\\\\\\",pmw,\\\\\\\"#6F7FA8\\\\\\\"],[\\\\\\\"Nuit\\\\\\\",nw,\\\\\\\"#44506F\\\\\\\"]", "[\\\\\\\"Matin\\\\\\\",am,\\\\\\\"#C99A52\\\\\\\"],[\\\\\\\"Après-midi\\\\\\\",pmw,\\\\\\\"#6F7FA8\\\\\\\"],[\\\\\\\"Nuit\\\\\\\",nw,\\\\\\\"#44506F\\\\\\\"]").replaceAll("label:\\\\\\\"Jour soir\\\\\\\"", "label:\\\\\\\"Après-midi\\\\\\\"").replaceAll("label:\\\\\\\"Soir\\\\\\\"", "label:\\\\\\\"Après-midi\\\\\\\"").replaceAll("s === \\\\\\\"evening\\\\\\\" ? \\\\\\\"Soir\\\\\\\"", "s === \\\\\\\"evening\\\\\\\" ? \\\\\\\"Après-midi\\\\\\\"").replaceAll(">Soir<", ">Après-midi<");\n    { const ps = code.indexOf("function PdfModal() {"), pe = code.indexOf("\\n  function AdminModal", ps); if (ps >= 0 && pe > ps) code = code.slice(0, ps) + ' + JSON.stringify(reportSource) + ' + code.slice(pe); }\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
