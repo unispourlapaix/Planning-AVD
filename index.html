@@ -145,9 +145,11 @@
     const nearestDay = (p,wanted,shift) => {
       for (let off=0; off<dim(y,m); off++) {
         const tries = off ? [wanted-off,wanted+off] : [wanted];
-        for (const d of tries) if (d>=1 && d<=dim(y,m) && canUse(p,d,shift)) return d;
+        const ok = tries.filter(d => d>=1 && d<=dim(y,m) && canUse(p,d,shift)).sort((a,b)=>(byDay[a]||[]).length-(byDay[b]||[]).length);
+        const light = ok.find(d => (byDay[d]||[]).length < 2);
+        if (light || ok[0]) return light || ok[0];
       }
-      return monthDays.find(d=>allowedOn(p,y,m,d,auxRules) && !(byDay[d]||[]).some(x=>x.p===p)) || 1;
+      return monthDays.filter(d=>allowedOn(p,y,m,d,auxRules) && !(byDay[d]||[]).some(x=>x.p===p)).sort((a,b)=>(byDay[a]||[]).length-(byDay[b]||[]).length)[0] || 1;
     };
     const shiftsFor = p => {
       const r = auxRules[p] || {};
@@ -163,7 +165,9 @@
       for (let i=0; left>0 && i<slots+8; i++) {
         const pref = shifts[(i + personIx) % shifts.length];
         const hours = Math.min(pref.hours,left);
-        const wanted = Math.max(1,Math.min(dim(y,m),Math.round(1 + ((i+.5) * dim(y,m) / slots))));
+        const phase = activeIds.length ? personIx * dim(y,m) / activeIds.length : 0;
+        const rawWanted = 1 + ((i+.5) * dim(y,m) / slots) + phase;
+        const wanted = Math.max(1,Math.min(dim(y,m),Math.round(((rawWanted - 1) % dim(y,m)) + 1)));
         const d = nearestDay(p,wanted,pref.shift);
         const row = {p,d,shift:pref.shift,hours:Math.round(hours*100)/100};
         rowsByPerson[p].push(row);
