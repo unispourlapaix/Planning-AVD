@@ -1,360 +1,55 @@
 (async () => {
   const root = document.getElementById("root");
-  const cfg = window.PLANNING_AVD_AUTH || {};
-  const auth = { uid: "", email: "", name: "", isConnected: false };
-  window.PlanningAVDAuth = auth;
 
   const fail = error => {
     console.error(error);
-    root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
-  };
-
-  const loadScript = src => new Promise((resolve, reject) => {
-    if ([...document.scripts].some(s => s.src === src)) return resolve();
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error(`Chargement impossible: ${src}`));
-    document.head.appendChild(s);
-  });
-
-  const allowed = email => {
-    const list = Array.isArray(cfg.allowedEmails) ? cfg.allowedEmails.map(x => String(x).toLowerCase().trim()).filter(Boolean) : [];
-    return !list.length || list.includes(String(email || "").toLowerCase().trim());
-  };
-
-  const firebaseReady = () => {
-    const c = cfg.firebaseConfig || {};
-    return !!(c.apiKey && c.authDomain && c.projectId && c.appId);
-  };
-
-  const updateAuth = user => {
-    auth.uid = user?.uid || "";
-    auth.email = user?.email || "";
-    auth.name = user?.displayName || "";
-    auth.isConnected = !!auth.email && allowed(auth.email);
-  };
-
-  const firstAuthState = fa => new Promise(resolve => {
-    let done = false;
-    const timeout = setTimeout(() => {
-      if (!done) {
-        done = true;
-        resolve(fa.currentUser || null);
-      }
-    }, 1800);
-    const unsub = fa.onAuthStateChanged(user => {
-      if (done) return;
-      done = true;
-      clearTimeout(timeout);
-      unsub();
-      resolve(user || null);
-    });
-  });
-
-  const initFirebase = async () => {
-    if (!firebaseReady()) return { authService: null, db: null };
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js");
-    await loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js");
-    if (!firebase.apps.length) firebase.initializeApp(cfg.firebaseConfig);
-    const authService = firebase.auth();
-    authService.useDeviceLanguage();
-    const user = await firstAuthState(authService);
-    updateAuth(user);
-    const db = firebase.firestore();
-    return { authService, db };
-  };
-
-  const storageKey = key => String(key || "").replace(/[/.#[\]]/g, "_");
-
-  const mountCloudStorage = db => {
-    const localGet = key => {
-      const raw = localStorage.getItem(key);
-      return raw == null ? null : { value: raw };
-    };
-    const localSet = (key, value) => localStorage.setItem(key, value);
-
-    window.storage = {
-      async get(key) {
-        if (!auth.isConnected || !auth.uid || !db) return localGet(key);
-        try {
-          const snap = await db.collection("planning-avd-users").doc(auth.uid).collection("storage").doc(storageKey(key)).get();
-          return snap.exists ? { value: snap.data().value } : localGet(key);
-        } catch (error) {
-          console.warn("Lecture cloud impossible, repli local.", error);
-          return localGet(key);
-        }
-      },
-      async set(key, value) {
-        localSet(key, value);
-        if (!auth.isConnected || !auth.uid || !db) return;
-        try {
-          await db.collection("planning-avd-users").doc(auth.uid).collection("storage").doc(storageKey(key)).set({
-            key,
-            value,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedBy: auth.email,
-          }, { merge: true });
-        } catch (error) {
-          console.warn("Sauvegarde cloud impossible, conservee en local.", error);
-        }
-      },
-    };
-  };
-
-  const signInGoogle = async fa => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-    const result = await fa.signInWithPopup(provider);
-    updateAuth(result.user);
-    if (!auth.isConnected) {
-      await fa.signOut();
-      updateAuth(null);
-      throw new Error("Ce compte Google n'est pas autorise.");
+    if (root) {
+      root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d;white-space:pre-wrap">Impossible de charger Planning-AVD.\n' + String(error && (error.stack || error.message) || error) + '</div>';
     }
   };
 
-  const mountAuthBar = fa => {
-    const bar = document.createElement("div");
-    bar.style.cssText = "position:fixed;right:12px;bottom:12px;z-index:1000;font:700 13px Nunito,system-ui,sans-serif";
-    const render = () => {
-      bar.innerHTML = auth.isConnected
-        ? `<button style="border:0;border-radius:999px;padding:10px 13px;background:#68C49A;color:white;font-weight:900;box-shadow:0 8px 24px rgba(40,90,120,.22)">Cloud actif : ${auth.email} · sortir</button>`
-        : '<button style="border:0;border-radius:999px;padding:10px 13px;background:#294C69;color:white;font-weight:900;box-shadow:0 8px 24px rgba(40,90,120,.22)">Connexion Google</button>';
-    };
-    bar.onclick = async () => {
-      if (!fa) return alert("Google/Firebase n'est pas encore configure dans auth-config.js.");
-      if (auth.isConnected) {
-        await fa.signOut();
-        updateAuth(null);
-        location.reload();
-        return;
-      }
-      try {
-        await signInGoogle(fa);
-        location.reload();
-      } catch (error) {
-        alert(error.message);
-      }
-    };
-    render();
-    document.body.appendChild(bar);
-    return render;
-  };
+  const loadText = url => new Promise((resolve, reject) => {
+    if (window.fetch) {
+      fetch(url, { cache: "no-cache" })
+        .then(response => response.ok ? response.text() : Promise.reject(new Error(url + " introuvable (" + response.status + ")")))
+        .then(resolve, reject);
+      return;
+    }
 
-  const googleConfigView = `function ConfigView() {
-    const connected = !!window.PlanningAVDAuth?.isConnected;
-    const canAddAux = connected && activeIds.length < 100;
-    const addAux = () => {
-      const next = TIDS.find(p => !activeIds.includes(p));
-      if (!next) return showT("Maximum 100 auxiliaires");
-      setAuxIds(ids => [...ids, next]);
-      setNames(x => ({...x, [next]: x[next] || NDEF[next]}));
-      setStat(x => ({...x, [next]: x[next] || "dispo"}));
-      setAuxContacts(x => ({...x, [next]: x[next] || {email:"",tel:"",address:""}}));
-      setAuxRules(x => ({...x, [next]: x[next] || {days:"all",shift:"all",custom:[0,1,2,3,4,5,6]}}));
-      showT("Auxiliaire ajoute");
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
+      else reject(new Error(url + " introuvable (" + xhr.status + ")"));
     };
-    const removeAux = p => {
-      if (activeIds.length <= 1) return;
-      setAuxIds(ids => ids.filter(x => x !== p));
-      setBOv(x => Object.fromEntries(Object.entries(x).filter(([,v]) => v !== p)));
-      setSpOv(x => Object.fromEntries(Object.entries(x).map(([k,v]) => [k, v?.second === p ? {...v, second:""} : v])));
-      showT("Auxiliaire retire");
-    };
-    return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Statuts</b>{activeIds.map(p=><div key={p} style={{display:"flex",alignItems:"center",gap:8,marginTop:9}}><Av t={p} st={stat[p]} names={names} priv={priv}/><span style={{flex:1,fontWeight:900,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</span>{Object.keys(STATUTS).map(s=><button key={s} onClick={()=>setStat(x=>({...x,[p]:s}))} style={btn(stat[p]===s,PAL[pidIx(p)].solid)}>{s==="dispo"?"OK":s==="absent"?"Absent":"Rempl."}</button>)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Roulement</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Choisissez la logique du planning mensuel.</p><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:8}}><button onClick={()=>setSchedRule("blocks")} style={btn(schedRule==="blocks","#8B9A7A")}>Blocs</button><button onClick={()=>setSchedRule("daily")} style={btn(schedRule==="daily","#8B9A7A")}>Par jour</button><button onClick={()=>setSchedRule("twoDayRest")} style={btn(schedRule==="twoDayRest","#8B9A7A")}>2j + repos</button></div>{schedRule==="twoDayRest"&&<><p style={{fontSize:12,color:"#667F94",margin:"10px 0 6px"}}>Repos semaine 1</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setRestStart(i)} style={btn(restStart===i,PAL[pidIx(p)].solid)}>{pName(names,p,priv)}</button>)}</div></>}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Equipe</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>{activeIds.length} auxiliaire(s) actif(s). Maximum 100.</p><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,margin:"8px 0 12px"}}>{activeIds.map((p,i)=><button key={p} onClick={()=>setSWI(i)} style={btn(swi===i,PAL[pidIx(p)].solid)}><Av t={p} sz={25} names={names} priv={priv}/></button>)}</div>{connected&&<button disabled={!canAddAux} onClick={addAux} style={{...btn(true,"#8B9A7A"),width:"100%",marginBottom:8}}>+ Ajouter un auxiliaire</button>}{connected ? activeIds.map(p=><input key={p} defaultValue={names[p]||""} onBlur={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #D6E7F5"}} />) : activeIds.map(p=><div key={p} style={{...btn(false),width:"100%",marginTop:7,textAlign:"left"}}>{pName(names,p,false)}</div>)}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Coordonnees</b><p style={{fontSize:12,color:"#667F94",margin:"6px 0"}}>Completez les informations utiles pour l'envoi et le suivi.</p>{connected ? activeIds.map((p,i)=>{ const c=auxContacts[p]||{}, r=auxRules[p]||{days:"all",shift:"all",custom:[0,1,2,3,4,5,6]}; const updRule = patch => setAuxRules(x=>({...x,[p]:{...(x[p]||{days:"all",shift:"all",custom:[0,1,2,3,4,5,6]}),...patch}})); return <div key={p} style={{marginTop:10,padding:10,border:"1px solid #E5DED2",borderRadius:14,background:"#FFFDF8"}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{...btn(true,PAL[pidIx(p)].solid),width:32,height:32,padding:0}}>+</span><b style={{color:PAL[pidIx(p)].text,flex:1}}>{pName(names,p,priv)}</b>{i>=4&&<button onClick={()=>removeAux(p)} style={btn(false)}>Retirer</button>}</div><input defaultValue={names[p]||""} onBlur={e=>setNames(x=>({...x,[p]:e.target.value}))} placeholder={NDEF[p]} style={{width:"100%",boxSizing:"border-box",marginTop:6,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><input type="email" defaultValue={c.email||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),email:e.target.value.trim()}}))} placeholder="Email" style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><input type="tel" defaultValue={c.tel||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),tel:e.target.value}}))} placeholder="Telephone" style={{width:"100%",boxSizing:"border-box",marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><textarea defaultValue={c.address||""} onBlur={e=>setAuxContacts(x=>({...x,[p]:{...(x[p]||{}),address:e.target.value}}))} placeholder="Adresse complete" style={{width:"100%",boxSizing:"border-box",minHeight:58,marginTop:7,padding:10,borderRadius:12,border:"1px solid #E5DED2"}} /><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginTop:8}}><select value={r.days||"all"} onChange={e=>updRule({days:e.target.value})} style={{padding:10,borderRadius:12,border:"1px solid #E5DED2"}}><option value="all">Tous les jours</option><option value="weekend">Week-end seulement</option><option value="weekdays">Semaine seulement</option><option value="custom">Jours precis</option></select><select value={r.shift||"all"} onChange={e=>updRule({shift:e.target.value})} style={{padding:10,borderRadius:12,border:"1px solid #E5DED2"}}><option value="all">Matin + soir</option><option value="morning">Matin</option><option value="evening">Soir</option></select></div>{r.days==="custom"&&<div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5,marginTop:8}}>{DS.map((d,di)=><button key={d+di} onClick={()=>{ const cur=r.custom||[]; updRule({custom:cur.includes(di)?cur.filter(x=>x!==di):[...cur,di]}); }} style={btn((r.custom||[]).includes(di),PAL[pidIx(p)].solid)}>{d}</button>)}</div>}</div>; }) : <div style={{...btn(false),width:"100%",textAlign:"left"}}>Connexion Google requise</div>}</div>
-      <div style={{...card,padding:12}}><b style={{color:"#31556F"}}>Sauvegarde</b><p style={{fontSize:13,color:"#667F94",margin:"7px 0 0"}}>{connected ? "Synchronisation active : "+window.PlanningAVDAuth.email : "Connexion Google pour synchroniser."}</p></div>
-    </div>;
-  }
-
-  function DayModal`;
+    xhr.onerror = () => reject(new Error(url + " inaccessible"));
+    xhr.send();
+  });
 
   try {
-    const { authService, db } = await initFirebase();
-    mountCloudStorage(db);
-    const renderAuth = mountAuthBar(authService);
-    if (authService) authService.onAuthStateChanged(user => { updateAuth(user); renderAuth(); });
-
     if (!window.React || !window.ReactDOM || !window.Babel) {
       throw new Error("React ou Babel n'est pas charge.");
     }
 
+    if (!window.storage) {
+      window.storage = {
+        async get(key) {
+          const raw = localStorage.getItem(key);
+          return raw == null ? null : { value: raw };
+        },
+        async set(key, value) {
+          localStorage.setItem(key, value);
+        },
+      };
+    }
+
     const response = await fetch("./planning-avd.jsx", { cache: "no-cache" });
-    if (!response.ok) throw new Error(`planning-avd.jsx introuvable (${response.status})`);
+    if (!response.ok) throw new Error("planning-avd.jsx introuvable (" + response.status + ")");
 
     let source = await response.text();
-    source = "const { useState, useMemo, useEffect, useCallback } = React;\n" + source.replace(/^import[^\n]*(?:\r?\n|$)/gm, "");
-    const schedulingSource = `// == MODULE SCH-001 == Scheduler multi-regles
-const SHIFTS = [{id:"morning",label:"Matin"},{id:"evening",label:"Soir"}];
-const shiftLabel = s => s === "morning" ? "Matin" : s === "evening" ? "Soir" : "";
-const ruleDays = r => r?.days === "weekend" ? [4,5,6] : r?.days === "weekdays" ? [0,1,2,3] : r?.days === "custom" ? (r.custom||[]) : [0,1,2,3,4,5,6];
-const allowedOn = (p,y,m,d,auxRules={}) => ruleDays(auxRules[p]).includes(dowD(y,m,d));
-const allowedShift = (p,shift,auxRules={}) => !auxRules[p]?.shift || auxRules[p].shift === "all" || auxRules[p].shift === shift;
-const allowedBlock = (p,b,y,m,auxRules={}) => allowedShift(p,b.shift,auxRules) && Array.from({length:b.end-b.start+1},(_,i)=>b.start+i).every(d=>allowedOn(p,y,m,d,auxRules));
-const splitBlocks = blks => blks.flatMap(b => SHIFTS.map(s => ({...b, baseIdx:b.idx, idx:\`\${b.idx}-\${s.id}\`, shift:s.id, shiftName:s.label, workerId:null, cross:false})));
-const fillSched = blks => {
-  const sched = {};
-  blks.forEach(b => {
-    for(let d=b.start; d<=b.end; d++) {
-      const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};
-      sched[d] = {...(sched[d]||{}), [b.shift]: item};
-      if (!sched[d].worker || b.shift === "morning") sched[d].worker = b.workerId;
-    }
-  });
-  return sched;
-};
-
-const buildBlockSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inheritWeWorker=null,activeIds=TIDS.slice(0,4),auxRules={}) => {
-  const blks = splitBlocks(getBlocks(y,m));
-  const weTeam = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p));
-  const wdTeam = weTeam;
-  let weIdx = startWeIdx || 0, wdIdx = 0, prevWe = null, prevWd = null, dup = 0;
-  const usable = (p,b=null) => statuts[p] !== "absent" && (!b || allowedBlock(p,b,y,m,auxRules));
-  blks.forEach(b => {
-    if (b.type !== "we") return;
-    const ov = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
-    if (ov) { b.workerId = ov; if (usable(b.workerId,b)) weIdx = (weTeam.indexOf(b.workerId)+1+weTeam.length)%weTeam.length; prevWe = b.workerId; return; }
-    if (inheritWeWorker && b.start === 1 && dowD(y,m,1) >= 5) { b.workerId = inheritWeWorker; b.cross = true; prevWe = b.workerId; return; }
-    for (let k=0;k<weTeam.length;k++) { const p = weTeam[(weIdx+k)%weTeam.length]; if (usable(p,b)) { b.workerId = p; weIdx = (weIdx+k+1)%weTeam.length; prevWe = p; return; } }
-    b.workerId = weTeam[weIdx]; prevWe = b.workerId;
-  });
-  blks.forEach((b,i) => {
-    if (b.type !== "wd") return;
-    const ov = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
-    if (ov && ov !== WE_ONLY) { b.workerId = ov; wdIdx = (wdTeam.indexOf(b.workerId)+1+wdTeam.length)%wdTeam.length; prevWd = b.workerId; return; }
-    const sameWeekWE = blks.find(x => x.type === "we" && x.start > b.start && x.start <= b.end + 3)?.workerId;
-    const prevBlockWe = [...blks].slice(0,i).reverse().find(x => x.type === "we")?.workerId || prevWe;
-    const hardAvoid = new Set([sameWeekWE,prevBlockWe].filter(Boolean));
-    const legal = p => usable(p,b) && !hardAvoid.has(p);
-    let pick = null, off = 0;
-    for (let k=0;k<wdTeam.length;k++) { const p = wdTeam[(wdIdx+k)%wdTeam.length]; if (legal(p)) { pick = p; off = k; break; } }
-    if (!pick && dup < 1) { pick = wdTeam[wdIdx]; dup += 1; off = 0; }
-    if (!pick) { pick = wdTeam.find(p => usable(p,b) && p !== prevWd) || wdTeam.find(p => p !== prevWd) || wdTeam[wdIdx]; dup = 0; off = Math.max(0,wdTeam.indexOf(pick)-wdIdx); }
-    if (pick === prevWd) dup += 1; else dup = 0;
-    b.workerId = pick; wdIdx = (wdIdx+off+1)%wdTeam.length; prevWd = pick;
-  });
-  const sched = fillSched(blks);
-  return { sched, blks };
-};
-
-const buildTwoDayRestSched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts={},restStart=0,activeIds=TIDS.slice(0,4),auxRules={}) => {
-  const n = dim(y,m), team = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), blks = [];
-  const usable = (p,b=null) => statuts[p] !== "absent" && (!b || allowedBlock(p,b,y,m,auxRules));
-  const restWeek = p => (((team.indexOf(p) - restStart) % team.length + team.length) % team.length) + 1;
-  const weekOf = d => Math.min(4, Math.floor((d-1)/7)+1);
-  let idx = 0, rot = startIdx || 0, prev = null;
-  for (let d=1; d<=n; d+=2) {
-    for (const s of SHIFTS) {
-      const b = { type:"two", start:d, end:Math.min(n,d+1), baseIdx:idx, idx:\`\${idx}-\${s.id}\`, shift:s.id, shiftName:s.label, workerId:null, cross:false };
-      if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
-      if (!b.workerId) {
-        for (let k=0;k<team.length;k++) {
-          const p = team[(rot+k)%team.length];
-          const inRest = restWeek(p) === weekOf(b.start) || restWeek(p) === weekOf(b.end);
-          if (usable(p,b) && !inRest && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
-        }
-      }
-      if (!b.workerId) {
-        for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p,b) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
-      }
-      b.workerId = b.workerId || team[rot%team.length];
-      prev = b.workerId;
-      blks.push(b);
-    }
-    idx++;
-  }
-  const sched = fillSched(blks);
-  return { sched, blks };
-};
-
-const buildDailySched = (y,m,startIdx=0,blkOverrides={},names=NDEF,statuts={},activeIds=TIDS.slice(0,4),auxRules={}) => {
-  const n = dim(y,m), team = (activeIds && activeIds.length ? activeIds : TIDS.slice(0,4)).filter(p => TIDS.includes(p)), blks = [];
-  const usable = (p,d) => statuts[p] !== "absent" && allowedOn(p,y,m,d,auxRules);
-  let rot = startIdx || 0, prev = null;
-  for (let d=1; d<=n; d++) {
-    for (const s of SHIFTS) {
-      const b = { type:"day", start:d, end:d, baseIdx:d-1, idx:\`\${d-1}-\${s.id}\`, shift:s.id, shiftName:s.label, workerId:null, cross:false };
-      if (blkOverrides[b.idx] || blkOverrides[b.baseIdx]) b.workerId = blkOverrides[b.idx] || blkOverrides[b.baseIdx];
-      if (!b.workerId) {
-        for (let k=0;k<team.length;k++) {
-          const p = team[(rot+k)%team.length];
-          if (usable(p,d) && allowedShift(p,s.id,auxRules) && p !== prev) { b.workerId = p; rot = (rot+k+1)%team.length; break; }
-        }
-      }
-      if (!b.workerId) {
-        for (let k=0;k<team.length;k++) { const p = team[(rot+k)%team.length]; if (usable(p,d) && allowedShift(p,s.id,auxRules)) { b.workerId = p; rot = (rot+k+1)%team.length; break; } }
-      }
-      b.workerId = b.workerId || team[rot%team.length];
-      prev = b.workerId;
-      blks.push(b);
-    }
-  }
-  const sched = fillSched(blks);
-  return { sched, blks };
-};
-
-const buildSched = (y,m,startWeIdx,blkOverrides={},names=NDEF,statuts={},inheritWeWorker=null,rule="blocks",restStart=0,activeIds=TIDS.slice(0,4),auxRules={}) => {
-  if (rule === "twoDayRest") return buildTwoDayRestSched(y,m,startWeIdx,blkOverrides,names,statuts,restStart,activeIds,auxRules);
-  if (rule === "daily") return buildDailySched(y,m,startWeIdx,blkOverrides,names,statuts,activeIds,auxRules);
-  return buildBlockSched(y,m,startWeIdx,blkOverrides,names,statuts,inheritWeWorker,activeIds,auxRules);
-};
-
-// == MODULE STO-001`;
-    source = source
+    source = "const { useState, useMemo, useEffect, useCallback } = React;\n" + source
       .replace(/^import[^\n]*(?:\r?\n|$)/gm, "")
-      .replace(/const SUPABASE_URL[\s\S]*?const supabase = [^\n]+;\s*/m, "const ALLOWED_EMAILS = [];\nconst supabase = null;\n")
-      .replace("const TIDS = [\"P1\",\"P2\",\"P3\",\"P4\"];\nconst NDEF = { P1:\"Auxiliaire 1\", P2:\"Auxiliaire 2\", P3:\"Auxiliaire 3\", P4:\"Auxiliaire 4\" };", "const TIDS = Array.from({length:100},(_,i)=>`P${i+1}`);\nconst NDEF = Object.fromEntries(TIDS.map((p,i)=>[p,`Auxiliaire ${i+1}`]));")
-      .replace("const pidIx = p => Math.max(0,TIDS.indexOf(p));", "const pidIx = p => { const i = Math.max(0,TIDS.indexOf(p)); return PAL.length ? i % PAL.length : 0; };")
-      .replace(/\/\/ ══ MODULE SCH-001[\s\S]*?\/\/ ══ MODULE STO-001/, schedulingSource)
-      .replace("const BBtxt = t => t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\";", "const BBtxt = (t,shift) => `${t === \"day\" ? \"Jour\" : t === \"two\" ? \"2 jours\" : t === \"wd\" ? \"Lun-Jeu\" : \"Ven-Dim\"}${shift ? \" \" + shiftLabel(shift) : \"\"}`;")
-      .replaceAll("BBtxt(b.type)", "BBtxt(b.type,b.shift)")
-      .replace("export default function App()", "function App()")
-      .replace("const card = {background:\"rgba(255,255,255,.9)\",border:\"1px solid rgba(180,210,235,.72)\",borderRadius:18,boxShadow:\"0 2px 14px rgba(90,150,210,.06)\"};", "const card = {background:\"rgba(255,255,255,.94)\",border:\"1px solid rgba(221,214,202,.9)\",borderRadius:16,boxShadow:\"0 10px 28px rgba(70,58,40,.06)\"};")
-      .replace("const btn = (on, c=\"#7BAFD4\") => ({padding:\"9px 11px\",borderRadius:14,background:on?c:\"rgba(255,255,255,.75)\",color:on?\"white\":\"#35546F\",border:`1px solid ${on?c:\"#D6E7F5\"}`,fontWeight:900});", "const btn = (on, c=\"#8B9A7A\") => ({padding:\"10px 12px\",borderRadius:12,background:on?c:\"#FFFDF8\",color:on?\"white\":\"#4F5D4A\",border:`1px solid ${on?c:\"#E5DED2\"}`,fontWeight:900,boxShadow:on?\"0 8px 18px rgba(80,90,65,.16)\":\"0 3px 10px rgba(80,70,50,.04)\",display:\"inline-flex\",alignItems:\"center\",justifyContent:\"center\",gap:6});")
-      .replace("return <div style={{position:\"sticky\",top:0,zIndex:10,backdropFilter:\"blur(18px)\",background:\"rgba(250,253,255,.78)\",borderBottom:\"1px solid rgba(190,215,235,.6)\",padding:\"10px 12px 9px\"}}>", "return <div style={{position:\"sticky\",top:0,zIndex:10,backdropFilter:\"blur(18px)\",background:\"rgba(250,247,240,.88)\",borderBottom:\"1px solid rgba(226,218,204,.9)\",padding:\"10px 12px 9px\"}}>")
-      .replace("<b style={{fontSize:20,color:\"#264A69\"}}>🗓 Planning-AVD</b>", "<b style={{fontSize:20,color:\"#3F4A3A\",letterSpacing:0}}>Planning-AVD</b>")
-      .replace("<div style={{display:\"flex\",gap:7}}><button title=\"Vue annuelle\" onClick={()=>setYearMod(true)} style={btn(false)}>📅</button><button title=\"Rapport\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄</button></div>", "<div style={{display:\"flex\",gap:7}}><button title=\"Vue annuelle\" onClick={()=>setYearMod(true)} style={btn(false)}>📅 Annee</button><button title=\"Rapport\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄 Rapport</button></div>")
-      .replace("<div style={{display:\"flex\",gap:7}}><button title={priv?`Connecte : ${authEmail||\"admin\"}`:\"Connexion email\"} onClick={()=>priv?signOut():setLoginMod(true)} style={btn(priv,\"#68C49A\")}>{priv?\"🔓\":\"🔐\"}</button><button title=\"Vue annuelle\" onClick={()=>setYearMod(true)} style={btn(false)}>📅</button><button title=\"Rapport\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄</button></div>", "<div style={{display:\"flex\",gap:7}}><button title={priv?`Connecte : ${authEmail||\"admin\"}`:\"Connexion\"} onClick={()=>priv?signOut():setLoginMod(true)} style={btn(priv,\"#8B9A7A\")}>{priv?\"🔓 Connecte\":\"🔐 Connexion\"}</button><button title=\"Vue annuelle\" onClick={()=>setYearMod(true)} style={btn(false)}>📅 Annee</button><button title=\"Rapport\" onClick={()=>setPdfMod(true)} style={btn(false)}>📄 Rapport</button></div>")
-      .replace("<div style={{display:\"flex\",justifyContent:\"space-between\",alignItems:\"center\",marginTop:10}}><span style={{fontSize:12,color:\"#657C91\"}}>Initiales et noms masques hors session connectee.</span><button onClick={()=>setEmailMod(true)} style={btn(true,\"#7BAFD4\")}>📧</button></div>", "<div style={{display:\"flex\",justifyContent:\"space-between\",alignItems:\"center\",gap:8,marginTop:10}}><span style={{fontSize:12,color:\"#746D61\"}}>Vue mensuelle</span><button onClick={()=>setEmailMod(true)} style={btn(true,\"#8B9A7A\")}>📧 Envoyer</button></div>")
-      .replace("<button onClick={()=>setEmailMod(true)} style={btn(true,\"#7BAFD4\")}>📧 Email / Imprimer</button>", "<button onClick={()=>setEmailMod(true)} style={btn(true,\"#8B9A7A\")}>📧 Envoyer ou imprimer</button>")
-      .replace("return <div style={{minHeight:\"100vh\",maxWidth:430,margin:\"0 auto\",background:\"linear-gradient(155deg, #EBF5FF 0%, #FBFCFF 55%, #F0ECFF 100%)\",fontFamily:\"Nunito, system-ui, sans-serif\",color:\"#294C69\"}}>", "return <div style={{minHeight:\"100vh\",maxWidth:430,margin:\"0 auto\",background:\"linear-gradient(155deg, #F7F4EE 0%, #FFFEFA 48%, #F1EDE4 100%)\",fontFamily:\"Nunito, system-ui, sans-serif\",color:\"#3F4A3A\"}}>")
-      .replace("<div style={{...card,padding:10,background:\"linear-gradient(120deg,#FFFFFF,#EEF7FF)\",fontWeight:900,color:\"#31556F\"}}>{bulle}</div>", "<div style={{...card,padding:10,background:\"linear-gradient(120deg,#FFFFFF,#F6F1E8)\",fontWeight:900,color:\"#4F5D4A\"}}>{bulle}</div>")
-      .replace("<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:10}}>{[[\"month\",\"📅\"],[\"week\",\"📋\"],[\"hours\",\"⏱\"],[\"config\",\"⚙️\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],\"#7BAFD4\")}>{x[1]}</button>)}</div>", "<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:10}}>{[[\"month\",\"📅\",\"Mois\"],[\"week\",\"📋\",\"Blocs\"],[\"hours\",\"⏱\",\"Heures\"],[\"config\",\"⚙️\",\"Reglages\"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={{...btn(view===x[0],\"#8B9A7A\"),minHeight:52,flexDirection:\"column\",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)}</div>")
-      .replace("const [swi,setSWI] = useState(0), [bOv,setBOv] = useState({}), [spOv,setSpOv] = useState({}), [nBlks,setNBlks] = useState({});", "const [swi,setSWI] = useState(0), [bOv,setBOv] = useState({}), [spOv,setSpOv] = useState({}), [nBlks,setNBlks] = useState({});\n  const [schedRule,setSchedRule] = useState(\"blocks\"), [restStart,setRestStart] = useState(0);")
-      .replace("const [names,setNames] = useState(NDEF), [stat,setStat] = useState({P1:\"dispo\",P2:\"dispo\",P3:\"dispo\",P4:\"dispo\"}), [ah,setAh] = useState({P1:0,P2:0,P3:0,P4:0});", "const [names,setNames] = useState(NDEF), [stat,setStat] = useState({P1:\"dispo\",P2:\"dispo\",P3:\"dispo\",P4:\"dispo\"}), [ah,setAh] = useState({P1:0,P2:0,P3:0,P4:0});\n  const [auxContacts,setAuxContacts] = useState({P1:{},P2:{},P3:{},P4:{}});\n  const [auxRules,setAuxRules] = useState({});\n  const [auxIds,setAuxIds] = useState(TIDS.slice(0,4));\n  const activeIds = (auxIds && auxIds.length ? auxIds : TIDS.slice(0,4)).filter(p=>TIDS.includes(p)).slice(0,100);")
-      .replace("return [...buildSched(py,pm,swi,{},names,defStat,null).blks].reverse().find(b=>b.type===\"we\")?.workerId || null;", "return [...buildSched(py,pm,swi,{},names,defStat,null,schedRule,restStart,activeIds,auxRules).blks].reverse().find(b=>b.type===\"we\")?.workerId || null;")
-      .replace("},[y,m,swi,names]);", "},[y,m,swi,names,schedRule,restStart,activeIds.join('|'),JSON.stringify(auxRules)]);")
-      .replace("const { sched, blks } = useMemo(() => buildSched(y,m,swi,bOv,names,stat,inh),[y,m,swi,bOv,names,stat,inh]);", "const { sched, blks } = useMemo(() => buildSched(y,m,swi,bOv,names,stat,inh,schedRule,restStart,activeIds,auxRules),[y,m,swi,bOv,names,stat,inh,schedRule,restStart,activeIds.join('|'),JSON.stringify(auxRules)]);")
-      .replace("const daysByP = useMemo(() => TIDS.reduce((a,p)=>(a[p]=blks.filter(b=>b.workerId===p).reduce((s,b)=>s+b.end-b.start+1,0),a),{}),[blks]);", "const daysByP = useMemo(() => activeIds.reduce((a,p)=>(a[p]=blks.filter(b=>b.workerId===p).reduce((s,b)=>s+(b.end-b.start+1)*0.5,0),a),{}),[blks,activeIds.join('|')]);")
-      .replace("const s = d && sched[d], p = s && PAL[pidIx(s.worker)], a = d && acts[d], isStart = s && d === s.bs;", "const s = d && sched[d], sm=s?.morning, se=s?.evening, pm=sm&&PAL[pidIx(sm.worker)], pe=se&&PAL[pidIx(se.worker)], a = d && acts[d];")
-      .replace("return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{height:54,borderRadius:12,background:d?(p?.light||\"white\"):\"transparent\",border:d?`1px solid ${p?.border||\"#E7EEF7\"}`:\"none\",padding:5,position:\"relative\",overflow:\"hidden\"}}>", "return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{height:62,borderRadius:12,background:d?\"#FFFDF8\":\"transparent\",border:d?\"1px solid #E5DED2\":\"none\",padding:5,position:\"relative\",overflow:\"hidden\"}}>")
-      .replace("{d && <><span style={{position:\"absolute\",top:5,left:6,fontSize:11,fontFamily:\"DM Mono\",fontWeight:900,color:\"#526A7F\"}}>{d}</span>{isStart ? <span style={{position:\"absolute\",right:5,top:5,width:20,height:20,borderRadius:99,background:p.pill,color:p.text,fontSize:10,fontWeight:900,display:\"grid\",placeItems:\"center\"}}>{initial(names,s.worker,priv)}</span> : <span style={{position:\"absolute\",left:6,right:6,bottom:9,height:8,borderRadius:99,background:p.solid,opacity:.75}} />}{a?.types?.length>0 && <span style={{position:\"absolute\",left:5,bottom:3,fontSize:11}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join(\"\")}</span>}</>}", "{d && <><span style={{position:\"absolute\",top:5,left:6,fontSize:11,fontFamily:\"DM Mono\",fontWeight:900,color:\"#746D61\"}}>{d}</span><div style={{position:\"absolute\",left:5,right:5,top:22,display:\"grid\",gap:3}}>{[[\"M\",sm,pm],[\"S\",se,pe]].map(x=><span key={x[0]} style={{height:14,borderRadius:8,background:x[2]?.pill||\"#F2EDE4\",color:x[2]?.text||\"#746D61\",display:\"flex\",alignItems:\"center\",justifyContent:\"space-between\",padding:\"0 4px\",fontSize:9,fontWeight:900}}><b>{x[0]}</b><span>{x[1]?initial(names,x[1].worker,priv):\"-\"}</span></span>)}</div>{a?.types?.length>0 && <span style={{position:\"absolute\",right:5,bottom:1,fontSize:10}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join(\"\")}</span>}</>}")
-      .replace("<BB type={b.type}/><Av t={b.workerId} st={stat[b.workerId]} names={names} priv={priv}/>", "<BB type={b.type}/><small style={btn(true,b.shift===\"morning\"?\"#C99A52\":\"#6F7FA8\")}>{shiftLabel(b.shift)}</small><Av t={b.workerId} st={stat[b.workerId]} names={names} priv={priv}/>")
-      .replace("<h3 style={{margin:\"0 0 10px\",color:\"#294C69\"}}>Bloc {b.start}-{b.end} <BB type={b.type}/></h3>", "<h3 style={{margin:\"0 0 10px\",color:\"#294C69\"}}>Bloc {b.start}-{b.end} · {shiftLabel(b.shift)} <BB type={b.type}/></h3>")
-      .replace("{TIDS.map(p => <div key={p} style={{...card,padding:8,textAlign:\"center\",minWidth:0}}>", "{activeIds.map(p => <div key={p} style={{...card,padding:8,textAlign:\"center\",minWidth:0}}>")
-      .replace("return <div className=\"su\" style={{display:\"grid\",gap:10}}>{TIDS.map(p => {", "return <div className=\"su\" style={{display:\"grid\",gap:10}}>{activeIds.map(p => {")
-      .replace("{TIDS.map(p=><button disabled={b.type===\"wd\"&&p===WE_ONLY}", "{activeIds.map(p=><button disabled={b.type===\"wd\"&&p===WE_ONLY}")
-      .replace("<option value=\"\">2e intervenant</option>{TIDS.map(p=><option key={p} value={p}>{pName(names,p,priv)}</option>)}</select>", "<option value=\"\">2e intervenant</option>{activeIds.map(p=><option key={p} value={p}>{pName(names,p,priv)}</option>)}</select>")
-      .replace("const choose = p => { if (b.type===\"wd\" && p===WE_ONLY) return showT(\"P4 est reservee aux week-ends\"); setBOv", "const choose = p => { setBOv")
-      .replace("disabled={b.type===\"wd\"&&p===WE_ONLY}", "")
-      .replace(",opacity:(b.type===\"wd\"&&p===WE_ONLY) ? .45 : 1", "")
-      .replace("<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:8}}>{TIDS.map(p=><button key={p} onClick={()=>setPid(p)}", "<div style={{display:\"grid\",gridTemplateColumns:\"repeat(4,1fr)\",gap:7,marginTop:8}}>{activeIds.map(p=><button key={p} onClick={()=>setPid(p)}")
-      .replace("const bs=buildSched(yy,mi,swi,{},names,stat,null).blks; const c=TIDS.reduce", "const bs=buildSched(yy,mi,swi,{},names,stat,null,schedRule,restStart,activeIds,auxRules).blks; const c=activeIds.reduce")
-      .replaceAll("reduce((s,b)=>s+b.end-b.start+1,0)", "reduce((s,b)=>s+(b.end-b.start+1)*0.5,0)")
-      .replace("{TIDS.map(p=><div key={p} style={{display:\"flex\",alignItems:\"center\",gap:5,fontSize:11,marginTop:5}}>", "{activeIds.map(p=><div key={p} style={{display:\"flex\",alignItems:\"center\",gap:5,fontSize:11,marginTop:5}}>")
-      .replace("const hrs=TIDS.map(p=>`<tr><td>${pName(names,p,priv)}</td>", "const hrs=activeIds.map(p=>`<tr><td>${pName(names,p,priv)}</td>")
-      .replace("const priv = adminSess;", "const priv = !!window.PlanningAVDAuth?.isConnected;")
-      .replace("const withAdmin = (title,fn,force=false) => { if (adminSess && !force) fn(); else setAdminMod({title,fn}); };", "const withAdmin = (title,fn,force=false) => { if (window.PlanningAVDAuth?.isConnected) fn(); else alert('Connexion Google requise.'); };")
-      .replace("if(sc){ setSWI(sc.swi??0); setAdminCode(sc.adminCode||ADMIN_DEF); }", "if(sc){ setSWI(sc.swi??0); setAdminCode(sc.adminCode||ADMIN_DEF); setSchedRule(sc.schedRule||\"blocks\"); setRestStart(sc.restStart??0); setAuxIds(Array.isArray(sc.auxIds)&&sc.auxIds.length?sc.auxIds.filter(p=>TIDS.includes(p)).slice(0,100):TIDS.slice(0,4)); setAuxContacts(sc.auxContacts||Object.fromEntries(TIDS.map(p=>[p,{email:sc.auxEmails?.[p]||\"\",tel:\"\",address:\"\"}]))); setAuxRules(sc.auxRules||{}); }")
-      .replace("if(loaded) sS(SK.cfg,{swi,adminCode}); },[swi,adminCode,loaded]);", "if(loaded) sS(SK.cfg,{swi,adminCode,auxContacts,auxRules,auxIds,schedRule,restStart}); },[swi,adminCode,auxContacts,auxRules,auxIds,schedRule,restStart,loaded]);")
-      .replace("const txt = mode===\"week\" ? mkWeek(blks,y,m,+ws||1,names,priv) : mkPerson(blks,y,m,pid,acts,lieux,names,det,priv);", "const txt = mode===\"week\" ? mkWeek(blks,y,m,+ws||1,names,priv) : mkPerson(blks,y,m,pid,acts,lieux,names,det,priv);\n    const recipients = mode===\"person\" ? (auxContacts[pid]?.email||\"\") : activeIds.map(p=>auxContacts[p]?.email).filter(Boolean).join(\",\");")
-      .replace("href={`mailto:?subject=Planning AVD&body=${encodeURIComponent(txt)}`}", "href={`mailto:${encodeURIComponent(recipients)}?subject=Planning AVD&body=${encodeURIComponent(txt)}`}")
-      .replace(/function ConfigView\(\) \{[\s\S]*?\n  function DayModal/, googleConfigView);
+      .replace("export default function App()", "function App()");
 
     source += "\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));";
 
