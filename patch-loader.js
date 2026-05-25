@@ -29,10 +29,10 @@
   });
 
   try {
-    let code = await loadText("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/browser-loader.js?v=20260525-safe");
+    let code = await loadText("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/browser-loader.js?v=20260525-menu-labels");
     code = code.replace(
       'const response = await fetch("./planning-avd.jsx", { cache: "no-cache" });',
-      'const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/planning-avd.jsx?v=20260525-safe", { cache: "no-cache" });'
+      'const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/planning-avd.jsx?v=20260525-menu-labels", { cache: "no-cache" });'
     );
     (0, eval)(code + "\n//# sourceURL=browser-loader.safe.js");
   } catch (error) {
