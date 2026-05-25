@@ -126,6 +126,27 @@
     };
     return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel paysage</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport sort en calendrier paysage lisible, avec les prenoms complets dans chaque creneau et le recapitulatif des heures en fin de document.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
   }`;
+          const monthSource = String.raw`function MonthView() {
+    const first = dowD(y,m,1), total = dim(y,m), cells = Array.from({length:first+total},(_,i)=>i<first?null:i-first+1);
+    while (cells.length % 7) cells.push(null);
+    const fullName = p => p ? pName(names,p,priv) : "A definir";
+    const row = (label,pid,color) => <div key={label} style={{display:"grid",gridTemplateColumns:"58px minmax(0,1fr)",gap:4,alignItems:"center",minHeight:18,padding:"2px 5px",borderRadius:8,background:"#FFFFFF",border:"1px solid #E5DED2"}}>
+      <b style={{fontSize:9,color:"#746D61",fontWeight:900,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</b>
+      <span style={{fontSize:10,fontWeight:900,color:pid?(PAL[pidIx(pid)]?.text||"#4F5D4A"):"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fullName(pid)}</span>
+    </div>;
+    return <div className="su" style={{...card,padding:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:5,position:"relative"}}>
+        {DS.map((x,i)=><b key={i} style={{textAlign:"center",fontSize:12,color:i<5?"#4F5D4A":"#7A648C",padding:5}}>{x}</b>)}
+        {cells.map((d,i)=> {
+          const s = d && sched[d], sm=s?.morning, se=s?.evening, sn=s?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker, a = d && acts[d], today=new Date(), isToday=d&&today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
+          return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{minHeight:116,borderRadius:14,background:d?(isToday?"#FFF9EA":"#FFFDF8"):"rgba(255,255,255,.24)",border:d?("1px solid "+(isToday?"#E8C878":"#E5DED2")):"1px dashed rgba(229,222,210,.55)",padding:7,position:"relative",overflow:"hidden",display:"grid",gridTemplateRows:"auto 1fr auto",gap:5,textAlign:"left"}}>
+            {d && <><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:5}}><span style={{fontSize:12,fontFamily:"DM Mono",fontWeight:900,color:"#746D61"}}>{d}</span>{a?.types?.length>0 && <span style={{fontSize:11}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join("")}</span>}</div><div style={{display:"grid",gap:4,alignContent:"start"}}>{row("Matin",am,"#C99A52")}{row("Après-midi",pmw,"#6F7FA8")}{row("Nuit",nw,"#44506F")}</div><span style={{fontSize:9,color:"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lieux[d]||"Lieu a preciser"}</span></>}
+          </button>;
+        })}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:8}}><span style={{fontSize:12,color:"#746D61"}}>Vue mensuelle avec prenoms complets quand la session est connectee.</span><button onClick={()=>setEmailMod(true)} style={btn(true,"#8B9A7A")}>Envoyer</button></div>
+    </div>;
+  }`;
           const hoursSource = String.raw`function HoursView() {
     const quotaFor = p => Math.max(0,+auxRules[p]?.quota||MAX_H);
     const correctionFor = p => +ah[p]||0;
@@ -223,7 +244,7 @@
             source = source.slice(0, reportStart + reportPrefix.length) + reportSource.slice('function PdfModal() {'.length) + source.slice(reportEnd);
           }
           const sourceHook = "source += \"\\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));\";";
-          const sourcePatch = 'source = source.replace(/function HoursView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, ' + JSON.stringify(hoursSource) + ' + "\\n\\n  function ConfigView").replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportSource) + ' + "\\n\\n  function AdminModal").replaceAll("Soir", "Après-midi");\n    ' + sourceHook;
+          const sourcePatch = 'source = source.replace(/function MonthView\\(\\) \\{[\\s\\S]*?\\n  function WeekView/, ' + JSON.stringify(monthSource) + ' + "\\n\\n  function WeekView").replace(/function HoursView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, ' + JSON.stringify(hoursSource) + ' + "\\n\\n  function ConfigView").replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportSource) + ' + "\\n\\n  function AdminModal").replaceAll("Soir", "Après-midi");\n    ' + sourceHook;
           const beforeEvalPatch = 'code = code.replace(' + JSON.stringify(sourceHook) + ', ' + JSON.stringify(sourcePatch) + ').replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
           source = source.split('(0, eval)(code').join(beforeEvalPatch + '(0, eval)(code');
           const evalCall = '(0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
