@@ -49,7 +49,23 @@
     let source = await response.text();
     source = "const { useState, useMemo, useEffect, useCallback } = React;\n" + source
       .replace(/^import[^\n]*(?:\r?\n|$)/gm, "")
-      .replace("export default function App()", "function App()");
+      .replace("export default function App()", "function App()")
+      .replace(
+        '<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:10}}>{[["month","📅"],["week","📋"],["hours","⏱"],["config","⚙️"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={btn(view===x[0],"#7BAFD4")}>{x[1]}</button>)}</div>',
+        '<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginTop:10}}>{[["month","📅","Mois"],["week","📋","Semaine"],["hours","⏱","Heures"],["config","⚙️","Réglages"]].map(x=><button key={x[0]} onClick={()=>setView(x[0])} style={{...btn(view===x[0],"#7BAFD4"),minHeight:52,display:"grid",placeItems:"center",lineHeight:1.05}}><span style={{fontSize:17}}>{x[1]}</span><span style={{fontSize:11}}>{x[2]}</span></button>)}</div>'
+      )
+      .replace(
+        '<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10}}><span style={{fontSize:12,color:"#657C91"}}>Initiales et noms masques hors session connectee.</span><button onClick={()=>setEmailMod(true)} style={btn(true,"#7BAFD4")}>📧</button></div>',
+        '<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:10}}><span style={{fontSize:12,color:"#657C91"}}>Vue mensuelle</span><button onClick={()=>setEmailMod(true)} style={btn(true,"#7BAFD4")}>📧 Envoyer</button></div>'
+      )
+      .replace(
+        '<button onClick={()=>setEmailMod(true)} style={btn(true,"#7BAFD4")}>📧 Email / Imprimer</button>',
+        '<button onClick={()=>setEmailMod(true)} style={btn(true,"#7BAFD4")}>📧 Envoyer ou imprimer</button>'
+      )
+      .replace(
+        '<button title="Vue annuelle" onClick={()=>setYearMod(true)} style={btn(false)}>📅</button><button title="Rapport" onClick={()=>setPdfMod(true)} style={btn(false)}>📄</button>',
+        '<button title="Vue annuelle" onClick={()=>setYearMod(true)} style={btn(false)}>📅 Année</button><button title="Rapport" onClick={()=>setPdfMod(true)} style={btn(false)}>📄 Rapport</button>'
+      );
 
     source += "\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));";
 
