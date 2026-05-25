@@ -6,7 +6,7 @@ window.PLANNING_AVD_AUTH = {
     storageBucket: "p-avd-1963b.firebasestorage.app",
     messagingSenderId: "93775651769",
     appId: "1:93775651769:web:e36ee5e44affbee0370c68",
-    measurementId: "G-L8KQDLDJH2"
+    measurementId: "G-L8KQDLDJH2",
   },
-  allowedEmails: []
+  allowedEmails: [],
 };
