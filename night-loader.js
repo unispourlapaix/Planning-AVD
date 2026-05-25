@@ -11,6 +11,30 @@
 
     source = source
       .replace(
+        'const ruleDays = r => r?.days === "weekend" ? [5,6] : r?.days === "weekdays" ? [0,1,2,3,4] : r?.days === "custom" ? (r.custom||[]) : [0,1,2,3,4,5,6];',
+        'const ruleDays = r => r?.days === "weekend" ? [5,6] : r?.days === "saturday" ? [5] : r?.days === "sunday" ? [6] : r?.days === "weekdays" ? [0,1,2,3,4] : r?.days === "custom" ? (r.custom||[]) : [0,1,2,3,4,5,6];'
+      )
+      .replace(
+        'const allowedShift = (p,shift,auxRules={}) => shift === "night" ? !!auxRules[p]?.night || auxRules[p]?.shift === "night" : (!auxRules[p]?.shift || auxRules[p].shift === "all" || auxRules[p].shift === shift);',
+        'const allowedShift = (p,shift,auxRules={}) => { const r=auxRules[p]||{}, s=r.shift||"all"; if (shift==="night") return !!r.night || s==="night"; if (s==="night") return false; if (s==="morning") return shift==="morning"; if (s==="evening") return shift==="evening"; return s==="all" || s===shift; };'
+      )
+      .replace(
+        '<option value="all">Tous les jours</option><option value="weekend">Week-end seulement</option><option value="weekdays">Semaine seulement</option><option value="custom">Jours precis</option>',
+        '<option value="all">Tous les jours</option><option value="weekdays">Semaine seulement</option><option value="weekend">Week-end seulement</option><option value="saturday">Samedi seulement</option><option value="sunday">Dimanche seulement</option><option value="custom">Jours precis</option>'
+      )
+      .replace(
+        '<option value="all">Matin + soir</option><option value="morning">Matin</option><option value="evening">Soir</option><option value="night">Nuit seulement</option>',
+        '<option value="all">Jour + soir</option><option value="morning">Matin seulement</option><option value="evening">Soir seulement</option><option value="night">Nuits seulement</option>'
+      )
+      .replace(
+        'const rotationTeam = (ids=[],auxRules={}) => { const base = ids.filter(p => TIDS.includes(p)); const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };',
+        'const rotationTeam = (ids=[],auxRules={},weekend=false) => { const base = ids.filter(p => TIDS.includes(p)); if (weekend) return base; const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };'
+      )
+      .replace(
+        'const weTeam = rotationTeam(baseTeam,auxRules);\n  const wdTeam = weTeam;',
+        'const weTeam = rotationTeam(baseTeam,auxRules,true);\n  const wdTeam = rotationTeam(baseTeam,auxRules,false);'
+      )
+      .replace(
         'const syncNightWorkers = blks => { blks.filter(b => b.shift === "night" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === "evening" || x.shift === "morning") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };',
         'const syncNightWorkers = (blks,auxRules={},y=0,m=0) => { const ids=[...new Set(blks.map(b=>b.workerId).filter(Boolean))]; blks.filter(b=>b.shift==="night").forEach(n=>{ const days=Array.from({length:n.end-n.start+1},(_,i)=>n.start+i); const weekend=days.some(d=>dowD(y,m,d)>=5); const eligible=ids.filter(p=>allowedShift(p,"night",auxRules)&&days.every(d=>allowedOn(p,y,m,d,auxRules))); const weekendFirst=weekend?eligible.filter(p=>auxRules[p]?.days==="weekend"):[]; const evening=blks.find(x=>x.baseIdx===n.baseIdx&&x.shift==="evening")?.workerId; const currentOk=n.workerId&&eligible.includes(n.workerId); if(!currentOk)n.workerId=weekendFirst[0]||eligible.find(p=>p===evening)||eligible[0]||null; }); return blks; };'
       )
