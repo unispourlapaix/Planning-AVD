@@ -9,8 +9,38 @@ import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 const { useEffect, useMemo, useState } = React;
 
 const cloneDefaultAux = () => DEFAULT_AUXILIARIES.map(aux => ({ ...aux, customDays: [...aux.customDays] }));
+const normalizeAuxiliaries = (saved) => {
+  const defaults = cloneDefaultAux();
+  if (Array.isArray(saved?.auxiliaries)) {
+    return saved.auxiliaries.map((aux, index) => {
+      const base = defaults[index] || {
+        ...defaults[0],
+        id: aux?.id || `P${index + 1}`,
+        name: `Auxiliaire ${index + 1}`,
+        lead: false,
+        night: false,
+      };
+      return {
+        ...base,
+        ...aux,
+        id: aux?.id || base.id,
+        name: (aux?.name || saved?.names?.[aux?.id] || base.name || `Auxiliaire ${index + 1}`).trim(),
+        active: aux?.active !== false,
+        customDays: Array.isArray(aux?.customDays) ? aux.customDays : base.customDays,
+      };
+    });
+  }
+  if (saved?.names && typeof saved.names === "object") {
+    return defaults.map(aux => ({ ...aux, name: saved.names[aux.id] || aux.name }));
+  }
+  return defaults;
+};
 const colorFor = index => PALETTE[index % PALETTE.length];
-const auxName = (auxiliaries, id) => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
+const auxName = (auxiliaries, id) => {
+  const index = auxiliaries.findIndex(aux => aux.id === id);
+  const aux = auxiliaries[index];
+  return aux?.name || `Auxiliaire ${index >= 0 ? index + 1 : ""}`.trim() || "A definir";
+};
 
 function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport }) {
   const moveMonth = delta => {
@@ -207,7 +237,7 @@ export default function App() {
       if (saved?.year) setYear(saved.year);
       if (Number.isInteger(saved?.month)) setMonth(saved.month);
       if (saved?.view) setView(saved.view);
-      if (Array.isArray(saved?.auxiliaries)) setAuxiliaries(saved.auxiliaries);
+      if (saved?.auxiliaries || saved?.names) setAuxiliaries(normalizeAuxiliaries(saved));
       setStateLoaded(true);
     });
   }, [authState.ready, authState.user, stateLoaded]);
