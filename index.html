@@ -49,7 +49,7 @@
           window.fetch = (url) => loadText(url).then(text => ({ ok: true, status: 200, text: () => Promise.resolve(text) }));
         }
         try {
-          let source = await loadText("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-chef-fair");
+          let source = await loadText("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-stable-loader");
           source = source
             .replace(
               'fetch("./browser-loader.js", { cache: "no-cache" })',
