@@ -13,14 +13,9 @@
       #root *{letter-spacing:0!important}
       #root h1,#root h2,#root h3,#root b{font-family:"Orbitron","Space Grotesk",system-ui,sans-serif!important}
       #root>div{background:transparent!important;max-width:1180px!important}
-      #root div[style*="background"],#root section,#root article{border-color:rgba(255,255,255,.92)!important}
       #root div[style*="border-radius"],#root div[style*="box-shadow"],#root div[style*="background:#FFF"],#root div[style*="background: #FFF"],#root div[style*="background:rgba"],#root div[style*="background: rgba"]{background:linear-gradient(145deg,rgba(255,255,255,.76),rgba(255,255,255,.42))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.96),inset 0 -1px 0 rgba(120,140,160,.10),0 14px 34px rgba(90,110,130,.16),0 3px 0 rgba(255,255,255,.55)!important;backdrop-filter:blur(18px) saturate(1.18)}
       #root button,#root a[href^="mailto:"],#root input,#root select,#root textarea{font-family:"Space Grotesk",system-ui,sans-serif!important;border:1px solid rgba(255,255,255,.95)!important;background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(255,255,255,.50))!important;color:#29352f!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 9px 22px rgba(102,122,142,.15),0 2px 0 rgba(255,255,255,.72)!important;backdrop-filter:blur(14px) saturate(1.2)}
       #root button{font-weight:800!important;text-shadow:0 1px 0 rgba(255,255,255,.55)}
-      #root button:nth-of-type(4n+1){background:linear-gradient(145deg,rgba(191,244,223,.84),rgba(255,255,255,.54))!important}
-      #root button:nth-of-type(4n+2){background:linear-gradient(145deg,rgba(201,233,255,.84),rgba(255,255,255,.54))!important}
-      #root button:nth-of-type(4n+3){background:linear-gradient(145deg,rgba(255,210,234,.84),rgba(255,255,255,.54))!important}
-      #root button:nth-of-type(4n+4){background:linear-gradient(145deg,rgba(221,214,255,.84),rgba(255,255,255,.54))!important}
     </style>
   </head>
   <body>
@@ -29,51 +24,6 @@
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="./auth-config.js"></script>
-    <script>
-      (async () => {
-        const fail = error => {
-          console.error(error);
-          const root = document.getElementById("root");
-          if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
-        };
-        try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-night-rules", { cache: "no-cache" });
-          if (!response.ok) throw new Error("patch-loader.js introuvable");
-          let source = await response.text();
-          const monthSource = String.raw`function MonthView() {
-    const first = dowD(y,m,1), total = dim(y,m), cells = Array.from({length:first+total},(_,i)=>i<first?null:i-first+1);
-    while (cells.length % 7) cells.push(null);
-    const fullName = p => p ? pName(names,p,priv) : "A definir";
-    const row = (label,pid) => <div key={label} style={{display:"grid",gridTemplateColumns:"64px minmax(0,1fr)",gap:4,alignItems:"center",minHeight:19,padding:"3px 6px",borderRadius:8,background:"#FFFFFF",border:"1px solid #E5DED2"}}>
-      <b style={{fontSize:9,color:"#746D61",fontWeight:900,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</b>
-      <span style={{fontSize:10,fontWeight:900,color:pid?(PAL[pidIx(pid)]?.text||"#4F5D4A"):"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fullName(pid)}</span>
-    </div>;
-    return <div className="su" style={{...card,padding:10}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:5,position:"relative"}}>
-        {DS.map((x,i)=><b key={i} style={{textAlign:"center",fontSize:12,color:i<5?"#4F5D4A":"#7A648C",padding:5}}>{x}</b>)}
-        {cells.map((d,i)=> {
-          const s = d && sched[d], am=s?.morning?.worker, pmw=s?.evening?.worker, rawN=s?.night?.worker, nw=allowedShift(rawN,"night",auxRules)?rawN:(allowedShift(pmw,"night",auxRules)?pmw:null), a=d&&acts[d], today=new Date(), isToday=d&&today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
-          return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{minHeight:116,borderRadius:14,background:d?(isToday?"#FFF9EA":"#FFFDF8"):"rgba(255,255,255,.24)",border:d?("1px solid "+(isToday?"#E8C878":"#E5DED2")):"1px dashed rgba(229,222,210,.55)",padding:7,position:"relative",overflow:"hidden",display:"grid",gridTemplateRows:"auto 1fr auto",gap:5,textAlign:"left"}}>
-            {d && <><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:5}}><span style={{fontSize:12,fontFamily:"DM Mono",fontWeight:900,color:"#746D61"}}>{d}</span>{a?.types?.length>0&&<span style={{fontSize:11}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join("")}</span>}</div><div style={{display:"grid",gap:4,alignContent:"start"}}>{row("Matin",am)}{row("Après-midi",pmw)}{row("Nuit",nw)}</div><span style={{fontSize:9,color:"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lieux[d]||"Lieu a preciser"}</span></>}
-          </button>;
-        })}
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:8}}><span style={{fontSize:12,color:"#746D61"}}>Vue mensuelle avec prenoms complets quand la session est connectee.</span><button onClick={()=>setEmailMod(true)} style={btn(true,"#8B9A7A")}>Envoyer</button></div>
-    </div>;
-  }`;
-          const sourceHook = "source += \"\\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));\";";
-          const sourcePatch = 'source = source.replace(/function MonthView\\(\\) \\{[\\s\\S]*?\\n  function WeekView/, ' + JSON.stringify(monthSource) + ' + "\\n\\n  function WeekView").replaceAll("Soir", "Après-midi");\n    ' + sourceHook;
-          const beforeEvalPatch = 'code = code.replace(' + JSON.stringify(sourceHook) + ', ' + JSON.stringify(sourcePatch) + ').replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
-          source = source.split('(0, eval)(code').join(beforeEvalPatch + '(0, eval)(code');
-          const evalCall = '(0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
-          const evalPatch = '\n    code = code.replace("const syncNightWorkers = blks => { blks.filter(b => b.shift === \\"night\\" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === \\"evening\\" || x.shift === \\"morning\\") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };", "const syncNightWorkers = (blks,auxRules={},y=0,m=0) => { const ids=[...new Set(blks.map(b=>b.workerId).filter(Boolean))]; blks.filter(b=>b.shift===\\"night\\").forEach(n=>{ const days=Array.from({length:n.end-n.start+1},(_,i)=>n.start+i); const weekend=days.some(d=>dowD(y,m,d)>=5); const eligible=ids.filter(p=>allowedShift(p,\\"night\\",auxRules)&&days.every(d=>allowedOn(p,y,m,d,auxRules))); const weekendFirst=weekend?eligible.filter(p=>auxRules[p]?.days===\\"weekend\\"):[]; const evening=blks.find(x=>x.baseIdx===n.baseIdx&&x.shift===\\"evening\\")?.workerId; const currentOk=n.workerId&&eligible.includes(n.workerId); if(!currentOk)n.workerId=weekendFirst[0]||eligible.find(p=>p===evening)||eligible[0]||null; }); return blks; };").replaceAll("syncNightWorkers(blks);", "syncNightWorkers(blks,auxRules,y,m);").replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (allowedShift(b.workerId,\\"night\\",auxRules) ? b.workerId : null) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const order = activeIds.slice(cursor).concat(activeIds.slice(0,cursor));", "const baseOrder = activeIds.slice(cursor).concat(activeIds.slice(0,cursor));\\n      const weekendDay = dowD(y,m,d) >= 5;\\n      const order = weekendDay ? baseOrder.slice().sort((a,b)=>((auxRules[b]?.days===\\"weekend\\"&&allowedShift(b,\\"night\\",auxRules))?1:0)-((auxRules[a]?.days===\\"weekend\\"&&allowedShift(a,\\"night\\",auxRules))?1:0)) : baseOrder;").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=allowedShift(sn?.worker,\\"night\\",auxRules)?sn?.worker:null").replaceAll("[\\\\\\"Matin\\\\\\",am,\\\\\\"#C99A52\\\\\\"],[\\\\\\"Soir\\\\\\",pmw,\\\\\\"#6F7FA8\\\\\\"],[\\\\\\"Nuit\\\\\\",nw,\\\\\\"#44506F\\\\\\"]", "[\\\\\\"Matin\\\\\\",am,\\\\\\"#C99A52\\\\\\"],[\\\\\\"Après-midi\\\\\\",pmw,\\\\\\"#6F7FA8\\\\\\"],[\\\\\\"Nuit\\\\\\",nw,\\\\\\"#44506F\\\\\\"]").replaceAll(">Soir<", ">Après-midi<");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
-          const evalIndex = source.lastIndexOf(evalCall);
-          source = evalIndex >= 0 ? source.slice(0, evalIndex) + evalPatch + source.slice(evalIndex + evalCall.length) : source;
-          (0, eval)(source + "\n//# sourceURL=patch-loader.accounts.js");
-        } catch (error) {
-          fail(error);
-        }
-      })();
-    </script>
+    <script src="./night-loader.js?v=20260525-night-rules"></script>
   </body>
 </html>
