@@ -24,6 +24,43 @@
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="./auth-config.js"></script>
-    <script src="./night-loader.js?v=20260525-night-rules"></script>
+    <script>
+      (async () => {
+        const root = document.getElementById("root");
+        const fail = error => {
+          console.error(error);
+          if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
+        };
+        try {
+          const response = await fetch("./patch-loader.js?v=20260525-chef-fair", { cache: "no-cache" });
+          if (!response.ok) throw new Error(`patch-loader.js introuvable (${response.status})`);
+          let source = await response.text();
+          source = source
+            .replace(
+              'const allowedShift = (p,shift,auxRules={}) => shift === "night" ? !!auxRules[p]?.night || auxRules[p]?.shift === "night" : (!auxRules[p]?.shift || auxRules[p].shift === "all" || auxRules[p].shift === shift);',
+              'const allowedShift = (p,shift,auxRules={}) => { const r=auxRules[p]||{}, s=r.shift||"all"; if (shift==="night") return !!r.night || s==="night"; if (s==="night") return false; if (s==="morning") return shift==="morning"; if (s==="evening") return shift==="evening"; return s==="all" || s===shift; };'
+            )
+            .replace(
+              'const shiftPayHours = s => s === "night" ? 12 : 5.75;',
+              'const shiftPayHours = s => s === "night" ? 12 : 6;'
+            )
+            .replace(
+              'const fairPick = (team,load,auxRules,ok,prev=null) => { const arr = team.filter(p => p && p !== prev && ok(p)); if (!arr.length) return null; return arr.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules))[0]; };',
+              'const fairPick = (team,load,auxRules,ok,prev=null) => { const pool = team.filter(p => p && ok(p)); const src = pool.filter(p => p !== prev); const list = src.length ? src : pool; return list.sort((a,b)=>loadScore(a,load,auxRules)-loadScore(b,load,auxRules) || team.indexOf(a)-team.indexOf(b))[0] || null; };'
+            )
+            .replace(
+              'const rotationTeam = (ids=[],auxRules={}) => { const base = ids.filter(p => TIDS.includes(p)); const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return others.length ? others.flatMap(p => [lead,p]) : [lead]; };',
+              'const rotationTeam = (ids=[],auxRules={},weekend=false) => { const base = ids.filter(p => TIDS.includes(p)); if (weekend) return base; const lead = base.find(p => auxRules[p]?.lead); if (!lead) return base; const others = base.filter(p => p !== lead); return [lead,...others]; };'
+            )
+            .replace(
+              'const weTeam = rotationTeam(baseTeam,auxRules);\n  const wdTeam = weTeam;',
+              'const weTeam = rotationTeam(baseTeam,auxRules,true);\n  const wdTeam = rotationTeam(baseTeam,auxRules,false);'
+            );
+          (0, eval)(source + "\n//# sourceURL=planning-avd-inline-loader.js");
+        } catch (error) {
+          fail(error);
+        }
+      })();
+    </script>
   </body>
 </html>
