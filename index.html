@@ -49,7 +49,7 @@
           window.fetch = (url) => loadText(url).then(text => ({ ok: true, status: 200, text: () => Promise.resolve(text) }));
         }
         try {
-          let source = await loadText("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-menu-labels");
+          let source = await loadText("./browser-loader.js?v=20260525-menu-labels-local");
           (0, eval)(source + "\n//# sourceURL=planning-avd-inline-loader.js");
         } catch (error) {
           fail(error);
