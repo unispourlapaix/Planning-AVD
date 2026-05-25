@@ -29,7 +29,7 @@
         const root = document.getElementById("root");
         const fail = error => {
           console.error(error);
-          if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
+          if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d;white-space:pre-wrap">Impossible de charger Planning-AVD.\n' + String(error && (error.stack || error.message) || error) + '</div>';
         };
         const loadText = url => new Promise((resolve, reject) => {
           if (window.fetch) {
