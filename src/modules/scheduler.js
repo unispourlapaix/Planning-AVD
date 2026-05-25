@@ -36,7 +36,7 @@ export function canWorkShift(aux, shift, year, month, day) {
   if (!aux) return false;
   const a = normalizeAuxiliary(aux);
   if (!canWorkDay(a, year, month, day)) return false;
-  if (shift === "night") return !!a.night || a.shift === "night";
+  if (shift === "night") return a.shift === "all" || a.shift === "night" || !!a.night;
   if (a.shift === "night") return false;
   if (a.shift === "morning") return shift === "morning";
   if (a.shift === "afternoon") return shift === "afternoon";
