@@ -7,61 +7,20 @@
     <link rel="icon" href="data:," />
     <title>Planning-AVD</title>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Space+Grotesk:wght@400;600;700&display=swap");
-      :root{
-        --glass:rgba(255,255,255,.58);
-        --glass-strong:rgba(255,255,255,.78);
-        --line:rgba(255,255,255,.92);
-        --ink:#25302c;
-        --muted:#6b746f;
-        --mint:#bff4df;
-        --pink:#ffd2ea;
-        --blue:#c9e9ff;
-        --lilac:#ddd6ff;
-        --sun:#ffe7a8;
-      }
-      html,body{min-height:100%;margin:0;background:
-        radial-gradient(circle at 12% 8%, rgba(191,244,223,.72), transparent 26%),
-        radial-gradient(circle at 86% 10%, rgba(221,214,255,.68), transparent 28%),
-        radial-gradient(circle at 25% 88%, rgba(255,210,234,.65), transparent 30%),
-        linear-gradient(135deg,#fffefa 0%,#f6fbff 45%,#fff8fd 100%)!important;}
-      body{font-family:"Space Grotesk",system-ui,sans-serif;color:var(--ink);letter-spacing:0;}
-      #root{isolation:isolate;}
-      #root *{letter-spacing:0!important;}
-      #root h1,#root h2,#root h3,#root b{font-family:"Orbitron","Space Grotesk",system-ui,sans-serif!important;}
-      #root>div{background:transparent!important;}
-      #root div[style*="background"],#root section,#root article{
-        border-color:rgba(255,255,255,.92)!important;
-      }
-      #root div[style*="border-radius"],#root div[style*="box-shadow"],#root div[style*="background:#FFF"],#root div[style*="background: #FFF"],#root div[style*="background:rgba"],#root div[style*="background: rgba"]{
-        background:linear-gradient(145deg,rgba(255,255,255,.74),rgba(255,255,255,.42))!important;
-        border:1px solid var(--line)!important;
-        box-shadow:
-          inset 0 1px 0 rgba(255,255,255,.96),
-          inset 0 -1px 0 rgba(120,140,160,.10),
-          0 14px 34px rgba(90,110,130,.16),
-          0 3px 0 rgba(255,255,255,.55)!important;
-        backdrop-filter:blur(18px) saturate(1.18);
-      }
-      #root button,#root a[href^="mailto:"],#root input,#root select,#root textarea{
-        font-family:"Space Grotesk",system-ui,sans-serif!important;
-        border:1px solid rgba(255,255,255,.95)!important;
-        background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(255,255,255,.50))!important;
-        color:#29352f!important;
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 9px 22px rgba(102,122,142,.15),0 2px 0 rgba(255,255,255,.72)!important;
-        backdrop-filter:blur(14px) saturate(1.2);
-      }
-      #root button{font-weight:800!important;text-shadow:0 1px 0 rgba(255,255,255,.55);transition:transform .16s ease,box-shadow .16s ease,filter .16s ease;}
-      #root button:hover{transform:translateY(-1px);filter:saturate(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 14px 28px rgba(92,112,132,.20),0 3px 0 rgba(255,255,255,.78)!important;}
-      #root button:active{transform:translateY(1px);box-shadow:inset 0 2px 8px rgba(90,110,130,.12),0 5px 12px rgba(92,112,132,.12)!important;}
-      #root button:nth-of-type(4n+1){background:linear-gradient(145deg,rgba(191,244,223,.84),rgba(255,255,255,.54))!important;}
-      #root button:nth-of-type(4n+2){background:linear-gradient(145deg,rgba(201,233,255,.84),rgba(255,255,255,.54))!important;}
-      #root button:nth-of-type(4n+3){background:linear-gradient(145deg,rgba(255,210,234,.84),rgba(255,255,255,.54))!important;}
-      #root button:nth-of-type(4n+4){background:linear-gradient(145deg,rgba(221,214,255,.84),rgba(255,255,255,.54))!important;}
-      #root button span b{color:#5d6470!important;background:rgba(255,255,255,.72)!important;border:1px solid rgba(255,255,255,.95)!important;border-radius:8px!important;min-width:12px!important;text-align:center!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 10px rgba(110,120,140,.12)!important}
-      #root input:focus,#root select:focus,#root textarea:focus{outline:2px solid rgba(201,233,255,.92)!important;outline-offset:2px;}
-      #root [style*="color:#294C69"],#root [style*="color: #294C69"],#root [style*="color:#3F4A3A"],#root [style*="color: #3F4A3A"]{color:#25302c!important;}
-      #root [style*="color:#746D61"],#root [style*="color: #746D61"],#root [style*="color:#667F94"],#root [style*="color: #667F94"]{color:var(--muted)!important;}
+      @import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Space+Grotesk:wght@400;600;700&display=swap");
+      html,body{min-height:100%;margin:0;background:radial-gradient(circle at 14% 10%,rgba(191,244,223,.7),transparent 28%),radial-gradient(circle at 86% 12%,rgba(221,214,255,.68),transparent 28%),radial-gradient(circle at 28% 88%,rgba(255,210,234,.62),transparent 30%),linear-gradient(135deg,#fffefa,#f6fbff 48%,#fff8fd)!important}
+      body{font-family:"Space Grotesk",system-ui,sans-serif;color:#25302c}
+      #root *{letter-spacing:0!important}
+      #root h1,#root h2,#root h3,#root b{font-family:"Orbitron","Space Grotesk",system-ui,sans-serif!important}
+      #root>div{background:transparent!important;max-width:1180px!important}
+      #root div[style*="background"],#root section,#root article{border-color:rgba(255,255,255,.92)!important}
+      #root div[style*="border-radius"],#root div[style*="box-shadow"],#root div[style*="background:#FFF"],#root div[style*="background: #FFF"],#root div[style*="background:rgba"],#root div[style*="background: rgba"]{background:linear-gradient(145deg,rgba(255,255,255,.76),rgba(255,255,255,.42))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.96),inset 0 -1px 0 rgba(120,140,160,.10),0 14px 34px rgba(90,110,130,.16),0 3px 0 rgba(255,255,255,.55)!important;backdrop-filter:blur(18px) saturate(1.18)}
+      #root button,#root a[href^="mailto:"],#root input,#root select,#root textarea{font-family:"Space Grotesk",system-ui,sans-serif!important;border:1px solid rgba(255,255,255,.95)!important;background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(255,255,255,.50))!important;color:#29352f!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 9px 22px rgba(102,122,142,.15),0 2px 0 rgba(255,255,255,.72)!important;backdrop-filter:blur(14px) saturate(1.2)}
+      #root button{font-weight:800!important;text-shadow:0 1px 0 rgba(255,255,255,.55)}
+      #root button:nth-of-type(4n+1){background:linear-gradient(145deg,rgba(191,244,223,.84),rgba(255,255,255,.54))!important}
+      #root button:nth-of-type(4n+2){background:linear-gradient(145deg,rgba(201,233,255,.84),rgba(255,255,255,.54))!important}
+      #root button:nth-of-type(4n+3){background:linear-gradient(145deg,rgba(255,210,234,.84),rgba(255,255,255,.54))!important}
+      #root button:nth-of-type(4n+4){background:linear-gradient(145deg,rgba(221,214,255,.84),rgba(255,255,255,.54))!important}
     </style>
   </head>
   <body>
@@ -78,59 +37,14 @@
           if (root) root.innerHTML = '<div style="font:16px system-ui;padding:24px;color:#7a1d1d">Impossible de charger Planning-AVD. Rechargez la page dans un instant.</div>';
         };
         try {
-          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-landscape-report", { cache: "no-cache" });
+          const response = await fetch("https://raw.githubusercontent.com/unispourlapaix/Planning-AVD/main/patch-loader.js?v=20260525-night-rules", { cache: "no-cache" });
           if (!response.ok) throw new Error("patch-loader.js introuvable");
           let source = await response.text();
-          const reportSource = String.raw`function PdfModal() {
-    const make = () => {
-      const clean = v => { const s = String(v ?? ""); return s === "undefined" || s === "null" ? "" : s; };
-      const esc = v => clean(v).replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
-      const worker = id => id ? esc(pName(names,id,priv) || names?.[id] || id) : "A definir";
-      const totals = activeIds.reduce((a,p)=>(a[p]={morning:0,afternoon:0,night:0,total:0,days:0},a),{});
-      const add = (p,k,h) => { if (!p || !totals[p]) return; totals[p][k] += h; totals[p].total += h; };
-      const dayCell = d => {
-        if (d < 1 || d > dim(y,m)) return "<td class='empty'></td>";
-        const day = sched[d] || {}, a = acts[d] || {};
-        const am = day.morning?.worker, ap = day.evening?.worker, nt = ap || day.night?.worker;
-        add(am,"morning",6); add(ap,"afternoon",6); add(nt,"night",12);
-        [am,ap,nt].filter(Boolean).forEach((p,i,arr) => { if (arr.indexOf(p) === i && totals[p]) totals[p].days += 1; });
-        const act = (a.types||[]).map(t => ACTS.find(x=>x[0]===t)?.[1] || t).filter(Boolean).join(", ");
-        const info = [lieux[d],act,a.note,a.objectif].map(clean).filter(Boolean).map(esc).join("<br>");
-        return "<td><div class='num'>"+d+"</div><div class='shift morning'><b>Matin</b><span>"+worker(am)+"</span><em>6h</em></div><div class='shift afternoon'><b>Après-midi</b><span>"+worker(ap)+"</span><em>6h</em></div><div class='shift night'><b>Nuit</b><span>"+worker(nt)+"</span><em>12h</em></div>"+(info?"<div class='info'>"+info+"</div>":"")+"</td>";
-      };
-      const firstDow = dowD(y,m,1), totalDays = dim(y,m), cells = [];
-      for (let i=0;i<firstDow;i++) cells.push(dayCell(0));
-      for (let d=1; d<=totalDays; d++) cells.push(dayCell(d));
-      while (cells.length % 7) cells.push(dayCell(0));
-      const weeks = [];
-      for (let i=0;i<cells.length;i+=7) weeks.push("<tr>"+cells.slice(i,i+7).join("")+"</tr>");
-      const hourRows = activeIds.map(p => {
-        const r = totals[p] || {morning:0,afternoon:0,night:0,total:0,days:0}, quota=Math.max(0,+auxRules[p]?.quota||MAX_H), corr=+ah[p]||0, total=Math.round((r.total+corr)*100)/100, rest=Math.round((quota-total)*100)/100;
-        return "<tr><td><b>"+worker(p)+"</b></td><td>"+esc(r.days)+"</td><td>"+esc(r.morning)+"h</td><td>"+esc(r.afternoon)+"h</td><td>"+esc(r.night)+"h</td><td><b>"+esc(total)+"h</b></td><td>"+esc(quota)+"h</td><td>"+esc(rest)+"h</td></tr>";
-      }).join("");
-      const generated = new Date().toLocaleDateString("fr-FR");
-      const html = "<html><head><title>Rapport Planning-AVD</title><style>"+
-        "@page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#2f352d;background:#fffdf8;margin:0;padding:0}"+
-        "h1{margin:0;color:#25302c;font-size:22px}h2{margin:10px 0 6px;color:#25302c;font-size:14px}.top{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;border-bottom:2px solid #dfe8df;padding-bottom:8px;margin-bottom:8px}.muted{color:#6b746f;font-size:11px}.pill{border:1px solid #dfe8df;border-radius:999px;padding:5px 9px;background:#fff;color:#4f5d4a;font-weight:700;font-size:11px}"+
-        ".calendar{width:100%;border-collapse:separate;border-spacing:4px;table-layout:fixed}.calendar th{background:#eef7f3;color:#4f5d4a;font-size:10px;text-transform:uppercase;padding:6px;border:1px solid #dfe8df;border-radius:8px}.calendar td{height:98px;vertical-align:top;border:1px solid #e5ded2;background:#fff;border-radius:9px;padding:5px;box-shadow:0 2px 8px rgba(80,95,100,.08)}.calendar td.empty{background:#f8f6f1}.num{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:999px;background:#f1ede4;font-weight:900;color:#25302c;font-size:12px;margin-bottom:4px}.shift{display:grid;grid-template-columns:52px minmax(0,1fr) 25px;gap:4px;align-items:center;font-size:8.8px;line-height:1.15;margin:3px 0;padding:3px 4px;border-radius:7px;border:1px solid #e7dfd2}.shift b{color:#59635d}.shift span{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#25302c}.shift em{font-style:normal;text-align:right;color:#4f5d4a;font-weight:800}.morning{background:#fff5db}.afternoon{background:#eaf6ff}.night{background:#edeaff}.info{margin-top:4px;border-top:1px dashed #e5ded2;padding-top:3px;color:#6b746f;font-size:8.2px;line-height:1.2}"+
-        ".hours{width:100%;border-collapse:separate;border-spacing:0;margin-top:6px;border:1px solid #dfe8df;border-radius:10px;overflow:hidden}.hours th{background:#eef7f3;color:#4f5d4a;text-align:left;font-size:10px;padding:6px;border-bottom:1px solid #dfe8df}.hours td{font-size:11px;padding:6px;border-bottom:1px solid #eee7dc;background:#fff}.hours tr:last-child td{border-bottom:0}.hours td:not(:first-child),.hours th:not(:first-child){text-align:right}.hours b{color:#25302c}"+
-        "</style></head><body>"+
-        "<div class='top'><div><h1>Planning-AVD · "+esc(MFR[m])+" "+esc(y)+"</h1><div class='muted'>Rapport mensuel paysage · genere le "+esc(generated)+"</div></div><span class='pill'>Noms "+(priv?"visibles":"masques")+"</span></div>"+
-        "<h2>Planning détaillé du mois</h2><table class='calendar'><thead><tr><th>Lundi</th><th>Mardi</th><th>Mercredi</th><th>Jeudi</th><th>Vendredi</th><th>Samedi</th><th>Dimanche</th></tr></thead><tbody>"+weeks.join("")+"</tbody></table>"+
-        "<h2>Heures réparties par intervenant</h2><table class='hours'><tr><th>Intervenant</th><th>Jours</th><th>Matin</th><th>Après-midi</th><th>Nuit</th><th>Total réparti</th><th>Quota</th><th>Reste</th></tr>"+hourRows+"</table>"+
-        "</body></html>";
-      const w=window.open("","_blank");
-      w.document.write(html.replaceAll("undefined","").replaceAll("null",""));
-      w.document.close();
-      w.print();
-    };
-    return <Ov onClose={()=>setPdfMod(false)} ch={<Sh ch={<><h3 style={{margin:"0 0 10px",color:"#3F4A3A"}}>Rapport mensuel paysage</h3><p style={{color:"#746D61",fontSize:13}}>Le rapport sort en calendrier paysage lisible, avec les prenoms complets dans chaque creneau et le recapitulatif des heures en fin de document.</p><button onClick={make} style={{...btn(true,"#8B9A7A"),width:"100%"}}>Generer le rapport PDF</button></>} />} />;
-  }`;
           const monthSource = String.raw`function MonthView() {
     const first = dowD(y,m,1), total = dim(y,m), cells = Array.from({length:first+total},(_,i)=>i<first?null:i-first+1);
     while (cells.length % 7) cells.push(null);
     const fullName = p => p ? pName(names,p,priv) : "A definir";
-    const row = (label,pid,color) => <div key={label} style={{display:"grid",gridTemplateColumns:"58px minmax(0,1fr)",gap:4,alignItems:"center",minHeight:18,padding:"2px 5px",borderRadius:8,background:"#FFFFFF",border:"1px solid #E5DED2"}}>
+    const row = (label,pid) => <div key={label} style={{display:"grid",gridTemplateColumns:"64px minmax(0,1fr)",gap:4,alignItems:"center",minHeight:19,padding:"3px 6px",borderRadius:8,background:"#FFFFFF",border:"1px solid #E5DED2"}}>
       <b style={{fontSize:9,color:"#746D61",fontWeight:900,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</b>
       <span style={{fontSize:10,fontWeight:900,color:pid?(PAL[pidIx(pid)]?.text||"#4F5D4A"):"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fullName(pid)}</span>
     </div>;
@@ -138,121 +52,23 @@
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:5,position:"relative"}}>
         {DS.map((x,i)=><b key={i} style={{textAlign:"center",fontSize:12,color:i<5?"#4F5D4A":"#7A648C",padding:5}}>{x}</b>)}
         {cells.map((d,i)=> {
-          const s = d && sched[d], sm=s?.morning, se=s?.evening, sn=s?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker, a = d && acts[d], today=new Date(), isToday=d&&today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
+          const s = d && sched[d], am=s?.morning?.worker, pmw=s?.evening?.worker, rawN=s?.night?.worker, nw=allowedShift(rawN,"night",auxRules)?rawN:(allowedShift(pmw,"night",auxRules)?pmw:null), a=d&&acts[d], today=new Date(), isToday=d&&today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d;
           return <button key={i} disabled={!d} onClick={()=>d&&setDayMod(d)} style={{minHeight:116,borderRadius:14,background:d?(isToday?"#FFF9EA":"#FFFDF8"):"rgba(255,255,255,.24)",border:d?("1px solid "+(isToday?"#E8C878":"#E5DED2")):"1px dashed rgba(229,222,210,.55)",padding:7,position:"relative",overflow:"hidden",display:"grid",gridTemplateRows:"auto 1fr auto",gap:5,textAlign:"left"}}>
-            {d && <><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:5}}><span style={{fontSize:12,fontFamily:"DM Mono",fontWeight:900,color:"#746D61"}}>{d}</span>{a?.types?.length>0 && <span style={{fontSize:11}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join("")}</span>}</div><div style={{display:"grid",gap:4,alignContent:"start"}}>{row("Matin",am,"#C99A52")}{row("Après-midi",pmw,"#6F7FA8")}{row("Nuit",nw,"#44506F")}</div><span style={{fontSize:9,color:"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lieux[d]||"Lieu a preciser"}</span></>}
+            {d && <><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:5}}><span style={{fontSize:12,fontFamily:"DM Mono",fontWeight:900,color:"#746D61"}}>{d}</span>{a?.types?.length>0&&<span style={{fontSize:11}}>{a.types.map(t=>ACTS.find(x=>x[0]===t)?.[2]).join("")}</span>}</div><div style={{display:"grid",gap:4,alignContent:"start"}}>{row("Matin",am)}{row("Après-midi",pmw)}{row("Nuit",nw)}</div><span style={{fontSize:9,color:"#746D61",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lieux[d]||"Lieu a preciser"}</span></>}
           </button>;
         })}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:8}}><span style={{fontSize:12,color:"#746D61"}}>Vue mensuelle avec prenoms complets quand la session est connectee.</span><button onClick={()=>setEmailMod(true)} style={btn(true,"#8B9A7A")}>Envoyer</button></div>
     </div>;
   }`;
-          const hoursSource = String.raw`function HoursView() {
-    const quotaFor = p => Math.max(0,+auxRules[p]?.quota||MAX_H);
-    const correctionFor = p => +ah[p]||0;
-    const monthDays = Array.from({length:dim(y,m)},(_,i)=>i+1);
-    const rowsByPerson = activeIds.reduce((a,p)=>(a[p]=[],a),{});
-    const byDay = monthDays.reduce((a,d)=>(a[d]=[],a),{});
-    const labelFor = row => row.shift === "night" ? "Nuit" : row.shift === "morning" ? "Matin" : row.shift === "evening" ? "Apres-midi" : "Jour";
-    const canUse = (p,d,shift) => {
-      if (!allowedOn(p,y,m,d,auxRules)) return false;
-      if (shift === "night" && !allowedShift(p,"night",auxRules)) return false;
-      if (shift !== "night" && !(allowedShift(p,"morning",auxRules) || allowedShift(p,"evening",auxRules))) return false;
-      if ((byDay[d]||[]).some(x=>x.p===p)) return false;
-      if (shift !== "night" && (byDay[d-1]||[]).some(x=>x.p===p && x.shift==="night")) return false;
-      if (shift === "night" && (byDay[d+1]||[]).some(x=>x.p===p && x.shift!=="night")) return false;
-      return true;
-    };
-    const nearestDay = (p,wanted,shift) => {
-      for (let off=0; off<dim(y,m); off++) {
-        const tries = off ? [wanted-off,wanted+off] : [wanted];
-        const ok = tries.filter(d => d>=1 && d<=dim(y,m) && canUse(p,d,shift)).sort((a,b)=>(byDay[a]||[]).length-(byDay[b]||[]).length);
-        const light = ok.find(d => (byDay[d]||[]).length < 2);
-        if (light || ok[0]) return light || ok[0];
-      }
-      return monthDays.filter(d=>allowedOn(p,y,m,d,auxRules) && !(byDay[d]||[]).some(x=>x.p===p)).sort((a,b)=>(byDay[a]||[]).length-(byDay[b]||[]).length)[0] || 1;
-    };
-    const shiftsFor = p => {
-      const r = auxRules[p] || {};
-      if (r.shift === "morning") return [{shift:"morning",hours:6}];
-      if (r.shift === "evening") return [{shift:"evening",hours:6}];
-      if (r.shift === "night") return [{shift:"night",hours:12}];
-      if (r.night) return [{shift:"day",hours:12},{shift:"night",hours:12}];
-      return [{shift:"day",hours:12}];
-    };
-    activeIds.forEach((p,personIx) => {
-      let left = Math.max(0,quotaFor(p)-correctionFor(p));
-      const shifts = shiftsFor(p), baseUnit = Math.max(...shifts.map(s=>s.hours)), slots = Math.max(1,Math.ceil(left/baseUnit));
-      for (let i=0; left>0 && i<slots+8; i++) {
-        const pref = shifts[(i + personIx) % shifts.length];
-        const hours = Math.min(pref.hours,left);
-        const phase = activeIds.length ? personIx * dim(y,m) / activeIds.length : 0;
-        const rawWanted = 1 + ((i+.5) * dim(y,m) / slots) + phase;
-        const wanted = Math.max(1,Math.min(dim(y,m),Math.round(((rawWanted - 1) % dim(y,m)) + 1)));
-        const d = nearestDay(p,wanted,pref.shift);
-        const row = {p,d,shift:pref.shift,hours:Math.round(hours*100)/100};
-        rowsByPerson[p].push(row);
-        byDay[d].push(row);
-        left = Math.round((left-hours)*100)/100;
-      }
-      if (left>0) {
-        monthDays.forEach(d => {
-          if (left<=0 || !allowedOn(p,y,m,d,auxRules) || (byDay[d]||[]).some(x=>x.p===p)) return;
-          const hours = Math.min(12,left), row = {p,d,shift:"day",hours:Math.round(hours*100)/100};
-          rowsByPerson[p].push(row); byDay[d].push(row); left = Math.round((left-hours)*100)/100;
-        });
-      }
-    });
-    const calc = activeIds.reduce((a,p)=>(a[p]={real:0,pay:0,nights:0,days:0,rows:rowsByPerson[p]||[],byDay:{}},a),{});
-    activeIds.forEach(p => (rowsByPerson[p]||[]).forEach(row => {
-      calc[p].real += row.hours; calc[p].pay += row.hours;
-      if (!calc[p].byDay[row.d]) calc[p].byDay[row.d] = [];
-      calc[p].byDay[row.d].push(row);
-      if (row.shift === "night") calc[p].nights += row.hours / 12;
-      else calc[p].days += row.hours / 12;
-    }));
-    const first = dowD(y,m,1), cells = Array.from({length:first+dim(y,m)},(_,i)=>i<first?null:i-first+1);
-    while (cells.length % 7) cells.push(null);
-    return <div className="su" style={{display:"grid",gap:10}}>
-      <div style={{...card,padding:12,background:"#FFFDF8"}}><b style={{color:"#3F4A3A"}}>Planning technique comptable</b><p style={{fontSize:12,color:"#746D61",margin:"6px 0 0"}}>Les quotas sont repartis sur tout le mois. Plusieurs auxiliaires peuvent etre places sur la meme journee pour atteindre les heures de chacun sans concentrer le travail au debut du mois.</p></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:7}}>
-        {cells.map((d,i)=><div key={i} style={{...card,minHeight:96,padding:8,background:d?"#FFFDF8":"rgba(255,255,255,.32)",display:"grid",gap:5,alignContent:"start"}}>
-          {d&&<><b style={{fontSize:13,color:"#3F4A3A"}}>{d}</b>{(byDay[d]||[]).length ? (byDay[d]||[]).map((r,j)=><span key={j} style={{fontSize:10,fontWeight:900,color:PAL[pidIx(r.p)].text,background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:8,padding:"4px 5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{labelFor(r)} · {pName(names,r.p,priv)} · {r.hours}h</span>) : <span style={{fontSize:11,color:"#746D61"}}>Libre</span>}</>}
-        </div>)}
-      </div>
-      {activeIds.map(p => {
-        const r = calc[p] || {real:0,pay:0,nights:0,days:0,rows:[],byDay:{}}, quota=quotaFor(p), pay=Math.round((r.pay+correctionFor(p))*100)/100, gap=Math.round((quota-pay)*100)/100, c=gap===0?"#4F8B5B":gap>0?"#D94C4C":pay>quota*.85?"#E6A23C":PAL[pidIx(p)].solid;
-        const placement = (r.rows||[]).slice().sort((a,b)=>a.d-b.d).map(row => row.d+" "+labelFor(row)+" "+row.hours+"h");
-        return <div key={p} style={{...card,padding:12,display:"grid",gap:9,background:"#FFFDF8"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}><Av t={p} st={stat[p]} names={names} priv={priv}/><b style={{flex:1,color:PAL[pidIx(p)].text}}>{pName(names,p,priv)}</b><input type="number" value={ah[p]||""} onChange={e=>setAh(x=>({...x,[p]:e.target.value}))} placeholder="+/- h" title="Correction ponctuelle" style={{width:78,padding:8,borderRadius:12,border:"1px solid #E5DED2",fontFamily:"DM Mono",fontWeight:900}} /></div>
-          <HBar v={pay} c={c}/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,fontSize:12,color:"#4F5D4A"}}>
-            <span><b>{Math.round(r.real*100)/100}h</b><br/>Placees</span><span><b>{quota}h</b><br/>Quota</span><span><b>{Math.round(r.nights*100)/100}</b><br/>Nuits</span><span><b>{gap}h</b><br/>Ecart</span>
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{placement.length ? placement.map(x=><span key={x} style={{fontSize:11,fontWeight:900,color:"#4F5D4A",background:"#FFFFFF",border:"1px solid #E5DED2",borderRadius:999,padding:"5px 8px"}}>{x}</span>) : <span style={{fontSize:12,color:"#746D61"}}>Aucune heure placee</span>}</div>
-          {gap===0 ? <div style={{color:"#4F8B5B",fontWeight:900,fontSize:12}}>Quota exact atteint</div> : <div style={{color:"#B83232",fontWeight:900,fontSize:12}}>Ecart a verifier: {gap}h</div>}
-        </div>;
-      })}
-    </div>;
-  }`;
-          const reportPrefix = 'const reportModalSource = String.raw`function PdfModal() {';
-          const reportStart = source.indexOf(reportPrefix);
-          const reportReplace = reportStart >= 0 ? source.indexOf('code = code.replace(/function PdfModal', reportStart) : -1;
-          const reportEnd = reportReplace >= 0 ? source.lastIndexOf('`;', reportReplace) : -1;
-          window.__planningReportPatch = { reportStart, reportReplace, reportEnd };
-          if (reportStart >= 0 && reportEnd > reportStart) {
-            source = source.slice(0, reportStart + reportPrefix.length) + reportSource.slice('function PdfModal() {'.length) + source.slice(reportEnd);
-          }
           const sourceHook = "source += \"\\nReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));\";";
-          const sourcePatch = 'source = source.replace(/function MonthView\\(\\) \\{[\\s\\S]*?\\n  function WeekView/, ' + JSON.stringify(monthSource) + ' + "\\n\\n  function WeekView").replace(/function HoursView\\(\\) \\{[\\s\\S]*?\\n  function ConfigView/, ' + JSON.stringify(hoursSource) + ' + "\\n\\n  function ConfigView").replace(/function PdfModal\\(\\) \\{[\\s\\S]*?\\n  function AdminModal/, ' + JSON.stringify(reportSource) + ' + "\\n\\n  function AdminModal").replaceAll("Soir", "Après-midi");\n    ' + sourceHook;
+          const sourcePatch = 'source = source.replace(/function MonthView\\(\\) \\{[\\s\\S]*?\\n  function WeekView/, ' + JSON.stringify(monthSource) + ' + "\\n\\n  function WeekView").replaceAll("Soir", "Après-midi");\n    ' + sourceHook;
           const beforeEvalPatch = 'code = code.replace(' + JSON.stringify(sourceHook) + ', ' + JSON.stringify(sourcePatch) + ').replaceAll(">Soir<", ">Après-midi<").replaceAll("Soir", "Après-midi");\n    ';
           source = source.split('(0, eval)(code').join(beforeEvalPatch + '(0, eval)(code');
           const evalCall = '(0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
-          const evalPatch = '\n    code = code.replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (sched[d]?.evening?.worker || b.workerId) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=se?.worker || sn?.worker").replaceAll("[\\\\\\\"Matin\\\\\\\",am,\\\\\\\"#C99A52\\\\\\\"],[\\\\\\\"Soir\\\\\\\",pmw,\\\\\\\"#6F7FA8\\\\\\\"],[\\\\\\\"Nuit\\\\\\\",nw,\\\\\\\"#44506F\\\\\\\"]", "[\\\\\\\"Matin\\\\\\\",am,\\\\\\\"#C99A52\\\\\\\"],[\\\\\\\"Après-midi\\\\\\\",pmw,\\\\\\\"#6F7FA8\\\\\\\"],[\\\\\\\"Nuit\\\\\\\",nw,\\\\\\\"#44506F\\\\\\\"]").replaceAll("label:\\\\\\\"Jour soir\\\\\\\"", "label:\\\\\\\"Après-midi\\\\\\\"").replaceAll("label:\\\\\\\"Soir\\\\\\\"", "label:\\\\\\\"Après-midi\\\\\\\"").replaceAll("s === \\\\\\\"evening\\\\\\\" ? \\\\\\\"Soir\\\\\\\"", "s === \\\\\\\"evening\\\\\\\" ? \\\\\\\"Après-midi\\\\\\\"").replaceAll(">Soir<", ">Après-midi<");\n    { const ps = code.indexOf("function PdfModal() {"), pe = code.indexOf("\\n  function AdminModal", ps); if (ps >= 0 && pe > ps) code = code.slice(0, ps) + ' + JSON.stringify(reportSource) + ' + code.slice(pe); }\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
+          const evalPatch = '\n    code = code.replace("const syncNightWorkers = blks => { blks.filter(b => b.shift === \\"night\\" && !b.workerId).forEach(n => { const day = blks.find(x => x.baseIdx === n.baseIdx && (x.shift === \\"evening\\" || x.shift === \\"morning\\") && x.workerId); if (day?.workerId) n.workerId = day.workerId; }); return blks; };", "const syncNightWorkers = (blks,auxRules={},y=0,m=0) => { const ids=[...new Set(blks.map(b=>b.workerId).filter(Boolean))]; blks.filter(b=>b.shift===\\"night\\").forEach(n=>{ const days=Array.from({length:n.end-n.start+1},(_,i)=>n.start+i); const weekend=days.some(d=>dowD(y,m,d)>=5); const eligible=ids.filter(p=>allowedShift(p,\\"night\\",auxRules)&&days.every(d=>allowedOn(p,y,m,d,auxRules))); const weekendFirst=weekend?eligible.filter(p=>auxRules[p]?.days===\\"weekend\\"):[]; const evening=blks.find(x=>x.baseIdx===n.baseIdx&&x.shift===\\"evening\\")?.workerId; const currentOk=n.workerId&&eligible.includes(n.workerId); if(!currentOk)n.workerId=weekendFirst[0]||eligible.find(p=>p===evening)||eligible[0]||null; }); return blks; };").replaceAll("syncNightWorkers(blks);", "syncNightWorkers(blks,auxRules,y,m);").replace("const item = {worker:b.workerId,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};", "const displayWorker = b.shift === \\"night\\" ? (allowedShift(b.workerId,\\"night\\",auxRules) ? b.workerId : null) : b.workerId;\\n      const item = {worker:displayWorker,bi:b.idx,base:b.baseIdx,bt:b.type,bs:b.start,be:b.end,shift:b.shift,cross:b.cross};").replace("const order = activeIds.slice(cursor).concat(activeIds.slice(0,cursor));", "const baseOrder = activeIds.slice(cursor).concat(activeIds.slice(0,cursor));\\n      const weekendDay = dowD(y,m,d) >= 5;\\n      const order = weekendDay ? baseOrder.slice().sort((a,b)=>((auxRules[b]?.days===\\"weekend\\"&&allowedShift(b,\\"night\\",auxRules))?1:0)-((auxRules[a]?.days===\\"weekend\\"&&allowedShift(a,\\"night\\",auxRules))?1:0)) : baseOrder;").replace("const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=sn?.worker", "const sm=sched[d]?.morning, se=sched[d]?.evening, sn=sched[d]?.night, am=sm?.worker, pmw=se?.worker, nw=allowedShift(sn?.worker,\\"night\\",auxRules)?sn?.worker:null").replaceAll("[\\\\\\"Matin\\\\\\",am,\\\\\\"#C99A52\\\\\\"],[\\\\\\"Soir\\\\\\",pmw,\\\\\\"#6F7FA8\\\\\\"],[\\\\\\"Nuit\\\\\\",nw,\\\\\\"#44506F\\\\\\"]", "[\\\\\\"Matin\\\\\\",am,\\\\\\"#C99A52\\\\\\"],[\\\\\\"Après-midi\\\\\\",pmw,\\\\\\"#6F7FA8\\\\\\"],[\\\\\\"Nuit\\\\\\",nw,\\\\\\"#44506F\\\\\\"]").replaceAll(">Soir<", ">Après-midi<");\n    (0, eval)(code + "\\n//# sourceURL=browser-loader.patched.js");';
           const evalIndex = source.lastIndexOf(evalCall);
-          source = evalIndex >= 0
-            ? source.slice(0, evalIndex) + evalPatch + source.slice(evalIndex + evalCall.length)
-            : source.replace(/\(0, eval\)\(code \+ [\s\S]*?browser-loader\.patched\.js"[\s\S]*?\);(?![\s\S]*browser-loader\.patched\.js)/, evalPatch);
+          source = evalIndex >= 0 ? source.slice(0, evalIndex) + evalPatch + source.slice(evalIndex + evalCall.length) : source;
           (0, eval)(source + "\n//# sourceURL=patch-loader.accounts.js");
         } catch (error) {
           fail(error);
