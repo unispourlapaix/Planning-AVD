@@ -155,7 +155,7 @@ function HoursView({ auxiliaries, hours }) {
           h("span", null, `Matin : ${hData.morning || 0}h`),
           h("span", null, `Apres-midi : ${hData.afternoon || 0}h`),
           h("span", null, `Nuit : ${hData.night || 0}h`),
-          h("span", null, `Reste : ${Math.round(((hData.quota || aux.quota) - (hData.total || 0)) * 100) / 100}h`),
+          h("span", null, `En pause : ${Math.round(((hData.quota || aux.quota) - (hData.total || 0)) * 100) / 100}h`),
         ),
       );
     }),
