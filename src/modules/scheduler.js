@@ -89,7 +89,13 @@ function addShift(dayPlan, shift, worker, load) {
   if (worker) load[worker] = (load[worker] || 0) + (def?.hours || 0);
 }
 
-export function buildSchedule({ year, month, auxiliaries }) {
+function pickPreferredOrNext({ preferred, team, pointers, load, shift, year, month, day, previous, preferLeader = false, preferWeekendOnly = false }) {
+  const preferredAux = team.find(aux => aux.id === preferred);
+  if (preferredAux && preferredAux.id !== previous && canWorkShift(preferredAux, shift, year, month, day)) return preferredAux.id;
+  return pickWorker({ team, pointers, load, shift, year, month, day, previous, preferLeader, preferWeekendOnly });
+}
+
+function buildDailySchedule({ year, month, auxiliaries }) {
   const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
   const schedule = {};
   const blocks = [];
@@ -151,6 +157,109 @@ export function buildSchedule({ year, month, auxiliaries }) {
   }
 
   return { schedule, blocks, load };
+}
+
+function buildBlockSchedule({ year, month, auxiliaries, rotationDays }) {
+  const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
+  const schedule = {};
+  const blocks = [];
+  const load = Object.fromEntries(team.map(aux => [aux.id, 0]));
+  const pointers = { morning: 0, afternoon: 0, night: 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0 };
+  const totalDays = daysInMonth(year, month);
+  const span = Math.min(4, Math.max(2, Number(rotationDays) || 2));
+  const step = span - 1;
+  const blockStarts = [];
+  const ownerByStart = {};
+  let previousOwner = null;
+
+  for (let start = 1; start <= totalDays; start += step) {
+    const weekend = isWeekendDay(year, month, start);
+    const owner = pickWorker({
+      team,
+      pointers,
+      load,
+      shift: "afternoon",
+      year,
+      month,
+      day: start,
+      previous: previousOwner,
+      preferLeader: !weekend,
+      preferWeekendOnly: weekend,
+    });
+    blockStarts.push(start);
+    ownerByStart[start] = owner;
+    previousOwner = owner;
+  }
+
+  for (let day = 1; day <= totalDays; day += 1) {
+    const weekend = isWeekendDay(year, month, day);
+    const plan = { day, weekend };
+    const morningStart = blockStarts.find(start => start <= day && day <= start + span - 1);
+    const serviceStart = blockStarts.filter(start => start <= day && day <= start + span - 2).at(-1);
+    const morningOwner = ownerByStart[morningStart];
+    const serviceOwner = ownerByStart[serviceStart] || morningOwner;
+
+    const morningWorker = pickPreferredOrNext({
+      preferred: morningOwner,
+      team,
+      pointers,
+      load,
+      shift: "morning",
+      year,
+      month,
+      day,
+      previous: null,
+      preferLeader: !weekend,
+      preferWeekendOnly: weekend,
+    });
+    addShift(plan, "morning", morningWorker, load);
+
+    const afternoonWorker = pickPreferredOrNext({
+      preferred: serviceOwner,
+      team,
+      pointers,
+      load,
+      shift: "afternoon",
+      year,
+      month,
+      day,
+      previous: plan.morning?.worker === serviceOwner ? null : plan.morning?.worker,
+      preferLeader: !weekend,
+      preferWeekendOnly: weekend,
+    });
+    addShift(plan, "afternoon", afternoonWorker, load);
+
+    const afternoonAux = team.find(aux => aux.id === afternoonWorker);
+    const nightWorker = afternoonAux && canWorkShift(afternoonAux, "night", year, month, day)
+      ? afternoonAux.id
+      : pickPreferredOrNext({
+          preferred: serviceOwner,
+          team,
+          pointers,
+          load,
+          shift: "night",
+          year,
+          month,
+          day,
+          previous: plan.morning?.worker,
+          preferLeader: false,
+          preferWeekendOnly: weekend,
+        });
+    addShift(plan, "night", nightWorker, load);
+
+    schedule[day] = plan;
+    SHIFT_DEFS.forEach(shift => {
+      blocks.push({ day, shift: shift.id, worker: plan[shift.id]?.worker || "", hours: shift.hours });
+    });
+  }
+
+  return { schedule, blocks, load };
+}
+
+export function buildSchedule({ year, month, auxiliaries, rotationDays = 1 }) {
+  const days = Number(rotationDays) || 1;
+  if (days >= 2) return buildBlockSchedule({ year, month, auxiliaries, rotationDays: days });
+  return buildDailySchedule({ year, month, auxiliaries });
 }
 
 export function calculateHours(schedule, auxiliaries) {
