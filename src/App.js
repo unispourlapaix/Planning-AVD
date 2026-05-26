@@ -123,7 +123,7 @@ function WeekView({ year, month, schedule, auxiliaries }) {
     const days = Array.from({ length: 7 }, (_, i) => start + i).filter(day => schedule[day]);
     return h("div", { className: "panel", key: start },
       h("h3", null, `Semaine du ${start} ${MONTHS[month]}`),
-      h("div", { className: "calendar" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries }))),
+      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries }))),
     );
   }));
 }
