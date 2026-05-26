@@ -6,6 +6,7 @@ export const defaultState = () => {
     year: now.getFullYear(),
     month: now.getMonth(),
     view: "month",
+    rotationDays: 1,
     auxiliaries: null,
     updatedAt: "",
   };
