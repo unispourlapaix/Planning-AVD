@@ -2,12 +2,16 @@ import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js";
 import { dayName, daysInMonth } from "./dates.js";
 
 const esc = value => String(value ?? "").replace(/[<>&]/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char]));
+const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 
 export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
   const dayRows = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1).map(day => {
     const plan = schedule[day] || {};
-    const lines = SHIFT_DEFS.map(shift => `<div class="slot"><b>${SHIFT_LABEL[shift.id]}</b><span>${esc(findName(plan[shift.id]?.worker))}</span><em>${shift.hours}h</em></div>`).join("");
+    const lines = SHIFT_DEFS.map(shift => {
+      const names = shiftWorkerIds(plan[shift.id]).map(findName).join(" + ") || "A definir";
+      return `<div class="slot"><b>${SHIFT_LABEL[shift.id]}</b><span>${esc(names)}</span><em>${shift.hours}h</em></div>`;
+    }).join("");
     return `<td><div class="date">${day} ${dayName(year, month, day)}</div>${lines}</td>`;
   });
   const rows = [];
