@@ -14,6 +14,7 @@ const ROTATION_OPTIONS = [
   { value: 3, label: "Roulement 3 jours", detail: "Bloc plus stable, toujours termine au matin." },
   { value: 4, label: "Roulement 4 jours", detail: "Longue presence, passage au suivant apres le matin." },
 ];
+const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
 
 const cloneDefaultAux = () => DEFAULT_AUXILIARIES.map(aux => ({ ...aux, customDays: [...aux.customDays] }));
 const normalizeAuxiliaries = (saved) => {
@@ -111,7 +112,7 @@ function DayCard({ day, year, month, plan, auxiliaries }) {
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
       const c = colorFor(index);
       return h("div", { className: "slot", key: shift.id },
-        h("span", { className: "slot-label" }, SHIFT_LABEL[shift.id]),
+        h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
         h("span", { className: "slot-name", style: { color: worker ? c.text : "#746d61" } }, workers.length ? workers.map(id => auxName(auxiliaries, id)).join(" + ") : "A definir"),
       );
     }),
