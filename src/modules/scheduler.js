@@ -110,9 +110,9 @@ function pickLeaderDouble({ primary, team, pointers, load, shift, year, month, d
   if (!primaryAux?.lead || weekend) return [];
   const saved = dayDoubles?.[primary];
   const savedAux = team.find(aux => aux.id === saved);
-  if (savedAux && canWorkShift(savedAux, shift, year, month, day)) return [savedAux.id];
+  if (savedAux && savedAux.shift !== "night" && canWorkShift(savedAux, shift, year, month, day)) return [savedAux.id];
   const teammate = pickWorker({
-    team: team.filter(aux => !aux.lead),
+    team: team.filter(aux => !aux.lead && aux.shift !== "night"),
     pointers,
     load,
     shift,
@@ -128,12 +128,42 @@ function pickLeaderDouble({ primary, team, pointers, load, shift, year, month, d
   return teammate ? [teammate] : [];
 }
 
+function pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, weekend }) {
+  const primaryAux = team.find(aux => aux.id === primary);
+  if (primaryAux?.shift === "night") return [];
+  const key = weekend ? "weekend-night-double" : "night-double";
+  const candidates = team.filter(aux => aux.shift === "night" && canWorkShift(aux, "night", year, month, day));
+  const teammate = pickWorker({
+    team: candidates,
+    pointers: { ...pointers, night: pointers[key] || 0 },
+    load,
+    shift: "night",
+    year,
+    month,
+    day,
+    previous: primary,
+    exclude: [primary],
+    preferLeader: false,
+    preferWeekendOnly: false,
+  });
+  if (!teammate) return [];
+  const idx = candidates.findIndex(aux => aux.id === teammate);
+  pointers[key] = (idx >= 0 ? idx + 1 : (pointers[key] || 0) + 1) % Math.max(1, candidates.length);
+  return [teammate];
+}
+
+function nightExtras({ primary, team, pointers, load, year, month, day, weekend, dayDoubles }) {
+  const nightOnly = pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, weekend });
+  if (nightOnly.length) return nightOnly;
+  return pickLeaderDouble({ primary, team, pointers, load, shift: "night", year, month, day, weekend, dayDoubles });
+}
+
 function buildDailySchedule({ year, month, auxiliaries }) {
   const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
   const schedule = {};
   const blocks = [];
   const load = Object.fromEntries(team.map(aux => [aux.id, 0]));
-  const pointers = { morning: 0, afternoon: 0, night: 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0 };
+  const pointers = { morning: 0, afternoon: 0, night: 0, "night-double": 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0, "weekend-night-double": 0 };
   let previousDayWorker = null;
   let weekendWorker = null;
   let weekendKey = "";
@@ -181,7 +211,7 @@ function buildDailySchedule({ year, month, auxiliaries }) {
           preferLeader: false,
           preferWeekendOnly: weekend,
         });
-    addShift(plan, "night", nightWorker, load, pickLeaderDouble({ primary: nightWorker, team, pointers, load, shift: "night", year, month, day, weekend, dayDoubles }));
+    addShift(plan, "night", nightWorker, load, nightExtras({ primary: nightWorker, team, pointers, load, year, month, day, weekend, dayDoubles }));
 
     previousDayWorker = plan.afternoon?.worker || plan.morning?.worker || previousDayWorker;
     schedule[day] = plan;
@@ -200,7 +230,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays }) {
   const schedule = {};
   const blocks = [];
   const load = Object.fromEntries(team.map(aux => [aux.id, 0]));
-  const pointers = { morning: 0, afternoon: 0, night: 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0 };
+  const pointers = { morning: 0, afternoon: 0, night: 0, "night-double": 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0, "weekend-night-double": 0 };
   const totalDays = daysInMonth(year, month);
   const span = Math.min(4, Math.max(2, Number(rotationDays) || 2));
   const step = span - 1;
@@ -282,7 +312,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays }) {
           preferLeader: false,
           preferWeekendOnly: weekend,
         });
-    addShift(plan, "night", nightWorker, load, pickLeaderDouble({ primary: nightWorker, team, pointers, load, shift: "night", year, month, day, weekend, dayDoubles }));
+    addShift(plan, "night", nightWorker, load, nightExtras({ primary: nightWorker, team, pointers, load, year, month, day, weekend, dayDoubles }));
 
     schedule[day] = plan;
     SHIFT_DEFS.forEach(shift => {
