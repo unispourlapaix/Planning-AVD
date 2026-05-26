@@ -30,5 +30,5 @@ export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
     .slot{display:grid;grid-template-columns:58px 1fr 28px;gap:4px;margin:3px 0}.slot b{color:#746d61}.slot span{font-weight:700}
     .hours{margin-top:18px}.hours td,.hours th{font-size:12px}
   </style></head><body><h1>Planning-AVD - ${MONTHS[month]} ${year}</h1><table>${rows.join("")}</table>
-  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Nuit</th><th>Total</th><th>Quota</th><th>Reste</th></tr>${hourRows}</table></body></html>`;
+  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Nuit</th><th>Total</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
 }
