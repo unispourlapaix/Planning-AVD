@@ -8,6 +8,13 @@ import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useState } = React;
 
+const ROTATION_OPTIONS = [
+  { value: 1, label: "Jour par jour", detail: "Matin, apres-midi et nuit recalcules chaque jour." },
+  { value: 2, label: "Roulement 2 jours", detail: "La personne finit le matin, la suivante commence l'apres-midi." },
+  { value: 3, label: "Roulement 3 jours", detail: "Bloc plus stable, toujours termine au matin." },
+  { value: 4, label: "Roulement 4 jours", detail: "Longue presence, passage au suivant apres le matin." },
+];
+
 const cloneDefaultAux = () => DEFAULT_AUXILIARIES.map(aux => ({ ...aux, customDays: [...aux.customDays] }));
 const normalizeAuxiliaries = (saved) => {
   const defaults = cloneDefaultAux();
@@ -153,7 +160,7 @@ function HoursView({ auxiliaries, hours }) {
   );
 }
 
-function ConfigView({ auxiliaries, setAuxiliaries }) {
+function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
   const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => aux.id === id ? { ...aux, ...patch } : aux));
   const addAux = () => setAuxiliaries(list => {
     if (list.length >= MAX_AUXILIARIES) return list;
@@ -173,6 +180,19 @@ function ConfigView({ auxiliaries, setAuxiliaries }) {
   });
 
   return h("section", { className: "layout" },
+    h("div", { className: "panel" },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h3", null, "Roulement"),
+          h("div", { className: "muted" }, "Choisir la duree du tour. En 2, 3 ou 4 jours, le tour se termine toujours le matin."),
+        ),
+      ),
+      h("div", { className: "rotation-options" }, ROTATION_OPTIONS.map(option => h(Button, {
+        key: option.value,
+        active: Number(rotationDays) === option.value,
+        onClick: () => setRotationDays(option.value),
+      }, h("span", null, option.label), h("small", null, option.detail)))),
+    ),
     h("div", { className: "panel title-row" },
       h("div", null, h("h3", null, "Configuration equipe"), h("div", { className: "muted" }, `${auxiliaries.length} auxiliaire(s), maximum ${MAX_AUXILIARIES}`)),
       h(Button, { onClick: addAux }, "+ Ajouter"),
@@ -225,6 +245,7 @@ export default function App() {
   const [year, setYear] = useState(defaultState().year);
   const [month, setMonth] = useState(defaultState().month);
   const [view, setView] = useState("month");
+  const [rotationDays, setRotationDays] = useState(defaultState().rotationDays);
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
 
   useEffect(() => {
@@ -237,6 +258,7 @@ export default function App() {
       if (saved?.year) setYear(saved.year);
       if (Number.isInteger(saved?.month)) setMonth(saved.month);
       if (saved?.view) setView(saved.view);
+      if ([1, 2, 3, 4].includes(Number(saved?.rotationDays))) setRotationDays(Number(saved.rotationDays));
       if (saved?.auxiliaries || saved?.names) setAuxiliaries(normalizeAuxiliaries(saved));
       setStateLoaded(true);
     });
@@ -247,13 +269,13 @@ export default function App() {
     const id = setTimeout(() => saveState({
       db: authState.db,
       user: authState.user,
-      state: { year, month, view, auxiliaries },
+      state: { year, month, view, rotationDays, auxiliaries },
     }), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, year, month, view, auxiliaries]);
+  }, [stateLoaded, authState.user, authState.db, year, month, view, rotationDays, auxiliaries]);
 
   const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active), [auxiliaries]);
-  const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux }), [year, month, activeAux]);
+  const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const hours = useMemo(() => calculateHours(planning.schedule, auxiliaries), [planning.schedule, auxiliaries]);
 
   const openReport = () => {
@@ -282,7 +304,7 @@ export default function App() {
       view === "month" ? h(MonthView, { year, month, schedule: planning.schedule, auxiliaries }) : null,
       view === "week" ? h(WeekView, { year, month, schedule: planning.schedule, auxiliaries }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
-      view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries }) : null,
+      view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
   );
 }
