@@ -40,6 +40,10 @@ h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .tab { min-height: 54px; display: grid; place-items: center; gap: 2px; line-height: 1.05; }
 .tab-icon { font-size: 18px; }
+.rotation-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 10px; }
+.rotation-options .btn { min-height: 76px; display: grid; gap: 4px; text-align: left; align-content: center; }
+.rotation-options .btn small { font-weight: 700; color: #746d61; line-height: 1.2; }
+.rotation-options .btn.active small { color: rgba(255,255,255,.82); }
 .layout { display: grid; gap: 12px; margin-top: 12px; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .pill { border-radius: 999px; padding: 5px 8px; font-weight: 900; font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
