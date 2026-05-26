@@ -48,6 +48,7 @@ const auxName = (auxiliaries, id) => {
   const aux = auxiliaries[index];
   return aux?.name || `Auxiliaire ${index >= 0 ? index + 1 : ""}`.trim() || "A definir";
 };
+const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 
 function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport }) {
   const moveMonth = delta => {
@@ -105,12 +106,13 @@ function DayCard({ day, year, month, plan, auxiliaries }) {
   return h("div", { className: "day-card" },
     h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
     SHIFT_DEFS.map(shift => {
-      const worker = plan?.[shift.id]?.worker;
+      const workers = shiftWorkerIds(plan?.[shift.id]);
+      const worker = workers[0];
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
       const c = colorFor(index);
       return h("div", { className: "slot", key: shift.id },
         h("span", { className: "slot-label" }, SHIFT_LABEL[shift.id]),
-        h("span", { className: "slot-name", style: { color: worker ? c.text : "#746d61" } }, worker ? auxName(auxiliaries, worker) : "A definir"),
+        h("span", { className: "slot-name", style: { color: worker ? c.text : "#746d61" } }, workers.length ? workers.map(id => auxName(auxiliaries, id)).join(" + ") : "A definir"),
       );
     }),
   );
