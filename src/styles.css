@@ -53,6 +53,10 @@ h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .slot-name { font-weight: 900; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel { border-radius: 16px; padding: 12px; }
 .week-grid, .hours-grid { display: grid; gap: 8px; }
+.week-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.week-days .day-card { min-height: 172px; }
+.week-days .slot { grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
+.week-days .slot-name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.15; }
 .aux-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
 .aux-card { border-radius: 16px; padding: 12px; display: grid; gap: 8px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
