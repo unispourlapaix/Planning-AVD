@@ -52,14 +52,14 @@ h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .day-card { min-height: 150px; border-radius: 14px; padding: 8px; display: grid; gap: 6px; align-content: start; }
 .day-card.empty { opacity: .35; }
 .day-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 900; color: #3f4a3a; }
-.slot { display: grid; grid-template-columns: 86px 1fr; gap: 6px; align-items: center; padding: 5px; border-radius: 10px; background: rgba(255,255,255,.65); border: 1px solid #eee7dc; min-width: 0; }
+.slot { display: grid; grid-template-columns: 38px 1fr; gap: 6px; align-items: center; padding: 5px; border-radius: 10px; background: rgba(255,255,255,.65); border: 1px solid #eee7dc; min-width: 0; }
 .slot-label { color: #746d61; font-size: 11px; font-weight: 900; background: #fff; border: 1px solid #e5ded2; border-radius: 8px; text-align: center; padding: 3px; }
 .slot-name { font-weight: 900; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel { border-radius: 16px; padding: 12px; }
 .week-grid, .hours-grid { display: grid; gap: 8px; }
 .week-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
 .week-days .day-card { min-height: 172px; }
-.week-days .slot { grid-template-columns: 96px minmax(0, 1fr); align-items: start; }
+.week-days .slot { grid-template-columns: 42px minmax(0, 1fr); align-items: start; }
 .week-days .slot-name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.15; }
 .aux-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
 .aux-card { border-radius: 16px; padding: 12px; display: grid; gap: 8px; }
