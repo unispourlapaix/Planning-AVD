@@ -50,8 +50,13 @@ const auxName = (auxiliaries, id) => {
   return aux?.name || `Auxiliaire ${index >= 0 ? index + 1 : ""}`.trim() || "A definir";
 };
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
+const extractBackupJson = text => {
+  const raw = String(text || "").trim();
+  const match = raw.match(/----- DEBUT SAUVEGARDE PLANNING-AVD -----(.*?)----- FIN SAUVEGARDE PLANNING-AVD -----/s);
+  return (match ? match[1] : raw).trim();
+};
 
-function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport, onShareBackup }) {
+function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport, onShareBackup, onRestoreBackup }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -71,6 +76,7 @@ function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLo
       h("div", { className: "action-row" },
         h(Button, { onClick: onReport }, "📄 Rapport"),
         h(Button, { onClick: onShareBackup }, "✉️ Sauvegarde"),
+        h(Button, { onClick: onRestoreBackup }, "↩ Restaurer"),
         authState.user
           ? h(Button, { active: true, onClick: onLogout }, "Connecté")
           : h(Button, { onClick: onLogin }, "Connexion Google"),
@@ -324,6 +330,30 @@ export default function App() {
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`;
   };
 
+  const restoreBackup = () => {
+    const input = window.prompt("Collez ici la sauvegarde Planning-AVD recue par email.");
+    if (!input) return;
+    try {
+      const backup = JSON.parse(extractBackupJson(input));
+      const next = backup?.state || backup;
+      if (!next || !Array.isArray(next.auxiliaries)) throw new Error("Format de sauvegarde incomplet.");
+      const nextYear = Number(next.year);
+      const nextMonth = Number(next.month);
+      const nextRotation = Number(next.rotationDays);
+      if (!Number.isInteger(nextYear) || !Number.isInteger(nextMonth) || nextMonth < 0 || nextMonth > 11) {
+        throw new Error("Mois ou annee invalide.");
+      }
+      setYear(nextYear);
+      setMonth(nextMonth);
+      setView(["month", "week", "hours", "config"].includes(next.view) ? next.view : "month");
+      setRotationDays([1, 2, 3, 4].includes(nextRotation) ? nextRotation : 1);
+      setAuxiliaries(normalizeAuxiliaries({ auxiliaries: next.auxiliaries }));
+      alert("Sauvegarde restauree. Elle sera aussi sauvegardee dans le cloud si vous etes connecte.");
+    } catch (error) {
+      alert(`Sauvegarde impossible a restaurer : ${error.message}`);
+    }
+  };
+
   return h("main", { className: "app" },
     h(TopBar, {
       authState,
@@ -337,6 +367,7 @@ export default function App() {
       onLogout: () => signOut(authState.auth),
       onReport: openReport,
       onShareBackup: shareBackup,
+      onRestoreBackup: restoreBackup,
     }),
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
