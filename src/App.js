@@ -51,7 +51,7 @@ const auxName = (auxiliaries, id) => {
 };
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 
-function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport }) {
+function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport, onShareBackup }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -70,6 +70,7 @@ function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLo
       h("div", null, h("h1", null, "Planning-AVD"), h("div", { className: "muted" }, authState.user ? `Cloud actif : ${authState.user.email}` : "Sauvegarde locale, connexion Google disponible")),
       h("div", { className: "action-row" },
         h(Button, { onClick: onReport }, "📄 Rapport"),
+        h(Button, { onClick: onShareBackup }, "✉️ Sauvegarde"),
         authState.user
           ? h(Button, { active: true, onClick: onLogout }, "Connecté")
           : h(Button, { onClick: onLogin }, "Connexion Google"),
@@ -289,6 +290,40 @@ export default function App() {
     win.focus();
   };
 
+  const shareBackup = async () => {
+    const backup = {
+      app: "Planning-AVD",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      state: { year, month, view, rotationDays, auxiliaries },
+    };
+    const content = JSON.stringify(backup, null, 2);
+    const fileName = `planning-avd-sauvegarde-${year}-${String(month + 1).padStart(2, "0")}.json`;
+    const subject = `Sauvegarde Planning-AVD - ${MONTHS[month]} ${year}`;
+    const fullBody = [
+      "Bonjour,",
+      "",
+      "Voici la sauvegarde complete Planning-AVD.",
+      "Conserver tout le bloc ci-dessous pour pouvoir la restaurer.",
+      "",
+      "----- DEBUT SAUVEGARDE PLANNING-AVD -----",
+      content,
+      "----- FIN SAUVEGARDE PLANNING-AVD -----",
+    ].join("\n");
+    await navigator.clipboard?.writeText(content).catch(() => {});
+    if (fullBody.length > 14000) {
+      const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("Bonjour,\n\nLa sauvegarde complete Planning-AVD a ete copiee dans le presse-papiers et telechargee en fichier JSON. Ajoutez le fichier au mail ou collez le contenu du presse-papiers.\n\nFichier : " + fileName)}`;
+      return;
+    }
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullBody)}`;
+  };
+
   return h("main", { className: "app" },
     h(TopBar, {
       authState,
@@ -301,6 +336,7 @@ export default function App() {
       onLogin: () => signInWithGoogle(authState.auth).catch(error => alert(error.message)),
       onLogout: () => signOut(authState.auth),
       onReport: openReport,
+      onShareBackup: shareBackup,
     }),
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
