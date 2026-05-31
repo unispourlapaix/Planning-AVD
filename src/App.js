@@ -2,7 +2,7 @@ import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIF
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler.js";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
-import { defaultState, loadState, saveState } from "./modules/storage.js";
+import { defaultState, isAdminUser, loadState, publishPersonalPlannings, saveState, subscribePersonalPlanning } from "./modules/storage.js";
 import { buildReportHtml } from "./modules/report.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
@@ -69,7 +69,7 @@ const extractBackupJson = text => {
   return (match ? match[1] : raw).trim();
 };
 
-function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport, onShareBackup, onRestoreBackup }) {
+function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport, onShareBackup, onRestoreBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -90,6 +90,7 @@ function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLo
         h(Button, { onClick: onReport }, "📄 Rapport"),
         h(Button, { onClick: onShareBackup }, "✉️ Sauvegarde"),
         h(Button, { onClick: onRestoreBackup }, "↩ Restaurer"),
+        authState.user && isAdmin ? h(Button, { active: true, onClick: onPublish }, "☁ Publier") : null,
         authState.user
           ? h(Button, { active: true, onClick: onLogout }, "Connecté")
           : h(Button, { onClick: onLogin }, "Connexion Google"),
@@ -107,6 +108,72 @@ function TopBar({ authState, view, setView, year, month, setYear, setMonth, onLo
       className: "tab",
       onClick: () => setView(tab[0]),
     }, h("span", { className: "tab-icon" }, tab[1]), h("span", null, tab[2])))),
+  );
+}
+
+function PersonalDayCard({ day, entries }) {
+  return h("div", { className: "day-card personal-day" },
+    h("div", { className: "day-head" }, h("span", null, day)),
+    SHIFT_DEFS.map(shift => {
+      const entry = entries.find(item => item.shift === shift.id);
+      return h("div", { className: `personal-slot ${entry ? "scheduled" : ""}`, key: shift.id },
+        h("span", { className: "slot-label" }, SHIFT_COMPACT_LABEL[shift.id]),
+        h("span", null, entry ? `${SHIFT_LABEL[shift.id]} · ${entry.hours}h` : "Repos"),
+      );
+    }),
+  );
+}
+
+function PersonalView({ authState, year, month, setYear, setMonth, planning, error, onLogout }) {
+  const [personalView, setPersonalView] = useState("week");
+  const moveMonth = delta => {
+    const date = new Date(year, month + delta, 1);
+    setYear(date.getFullYear());
+    setMonth(date.getMonth());
+  };
+  const byDay = Object.fromEntries(Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => [index + 1, []]));
+  (planning?.entries || []).forEach(entry => { if (byDay[entry.day]) byDay[entry.day].push(entry); });
+  const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
+  const weekGroups = [];
+  for (let day = 1; day <= Object.keys(byDay).length; day += 7) weekGroups.push(Array.from({ length: 7 }, (_, index) => day + index).filter(item => byDay[item]));
+  const hData = planning?.hours || {};
+  return h("main", { className: "app personal-app" },
+    h("header", { className: "topbar" },
+      h("div", { className: "title-row" },
+        h("div", null, h("h1", null, "Mon planning"), h("div", { className: "muted" }, authState.user?.email || "")),
+        h("div", { className: "action-row" },
+          h(Button, { onClick: () => window.print() }, "🖨 Imprimer"),
+          h(Button, { onClick: onLogout }, "Déconnexion"),
+        ),
+      ),
+      h("div", { className: "month-row" },
+        h(Button, { onClick: () => moveMonth(-1) }, "‹"),
+        h("h2", { style: { margin: 0 } }, `${MONTHS[month]} ${year}`),
+        h(Button, { onClick: () => moveMonth(1) }, "›"),
+      ),
+      h("nav", { className: "tabs personal-tabs" },
+        h(Button, { active: personalView === "week", onClick: () => setPersonalView("week") }, "📋 Semaines"),
+        h(Button, { active: personalView === "month", onClick: () => setPersonalView("month") }, "📅 Mois"),
+      ),
+    ),
+    h("section", { className: "layout" },
+      error ? h("div", { className: "panel muted" }, error) : null,
+      planning
+        ? h("div", { className: "panel personal-summary" },
+            h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel publié par votre administrateur.")),
+            h("b", null, `${hData.total || 0}h / ${hData.quota || 0}h`),
+          )
+        : h("div", { className: "panel" }, h("h3", null, "Planning en attente"), h("div", { className: "muted" }, "Votre administrateur n'a pas encore publié de planning pour ce mois.")),
+      planning && personalView === "week"
+        ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
+            h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
+            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day] }))),
+          )))
+        : null,
+      planning && personalView === "month"
+        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries })))
+        : null,
+    ),
   );
 }
 
@@ -297,10 +364,40 @@ export default function App() {
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
   const [overrides, setOverrides] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
+  const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false });
+  const [personalPlanning, setPersonalPlanning] = useState(null);
+  const [personalError, setPersonalError] = useState("");
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
   }, []);
+
+  useEffect(() => {
+    if (!authState.ready) return;
+    if (!authState.user) {
+      setSessionRole({ ready: true, isAdmin: false });
+      return;
+    }
+    setSessionRole({ ready: false, isAdmin: false });
+    isAdminUser({ db: authState.db, user: authState.user })
+      .then(isAdmin => setSessionRole({ ready: true, isAdmin }))
+      .catch(() => setSessionRole({ ready: true, isAdmin: false }));
+  }, [authState.ready, authState.user, authState.db]);
+
+  const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin;
+
+  useEffect(() => {
+    if (!personalMode) return;
+    setPersonalError("");
+    return subscribePersonalPlanning({
+      db: authState.db,
+      user: authState.user,
+      year,
+      month,
+      onChange: setPersonalPlanning,
+      onError: error => setPersonalError(`Lecture du planning impossible : ${error.message}`),
+    });
+  }, [personalMode, authState.db, authState.user, year, month]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;
@@ -317,13 +414,14 @@ export default function App() {
 
   useEffect(() => {
     if (!stateLoaded) return;
+    if (authState.user && (!sessionRole.ready || !sessionRole.isAdmin)) return;
     const id = setTimeout(() => saveState({
       db: authState.db,
       user: authState.user,
       state: { year, month, view, rotationDays, auxiliaries, overrides },
     }), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, year, month, view, rotationDays, auxiliaries, overrides]);
+  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides]);
 
   const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active), [auxiliaries]);
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
@@ -336,6 +434,15 @@ export default function App() {
     win.document.write(html);
     win.document.close();
     win.focus();
+  };
+
+  const publishPlanning = async () => {
+    try {
+      const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours });
+      alert(`Planning publié pour ${count} auxiliaire(s).`);
+    } catch (error) {
+      alert(`Publication impossible : ${error.message}`);
+    }
   };
 
   const shareBackup = async () => {
@@ -397,9 +504,12 @@ export default function App() {
     }
   };
 
+  if (personalMode) return h(PersonalView, { authState, year, month, setYear, setMonth, planning: personalPlanning, error: personalError, onLogout: () => signOut(authState.auth) });
+
   return h("main", { className: "app" },
     h(TopBar, {
       authState,
+      isAdmin: sessionRole.isAdmin,
       view,
       setView,
       year,
@@ -411,6 +521,7 @@ export default function App() {
       onReport: openReport,
       onShareBackup: shareBackup,
       onRestoreBackup: restoreBackup,
+      onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
