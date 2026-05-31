@@ -1,6 +1,6 @@
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, calculateHours } from "./modules/scheduler.js";
+import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler.js";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import { defaultState, loadState, saveState } from "./modules/storage.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -51,6 +51,17 @@ const auxName = (auxiliaries, id) => {
   return aux?.name || `Auxiliaire ${index >= 0 ? index + 1 : ""}`.trim() || "A definir";
 };
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
+const overrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
+const applyOverrides = ({ schedule, overrides, year, month }) => Object.fromEntries(Object.entries(schedule).map(([day, plan]) => [
+  day,
+  {
+    ...plan,
+    ...Object.fromEntries(SHIFT_DEFS.map(shift => {
+      const worker = overrides[overrideKey(year, month, day, shift.id)];
+      return [shift.id, worker ? { ...plan[shift.id], worker, workers: [worker] } : plan[shift.id]];
+    })),
+  },
+]));
 const extractBackupJson = text => {
   const raw = String(text || "").trim();
   const match = raw.match(/----- DEBUT SAUVEGARDE PLANNING-AVD -----(.*?)----- FIN SAUVEGARDE PLANNING-AVD -----/s);
@@ -110,7 +121,7 @@ function Summary({ auxiliaries, hours }) {
   }));
 }
 
-function DayCard({ day, year, month, plan, auxiliaries }) {
+function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
   if (!day) return h("div", { className: "day-card empty" });
   return h("div", { className: "day-card" },
     h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
@@ -119,7 +130,7 @@ function DayCard({ day, year, month, plan, auxiliaries }) {
       const worker = workers[0];
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
       const c = colorFor(index);
-      return h("div", { className: "slot", key: shift.id },
+      return h("button", { className: "slot editable-slot", key: shift.id, onClick: () => onEditSlot({ day, shift: shift.id }) },
         h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
         h("span", { className: "slot-name", style: { color: worker ? c.text : "#746d61" } }, workers.length ? workers.map(id => auxName(auxiliaries, id)).join(" + ") : "A definir"),
       );
@@ -127,21 +138,21 @@ function DayCard({ day, year, month, plan, auxiliaries }) {
   );
 }
 
-function MonthView({ year, month, schedule, auxiliaries }) {
+function MonthView({ year, month, schedule, auxiliaries, onEditSlot }) {
   return h("section", { className: "layout" },
     h("div", { className: "calendar" },
       DAYS_SHORT.map((day, index) => h("div", { key: `d-${index}`, className: "dow" }, day)),
-      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries })),
+      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries, onEditSlot })),
     ),
   );
 }
 
-function WeekView({ year, month, schedule, auxiliaries }) {
+function WeekView({ year, month, schedule, auxiliaries, onEditSlot }) {
   return h("section", { className: "week-grid" }, weekStarts(year, month).map(start => {
     const days = Array.from({ length: 7 }, (_, i) => start + i).filter(day => schedule[day]);
     return h("div", { className: "panel", key: start },
       h("h3", null, `Semaine du ${start} ${MONTHS[month]}`),
-      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries }))),
+      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries, onEditSlot }))),
     );
   }));
 }
@@ -168,6 +179,30 @@ function HoursView({ auxiliaries, hours }) {
         ),
       );
     }),
+  );
+}
+
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onChoose, onReset, onClose }) {
+  if (!edit) return null;
+  const key = overrideKey(year, month, edit.day, edit.shift);
+  const current = schedule[edit.day]?.[edit.shift]?.worker;
+  const available = auxiliaries.filter(aux => aux.active && canWorkShift(aux, edit.shift, year, month, edit.day));
+  return h("div", { className: "modal-backdrop", onClick: onClose },
+    h("section", { className: "slot-editor", onClick: event => event.stopPropagation() },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h3", null, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[month]}`),
+          h("div", { className: "muted" }, "Choisir l'intervenant pour ce créneau."),
+        ),
+        h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, "×"),
+      ),
+      h("div", { className: "worker-options" }, available.map((aux, index) => h(Button, {
+        key: aux.id,
+        active: current === aux.id,
+        onClick: () => onChoose(key, aux.id),
+      }, h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }), aux.name))),
+      overrides[key] ? h(Button, { onClick: () => onReset(key) }, "↺ Revenir au roulement automatique") : null,
+    ),
   );
 }
 
@@ -259,6 +294,8 @@ export default function App() {
   const [view, setView] = useState("month");
   const [rotationDays, setRotationDays] = useState(defaultState().rotationDays);
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
+  const [overrides, setOverrides] = useState({});
+  const [slotEdit, setSlotEdit] = useState(null);
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
@@ -272,6 +309,7 @@ export default function App() {
       if (saved?.view) setView(saved.view);
       if ([1, 2, 3, 4].includes(Number(saved?.rotationDays))) setRotationDays(Number(saved.rotationDays));
       if (saved?.auxiliaries || saved?.names) setAuxiliaries(normalizeAuxiliaries(saved));
+      if (saved?.overrides && typeof saved.overrides === "object") setOverrides(saved.overrides);
       setStateLoaded(true);
     });
   }, [authState.ready, authState.user, stateLoaded]);
@@ -281,17 +319,18 @@ export default function App() {
     const id = setTimeout(() => saveState({
       db: authState.db,
       user: authState.user,
-      state: { year, month, view, rotationDays, auxiliaries },
+      state: { year, month, view, rotationDays, auxiliaries, overrides },
     }), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, year, month, view, rotationDays, auxiliaries]);
+  }, [stateLoaded, authState.user, authState.db, year, month, view, rotationDays, auxiliaries, overrides]);
 
   const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active), [auxiliaries]);
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
-  const hours = useMemo(() => calculateHours(planning.schedule, auxiliaries), [planning.schedule, auxiliaries]);
+  const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
+  const hours = useMemo(() => calculateHours(schedule, auxiliaries), [schedule, auxiliaries]);
 
   const openReport = () => {
-    const html = buildReportHtml({ year, month, auxiliaries: activeAux, schedule: planning.schedule, hours });
+    const html = buildReportHtml({ year, month, auxiliaries: activeAux, schedule, hours });
     const win = window.open("", "_blank");
     win.document.write(html);
     win.document.close();
@@ -303,7 +342,7 @@ export default function App() {
       app: "Planning-AVD",
       version: 1,
       exportedAt: new Date().toISOString(),
-      state: { year, month, view, rotationDays, auxiliaries },
+      state: { year, month, view, rotationDays, auxiliaries, overrides },
     };
     const content = JSON.stringify(backup, null, 2);
     const fileName = `planning-avd-sauvegarde-${year}-${String(month + 1).padStart(2, "0")}.json`;
@@ -350,6 +389,7 @@ export default function App() {
       setView(["month", "week", "hours", "config"].includes(next.view) ? next.view : "month");
       setRotationDays([1, 2, 3, 4].includes(nextRotation) ? nextRotation : 1);
       setAuxiliaries(normalizeAuxiliaries({ auxiliaries: next.auxiliaries }));
+      setOverrides(next.overrides && typeof next.overrides === "object" ? next.overrides : {});
       alert("Sauvegarde restauree. Elle sera aussi sauvegardee dans le cloud si vous etes connecte.");
     } catch (error) {
       alert(`Sauvegarde impossible a restaurer : ${error.message}`);
@@ -373,10 +413,21 @@ export default function App() {
     }),
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
-      view === "month" ? h(MonthView, { year, month, schedule: planning.schedule, auxiliaries }) : null,
-      view === "week" ? h(WeekView, { year, month, schedule: planning.schedule, auxiliaries }) : null,
+      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, onEditSlot: setSlotEdit }) : null,
+      view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, onEditSlot: setSlotEdit }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
+    h(SlotEditor, {
+      edit: slotEdit,
+      year,
+      month,
+      auxiliaries,
+      schedule,
+      overrides,
+      onChoose: (key, worker) => { setOverrides(current => ({ ...current, [key]: worker })); setSlotEdit(null); },
+      onReset: key => { setOverrides(current => { const next = { ...current }; delete next[key]; return next; }); setSlotEdit(null); },
+      onClose: () => setSlotEdit(null),
+    }),
   );
 }
