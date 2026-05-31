@@ -211,6 +211,7 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
   const pointers = { morning: 0, afternoon: 0, night: 0, "weekday-owner": 0, "weekend-owner": 0, "night-double": 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0, "weekend-night-double": 0 };
   let previousDayWorker = null;
   let weekendWorker = null;
+  let weekendHandover = initialWeekendRest[0] || null;
   let weekendKey = "";
   let previousWorked = new Set();
   const restAfterWeekend = new Set(initialWeekendRest);
@@ -220,6 +221,8 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
     const index = dayIndex(year, month, day);
     if (index === 5) restAfterWeekend.clear();
     const availableTeam = index === 0 ? team.filter(aux => !restAfterWeekend.has(aux.id)) : team;
+    const morningTeam = index === 0 ? team : availableTeam;
+    const mondayHandover = index === 0 ? weekendHandover : null;
     const key = `${year}-${month}-${dayIndex(year, month, day) === 5 ? day : day - 1}`;
     if (!weekend || key !== weekendKey) {
       weekendKey = key;
@@ -228,24 +231,27 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
 
     const plan = { day, weekend };
     const dayDoubles = {};
-    if (weekend && weekendWorker && canWorkShift(availableTeam.find(aux => aux.id === weekendWorker), "morning", year, month, day)) {
-      addShift(plan, "morning", weekendWorker, load, dayExtras({ primary: weekendWorker, team: availableTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
+    if (weekend && weekendWorker && canWorkShift(morningTeam.find(aux => aux.id === weekendWorker), "morning", year, month, day)) {
+      addShift(plan, "morning", weekendWorker, load, dayExtras({ primary: weekendWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
     } else {
       const weekendTeam = weekend && index === 5
         ? availableTeam.filter(aux => !previousWorked.has(aux.id))
-        : availableTeam;
-      const eligibleWeekendTeam = weekendTeam.length ? weekendTeam : availableTeam;
-      const worker = (weekend
+        : morningTeam;
+      const eligibleWeekendTeam = weekendTeam.length ? weekendTeam : morningTeam;
+      const worker = mondayHandover || (weekend
         ? pickWeekendOwner({ team: eligibleWeekendTeam, pointers, shift: "morning", year, month, day })
-        : pickWeekdayOwner({ team: availableTeam, pointers, shift: "morning", year, month, day }))
+        : pickWeekdayOwner({ team: morningTeam, pointers, shift: "morning", year, month, day }))
         || pickWorker({
-          team: availableTeam, pointers, load, shift: "morning", year, month, day,
+          team: morningTeam, pointers, load, shift: "morning", year, month, day,
           previous: previousDayWorker,
           preferLeader: !weekend,
           preferWeekendOnly: weekend,
         });
-      addShift(plan, "morning", worker, load, dayExtras({ primary: worker, team: availableTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
-      if (weekend) weekendWorker = worker;
+      addShift(plan, "morning", worker, load, dayExtras({ primary: worker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
+      if (weekend) {
+        weekendWorker = worker;
+        weekendHandover = worker;
+      }
     }
 
     const morningAux = availableTeam.find(aux => aux.id === plan.morning?.worker);
@@ -300,6 +306,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   const ownerByStart = {};
   let previousOwner = null;
   let weekendWorker = null;
+  let weekendHandover = initialWeekendRest[0] || null;
   let weekendKey = "";
   let previousWorked = new Set();
   const restAfterWeekend = new Set(initialWeekendRest);
@@ -336,6 +343,8 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
     const index = dayIndex(year, month, day);
     if (index === 5) restAfterWeekend.clear();
     const availableTeam = index === 0 ? team.filter(aux => !restAfterWeekend.has(aux.id)) : team;
+    const morningTeam = index === 0 ? team : availableTeam;
+    const mondayHandover = index === 0 ? weekendHandover : null;
     const plan = { day, weekend };
     const dayDoubles = {};
     const serviceIndex = blockStarts.findIndex(block => block.start <= day && day < block.start + block.serviceDays);
@@ -351,6 +360,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
         weekendKey = key;
         const weekendTeam = index === 5 ? availableTeam.filter(aux => !previousWorked.has(aux.id)) : availableTeam;
         weekendWorker = pickWeekendOwner({ team: weekendTeam.length ? weekendTeam : availableTeam, pointers, shift: "morning", year, month, day });
+        weekendHandover = weekendWorker;
       }
       morningOwner = weekendWorker || morningOwner;
       serviceOwner = weekendWorker || serviceOwner;
@@ -358,10 +368,11 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       weekendWorker = null;
       weekendKey = "";
     }
+    morningOwner = mondayHandover || morningOwner;
 
-    const morningWorker = pickPreferredOrNext({
+    const morningWorker = mondayHandover || pickPreferredOrNext({
       preferred: morningOwner,
-      team: availableTeam,
+      team: morningTeam,
       pointers,
       load,
       shift: "morning",
@@ -372,7 +383,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       preferLeader: !weekend,
       preferWeekendOnly: weekend,
     });
-    addShift(plan, "morning", morningWorker, load, dayExtras({ primary: morningWorker, team: availableTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
+    addShift(plan, "morning", morningWorker, load, dayExtras({ primary: morningWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
 
     const afternoonWorker = pickPreferredOrNext({
       preferred: serviceOwner,
