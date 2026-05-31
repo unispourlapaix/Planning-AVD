@@ -206,7 +206,7 @@ function nightExtras({ primary, team, pointers, load, year, month, day, weekend,
   return dayExtras({ primary, team, pointers, load, shift: "night", year, month, day, weekend, dayDoubles });
 }
 
-function buildDailySchedule({ year, month, auxiliaries }) {
+function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] }) {
   const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
   const schedule = {};
   const blocks = [];
@@ -215,7 +215,7 @@ function buildDailySchedule({ year, month, auxiliaries }) {
   let previousDayWorker = null;
   let weekendWorker = null;
   let weekendKey = "";
-  const restAfterWeekend = new Set();
+  const restAfterWeekend = new Set(initialWeekendRest);
 
   for (let day = 1; day <= daysInMonth(year, month); day += 1) {
     const weekend = isWeekendDay(year, month, day);
@@ -282,7 +282,7 @@ function buildDailySchedule({ year, month, auxiliaries }) {
   return { schedule, blocks, load };
 }
 
-function buildBlockSchedule({ year, month, auxiliaries, rotationDays }) {
+function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWeekendRest = [] }) {
   const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
   const schedule = {};
   const blocks = [];
@@ -296,7 +296,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays }) {
   let previousOwner = null;
   let weekendWorker = null;
   let weekendKey = "";
-  const restAfterWeekend = new Set();
+  const restAfterWeekend = new Set(initialWeekendRest);
 
   for (let start = 1; start <= totalDays; start += step) {
     const weekend = isWeekendDay(year, month, start);
@@ -405,10 +405,29 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays }) {
   return { schedule, blocks, load };
 }
 
+function previousWeekendRest({ year, month, auxiliaries, rotationDays }) {
+  if (dayIndex(year, month, 1) !== 0) return [];
+  const previousDate = new Date(year, month, 0);
+  const previousYear = previousDate.getFullYear();
+  const previousMonth = previousDate.getMonth();
+  const previousTotal = daysInMonth(previousYear, previousMonth);
+  const previous = Number(rotationDays) >= 2
+    ? buildBlockSchedule({ year: previousYear, month: previousMonth, auxiliaries, rotationDays })
+    : buildDailySchedule({ year: previousYear, month: previousMonth, auxiliaries });
+  const rest = new Set();
+  [previousTotal - 1, previousTotal].forEach(day => {
+    SHIFT_DEFS.forEach(shift => {
+      shiftWorkers(previous.schedule[day]?.[shift.id]).forEach(worker => rest.add(worker));
+    });
+  });
+  return [...rest];
+}
+
 export function buildSchedule({ year, month, auxiliaries, rotationDays = 1 }) {
   const days = Number(rotationDays) || 1;
-  if (days >= 2) return buildBlockSchedule({ year, month, auxiliaries, rotationDays: days });
-  return buildDailySchedule({ year, month, auxiliaries });
+  const initialWeekendRest = previousWeekendRest({ year, month, auxiliaries, rotationDays: days });
+  if (days >= 2) return buildBlockSchedule({ year, month, auxiliaries, rotationDays: days, initialWeekendRest });
+  return buildDailySchedule({ year, month, auxiliaries, initialWeekendRest });
 }
 
 export function calculateHours(schedule, auxiliaries) {
