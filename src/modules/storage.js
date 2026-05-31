@@ -1,4 +1,6 @@
 const LOCAL_KEY = "planning-avd-state-v2";
+const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
+const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 
 export const defaultState = () => {
   const now = new Date();
@@ -37,4 +39,51 @@ export async function saveState({ db, user, state }) {
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
   }
+}
+
+export async function isAdminUser({ db, user }) {
+  if (!db || !user?.uid) return false;
+  try {
+    const snap = await db.collection("planning-avd-admins").doc(user.uid).get();
+    return snap.exists;
+  } catch (error) {
+    console.warn("Verification admin impossible.", error);
+    return false;
+  }
+}
+
+export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
+  if (!db || !user?.email) return () => {};
+  return db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(year, month))
+    .onSnapshot(snap => onChange?.(snap.exists ? snap.data() : null), error => onError?.(error));
+}
+
+export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours }) {
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  const active = auxiliaries.filter(aux => aux.active && String(aux.email || "").trim());
+  if (!active.length) throw new Error("Ajoutez au moins un email auxiliaire dans Reglages.");
+  const batch = db.batch();
+  active.forEach(aux => {
+    const entries = [];
+    Object.values(schedule).forEach(plan => {
+      ["morning", "afternoon", "night"].forEach(shift => {
+        const workers = Array.isArray(plan?.[shift]?.workers) ? plan[shift].workers : [plan?.[shift]?.worker];
+        if (workers.filter(Boolean).includes(aux.id)) entries.push({ day: plan.day, shift, hours: plan[shift]?.hours || 0 });
+      });
+    });
+    const email = String(aux.email).trim().toLowerCase();
+    const ref = db.collection("planning-avd-shares").doc(emailKey(email)).collection("months").doc(monthKey(year, month));
+    batch.set(ref, {
+      email,
+      name: aux.name,
+      year,
+      month,
+      entries,
+      hours: hours[aux.id] || { morning: 0, afternoon: 0, night: 0, total: 0, quota: Number(aux.quota) || 0 },
+      publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      publishedBy: user.email || "",
+    });
+  });
+  await batch.commit();
+  return active.length;
 }
