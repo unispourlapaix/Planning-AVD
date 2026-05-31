@@ -34,6 +34,7 @@ const normalizeAuxiliaries = (saved) => {
         id: aux?.id || base.id,
         name: (aux?.name || saved?.names?.[aux?.id] || base.name || `Auxiliaire ${index + 1}`).trim(),
         active: aux?.active !== false,
+        coverage: aux?.coverage ?? /^marie\b/i.test(aux?.name || ""),
         customDays: Array.isArray(aux?.customDays) ? aux.customDays : base.customDays,
       };
     });
@@ -244,6 +245,7 @@ function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays
         }, label);
       })) : null,
       h(Checkbox, { checked: aux.lead, onChange: value => patchAux(aux.id, { lead: value }), label: "Chef d'equipe prioritaire en semaine" }),
+      h(Checkbox, { checked: !!aux.coverage, onChange: value => patchAux(aux.id, { coverage: value }), label: "Comblage en doublon" }),
       h(Checkbox, { checked: aux.night || aux.shift === "all", onChange: value => patchAux(aux.id, { night: value }), label: aux.shift === "all" ? "Nuit incluse avec Jour et nuit" : "Peut faire la surveillance de nuit 12h" }),
     ))),
   );
