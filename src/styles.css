@@ -56,7 +56,7 @@ h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .editable-slot { width: 100%; text-align: left; color: inherit; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .editable-slot:hover, .editable-slot:focus-visible { border-color: #a8b99a; box-shadow: 0 6px 16px rgba(102,122,142,.16); transform: translateY(-1px); outline: none; }
 .slot-label { color: #746d61; font-size: 11px; font-weight: 900; background: #fff; border: 1px solid #e5ded2; border-radius: 8px; text-align: center; padding: 3px; }
-.slot-name { font-weight: 900; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-name { font-size: 12px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel { border-radius: 16px; padding: 12px; }
 .week-grid, .hours-grid { display: grid; gap: 8px; }
 .week-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
