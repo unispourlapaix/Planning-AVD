@@ -15,6 +15,7 @@ const ROTATION_OPTIONS = [
   { value: 4, label: "Roulement 4 jours", detail: "Longue presence, passage au suivant apres le matin." },
 ];
 const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
+const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
 
 const cloneDefaultAux = () => DEFAULT_AUXILIARIES.map(aux => ({ ...aux, customDays: [...aux.customDays] }));
 const normalizeAuxiliaries = (saved) => {
@@ -132,7 +133,7 @@ function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
       const c = colorFor(index);
       return h("button", { className: "slot editable-slot", key: shift.id, onClick: () => onEditSlot({ day, shift: shift.id }) },
         h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
-        h("span", { className: "slot-name", style: { color: worker ? c.text : "#746d61" } }, workers.length ? workers.map(id => auxName(auxiliaries, id)).join(" + ") : "A definir"),
+        h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? workers.map(id => auxName(auxiliaries, id)).join(" + ") : "A definir"),
       );
     }),
   );
