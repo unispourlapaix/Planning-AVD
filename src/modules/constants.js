@@ -37,6 +37,7 @@ export const DEFAULT_AUXILIARIES = Array.from({ length: 4 }, (_, i) => ({
   status: "available",
   quota: i === 3 ? 72 : DEFAULT_QUOTA,
   lead: i === 0,
+  coverage: false,
   night: i !== 2,
   days: "all",
   customDays: [0, 1, 2, 3, 4, 5, 6],
