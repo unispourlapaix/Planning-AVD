@@ -62,7 +62,7 @@ function pickWeekdayOwner({ team, pointers, shift, year, month, day }) {
   const base = team.filter(aux => !aux.coverage && aux.shift !== "night" && !isWeekendOnly(aux));
   const leader = base.find(aux => aux.lead);
   const others = prioritizeRomain(base.filter(aux => !aux.lead));
-  const ordered = leader && others.length ? others.flatMap(aux => [aux, leader]) : (leader ? [leader] : others);
+  const ordered = leader ? [...others, leader] : others;
   return pickSequential({ ordered, pointers, key: "weekday-owner", shift, year, month, day });
 }
 
@@ -82,7 +82,7 @@ function orderedTeam(team, pointer, preferLeader, preferWeekendOnly) {
     ];
   } else if (leader) {
     const others = base.filter(aux => aux.id !== leader.id);
-    ordered = others.length ? others.flatMap(aux => [leader, aux]) : [leader];
+    ordered = others.length ? [...others, leader] : [leader];
   }
   if (!ordered.length) return [];
   const offset = pointer % ordered.length;
