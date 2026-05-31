@@ -213,14 +213,14 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
   let weekendWorker = null;
   let weekendHandover = initialWeekendRest[0] || null;
   let weekendKey = "";
-  let previousWorked = new Set();
+  let previousWorked = new Set(initialWeekendRest);
   const restAfterWeekend = new Set(initialWeekendRest);
 
   for (let day = 1; day <= daysInMonth(year, month); day += 1) {
     const weekend = isWeekendDay(year, month, day);
     const index = dayIndex(year, month, day);
     if (index === 5) restAfterWeekend.clear();
-    const availableTeam = index === 0 ? team.filter(aux => !restAfterWeekend.has(aux.id)) : team;
+    const availableTeam = index === 0 ? team.filter(aux => !previousWorked.has(aux.id)) : team;
     const morningTeam = index === 0 ? team : availableTeam;
     const mondayHandover = index === 0 ? weekendHandover : null;
     const key = `${year}-${month}-${dayIndex(year, month, day) === 5 ? day : day - 1}`;
@@ -308,7 +308,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   let weekendWorker = null;
   let weekendHandover = initialWeekendRest[0] || null;
   let weekendKey = "";
-  let previousWorked = new Set();
+  let previousWorked = new Set(initialWeekendRest);
   const restAfterWeekend = new Set(initialWeekendRest);
 
   let start = 1;
@@ -342,7 +342,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
     const weekend = isWeekendDay(year, month, day);
     const index = dayIndex(year, month, day);
     if (index === 5) restAfterWeekend.clear();
-    const availableTeam = index === 0 ? team.filter(aux => !restAfterWeekend.has(aux.id)) : team;
+    const availableTeam = index === 0 ? team.filter(aux => !previousWorked.has(aux.id)) : team;
     const morningTeam = index === 0 ? team : availableTeam;
     const mondayHandover = index === 0 ? weekendHandover : null;
     const plan = { day, weekend };
@@ -444,7 +444,7 @@ function previousWeekendRest({ year, month, auxiliaries, rotationDays }) {
     ? buildBlockSchedule({ year: previousYear, month: previousMonth, auxiliaries, rotationDays })
     : buildDailySchedule({ year: previousYear, month: previousMonth, auxiliaries });
   const rest = new Set();
-  [previousTotal - 1, previousTotal].forEach(day => {
+  [previousTotal].forEach(day => {
     SHIFT_DEFS.forEach(shift => {
       shiftWorkers(previous.schedule[day]?.[shift.id]).forEach(worker => rest.add(worker));
     });
