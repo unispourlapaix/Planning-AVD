@@ -47,6 +47,7 @@ export function canWorkShift(aux, shift, year, month, day) {
 const quota = aux => Math.max(1, Number(aux.quota) || DEFAULT_QUOTA);
 const loadRatio = (aux, load) => (load[aux.id] || 0) / quota(aux);
 const isWeekendOnly = aux => aux.days === "weekend" || aux.days === "saturday" || aux.days === "sunday";
+const prioritizeRomain = team => team.slice().sort((a, b) => Number(/^romain\b/i.test(b.name || "")) - Number(/^romain\b/i.test(a.name || "")));
 
 function pickSequential({ ordered, pointers, key, shift, year, month, day }) {
   const available = ordered.filter(aux => canWorkShift(aux, shift, year, month, day));
@@ -60,8 +61,8 @@ function pickSequential({ ordered, pointers, key, shift, year, month, day }) {
 function pickWeekdayOwner({ team, pointers, shift, year, month, day }) {
   const base = team.filter(aux => !aux.coverage && aux.shift !== "night" && !isWeekendOnly(aux));
   const leader = base.find(aux => aux.lead);
-  const others = base.filter(aux => !aux.lead);
-  const ordered = leader && others.length ? others.flatMap(aux => [leader, aux]) : (leader ? [leader] : others);
+  const others = prioritizeRomain(base.filter(aux => !aux.lead));
+  const ordered = leader && others.length ? others.flatMap(aux => [aux, leader]) : (leader ? [leader] : others);
   return pickSequential({ ordered, pointers, key: "weekday-owner", shift, year, month, day });
 }
 
@@ -135,18 +136,14 @@ function pickLeaderDouble({ primary, team, pointers, load, shift, year, month, d
   const saved = dayDoubles?.[primary];
   const savedAux = team.find(aux => aux.id === saved);
   if (savedAux && !savedAux.coverage && savedAux.shift !== "night" && canWorkShift(savedAux, shift, year, month, day)) return [savedAux.id];
-  const teammate = pickWorker({
-    team: team.filter(aux => !aux.lead && !aux.coverage && aux.shift !== "night"),
+  const teammate = pickSequential({
+    ordered: prioritizeRomain(team.filter(aux => !aux.lead && !aux.coverage && aux.shift !== "night")),
     pointers,
-    load,
+    key: "leader-double",
     shift,
     year,
     month,
     day,
-    previous: primary,
-    exclude: [primary],
-    preferLeader: false,
-    preferWeekendOnly: false,
   });
   if (teammate && dayDoubles) dayDoubles[primary] = teammate;
   return teammate ? [teammate] : [];
