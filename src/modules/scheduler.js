@@ -295,7 +295,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   const pointers = { morning: 0, afternoon: 0, night: 0, "weekday-owner": 0, "weekend-owner": 0, "night-double": 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0, "weekend-night-double": 0 };
   const totalDays = daysInMonth(year, month);
   const span = Math.min(4, Math.max(2, Number(rotationDays) || 2));
-  const step = span - 1;
+  const servicePattern = span === 3 ? [3, 2, 2] : [span - 1];
   const blockStarts = [];
   const ownerByStart = {};
   let previousOwner = null;
@@ -304,7 +304,10 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   let previousWorked = new Set();
   const restAfterWeekend = new Set(initialWeekendRest);
 
-  for (let start = 1; start <= totalDays; start += step) {
+  let start = 1;
+  let patternIndex = 0;
+  while (start <= totalDays) {
+    const serviceDays = servicePattern[patternIndex % servicePattern.length];
     const weekend = isWeekendDay(year, month, start);
     const owner = weekend
       ? previousOwner
@@ -321,9 +324,11 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
           preferLeader: true,
           preferWeekendOnly: false,
         });
-    blockStarts.push(start);
+    blockStarts.push({ start, serviceDays });
     ownerByStart[start] = owner;
     previousOwner = owner;
+    start += serviceDays;
+    patternIndex += 1;
   }
 
   for (let day = 1; day <= totalDays; day += 1) {
@@ -333,10 +338,13 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
     const availableTeam = index === 0 ? team.filter(aux => !restAfterWeekend.has(aux.id)) : team;
     const plan = { day, weekend };
     const dayDoubles = {};
-    const morningStart = blockStarts.find(start => start <= day && day <= start + span - 1);
-    const serviceStart = blockStarts.filter(start => start <= day && day <= start + span - 2).at(-1);
-    let morningOwner = ownerByStart[morningStart];
-    let serviceOwner = ownerByStart[serviceStart] || morningOwner;
+    const serviceIndex = blockStarts.findIndex(block => block.start <= day && day < block.start + block.serviceDays);
+    const serviceBlock = blockStarts[serviceIndex];
+    const previousBlock = blockStarts[serviceIndex - 1];
+    let serviceOwner = ownerByStart[serviceBlock?.start];
+    let morningOwner = day === serviceBlock?.start && previousBlock
+      ? ownerByStart[previousBlock.start]
+      : serviceOwner;
     if (weekend) {
       const key = `${year}-${month}-${dayIndex(year, month, day) === 5 ? day : day - 1}`;
       if (!weekendWorker || key !== weekendKey) {
