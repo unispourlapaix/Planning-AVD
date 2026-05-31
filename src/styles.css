@@ -27,15 +27,7 @@ button { cursor: pointer; }
 h1, h2, h3, .brand { font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif; letter-spacing: 0; }
 h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .muted { color: #746d61; font-size: 13px; }
-.btn {
-  border: 1px solid rgba(255,255,255,.95);
-  border-radius: 12px;
-  background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(255,255,255,.55));
-  color: #29352f;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 9px 22px rgba(102,122,142,.15);
-  font-weight: 800;
-  padding: 9px 11px;
-}
+.btn { border: 1px solid rgba(255,255,255,.95); border-radius: 12px; background: linear-gradient(145deg, rgba(255,255,255,.9), rgba(255,255,255,.55)); color: #29352f; box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 9px 22px rgba(102,122,142,.15); font-weight: 800; padding: 9px 11px; }
 .btn.active { background: #8b9a7a; color: #fff; }
 .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .tab { min-height: 54px; display: grid; place-items: center; gap: 2px; line-height: 1.05; }
@@ -67,14 +59,7 @@ h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .aux-card { border-radius: 16px; padding: 12px; display: grid; gap: 8px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .field { display: grid; gap: 4px; font-size: 12px; font-weight: 800; color: #5d6658; }
-.field input, .field select, .field textarea {
-  width: 100%;
-  border: 1px solid #e5ded2;
-  border-radius: 11px;
-  padding: 9px;
-  background: rgba(255,255,255,.82);
-  color: #29352f;
-}
+.field input, .field select, .field textarea { width: 100%; border: 1px solid #e5ded2; border-radius: 11px; padding: 9px; background: rgba(255,255,255,.82); color: #29352f; }
 .check-row { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; }
 .progress { height: 8px; border-radius: 99px; background: #efe8dc; overflow: hidden; }
 .progress span { display: block; height: 100%; background: #8b9a7a; }
@@ -86,6 +71,12 @@ h1 { margin: 0; font-size: 22px; color: #3f4a3a; }
 .worker-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .worker-options .btn { display: flex; align-items: center; gap: 8px; text-align: left; }
 .worker-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
-@media (orientation: portrait) {
-  .app::before { content: "Mode paysage conseille pour lire le mois complet."; display: block; color: #746d61; font-weight: 800; margin-bottom: 8px; }
-}
+.personal-tabs { grid-template-columns: repeat(2, 1fr); }
+.personal-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.personal-summary h3 { margin: 0 0 4px; }
+.personal-month { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+.personal-day { min-height: 146px; }
+.personal-slot { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 6px; align-items: center; padding: 5px; border-radius: 10px; color: #918a80; background: rgba(255,255,255,.46); border: 1px solid #eee7dc; font-size: 12px; font-weight: 800; }
+.personal-slot.scheduled { color: #5689c9; background: rgba(235,245,255,.82); border-color: #d5e7f7; }
+@media print { body { background: #fff; } .personal-app { width: 100%; padding: 0; } .personal-app .action-row, .personal-app .tabs, .personal-app .month-row .btn { display: none; } .personal-app .topbar, .personal-app .panel, .personal-app .day-card { box-shadow: none; backdrop-filter: none; border-color: #ddd; } }
+@media (orientation: portrait) { .app::before { content: "Mode paysage conseille pour lire le mois complet."; display: block; color: #746d61; font-weight: 800; margin-bottom: 8px; } }
