@@ -456,30 +456,10 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   return { schedule, blocks, load };
 }
 
-function previousWeekendRest({ year, month, auxiliaries, rotationDays }) {
-  if (dayIndex(year, month, 1) !== 0) return [];
-  const previousDate = new Date(year, month, 0);
-  const previousYear = previousDate.getFullYear();
-  const previousMonth = previousDate.getMonth();
-  const previousTotal = daysInMonth(previousYear, previousMonth);
-  const previous = Number(rotationDays) >= 2
-    ? buildBlockSchedule({ year: previousYear, month: previousMonth, auxiliaries, rotationDays })
-    : buildDailySchedule({ year: previousYear, month: previousMonth, auxiliaries });
-  const rest = new Set();
-  [previousTotal].forEach(day => {
-    SHIFT_DEFS.forEach(shift => {
-      const worker = previous.schedule[day]?.[shift.id]?.worker;
-      if (worker) rest.add(worker);
-    });
-  });
-  return [...rest];
-}
-
 export function buildSchedule({ year, month, auxiliaries, rotationDays = 1 }) {
   const days = Number(rotationDays) || 1;
-  const initialWeekendRest = previousWeekendRest({ year, month, auxiliaries, rotationDays: days });
-  if (days >= 2) return buildBlockSchedule({ year, month, auxiliaries, rotationDays: days, initialWeekendRest });
-  return buildDailySchedule({ year, month, auxiliaries, initialWeekendRest });
+  if (days >= 2) return buildBlockSchedule({ year, month, auxiliaries, rotationDays: days });
+  return buildDailySchedule({ year, month, auxiliaries });
 }
 
 export function calculateHours(schedule, auxiliaries) {
