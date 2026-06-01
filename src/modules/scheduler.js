@@ -259,9 +259,21 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
       const eligibleWeekendTeam = weekend && index === 5
         ? weekendOwnerTeam({ team: morningTeam, previousWorked, shift: "morning", year, month, day })
         : morningTeam;
-      const worker = mondayHandover || (weekend
+      const worker = day === 1 ? null : mondayHandover || (weekend
         ? pickWeekendOwner({ team: eligibleWeekendTeam, pointers, shift: "morning", year, month, day })
-        : pickWeekdayOwner({ team: morningTeam, pointers, shift: "morning", year, month, day }))
+        : pickPreferredOrNext({
+            preferred: previousDayWorker,
+            team: morningTeam,
+            pointers,
+            load: primaryLoad,
+            shift: "morning",
+            year,
+            month,
+            day,
+            previous: null,
+            preferLeader: true,
+            preferWeekendOnly: false,
+          }))
         || pickWorker({
           team: morningTeam, pointers, load: primaryLoad, shift: "morning", year, month, day,
           previous: previousDayWorker,
@@ -275,10 +287,22 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
       }
     }
 
-    const morningAux = availableTeam.find(aux => aux.id === plan.morning?.worker);
-    const afternoonWorker = morningAux && canWorkShift(morningAux, "afternoon", year, month, day)
-      ? morningAux.id
-      : pickWorker({
+    const afternoonWorker = weekend
+      ? pickPreferredOrNext({
+          preferred: weekendWorker || plan.morning?.worker,
+          team: availableTeam,
+          pointers,
+          load: primaryLoad,
+          shift: "afternoon",
+          year,
+          month,
+          day,
+          previous: null,
+          preferLeader: false,
+          preferWeekendOnly: true,
+        })
+      : pickWeekdayOwner({ team: availableTeam, pointers, shift: "afternoon", year, month, day })
+        || pickWorker({
           team: availableTeam, pointers, load: primaryLoad, shift: "afternoon", year, month, day,
           previous: plan.morning?.worker,
           preferLeader: !weekend,
@@ -393,7 +417,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
     }
     morningOwner = mondayHandover || morningOwner;
 
-    const morningWorker = mondayHandover || pickPreferredOrNext({
+    const morningWorker = day === 1 ? null : mondayHandover || pickPreferredOrNext({
       preferred: morningOwner,
       team: morningTeam,
       pointers,
