@@ -14,7 +14,28 @@ export function buildSchedule(options) {
   if (Number(options.rotationDays) !== 3) return result;
 
   const schedule = result.schedule;
-  Object.keys(schedule).map(Number).forEach(day => {
+  const days = Object.keys(schedule).map(Number);
+  const weekendCycle = [];
+  days.forEach(day => {
+    if (new Date(options.year, options.month, day).getDay() !== 6) return;
+    const worker = schedule[day]?.afternoon?.worker;
+    if (worker && !weekendCycle.includes(worker)) weekendCycle.push(worker);
+  });
+  options.auxiliaries
+    .filter(aux => aux.active !== false && aux.status !== "absent")
+    .forEach(aux => { if (!weekendCycle.includes(aux.id)) weekendCycle.push(aux.id); });
+
+  days.filter(day => new Date(options.year, options.month, day).getDay() === 6).forEach((day, index) => {
+    const saturday = schedule[day];
+    const sunday = schedule[day + 1];
+    const weekendWorker = weekendCycle[index % weekendCycle.length];
+    if (!weekendWorker || !sunday) return;
+    saturday.afternoon = withPrimary(saturday.afternoon, weekendWorker);
+    saturday.night = withPrimary(saturday.night, weekendWorker);
+    sunday.morning = withPrimary(sunday.morning, weekendWorker);
+  });
+
+  days.forEach(day => {
     const sunday = schedule[day];
     const monday = schedule[day + 1];
     if (!sunday || !monday || new Date(options.year, options.month, day).getDay() !== 0) return;
