@@ -13,6 +13,9 @@
     <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="./auth-config.js"></script>
-    <script type="module" src="./src/main.js?v=20260601-double-initials"></script>
+    <script type="importmap">
+      { "imports": { "./src/modules/scheduler.js": "./src/modules/scheduler-handover.js?v=20260601-sunday" } }
+    </script>
+    <script type="module" src="./src/main.js?v=20260601-sunday-handover"></script>
   </body>
 </html>
