@@ -61,7 +61,7 @@ function pickSequential({ ordered, pointers, key, shift, year, month, day }) {
 function pickWeekdayOwner({ team, pointers, shift, year, month, day }) {
   const base = team.filter(aux => !aux.coverage && aux.shift !== "night" && !isWeekendOnly(aux));
   const leader = base.find(aux => aux.lead);
-  const others = prioritizeRomain(base.filter(aux => !aux.lead));
+  const others = prioritizeRomain(base.filter(aux => aux.id !== leader?.id));
   const ordered = leader ? [...others, leader] : others;
   return pickSequential({ ordered, pointers, key: "weekday-owner", shift, year, month, day });
 }
@@ -134,10 +134,15 @@ function pickLeaderDouble({ primary, team, pointers, load, shift, year, month, d
   const primaryAux = team.find(aux => aux.id === primary);
   if (!primaryAux?.lead || weekend) return [];
   const saved = dayDoubles?.[primary];
-  const savedAux = team.find(aux => aux.id === saved);
-  if (savedAux && !savedAux.coverage && savedAux.shift !== "night" && canWorkShift(savedAux, shift, year, month, day)) return [savedAux.id];
+  const savedAux = team.find(aux => aux.id === saved?.worker);
+  if (saved?.day >= day - 1 && savedAux && !savedAux.coverage && savedAux.shift !== "night" && canWorkShift(savedAux, shift, year, month, day)) {
+    saved.day = day;
+    return [savedAux.id];
+  }
+  const teammates = prioritizeRomain(team.filter(aux => !aux.lead && !aux.coverage && aux.shift !== "night"));
+  const rotatingTeammates = saved?.worker ? teammates.filter(aux => aux.id !== saved.worker) : teammates;
   const teammate = pickSequential({
-    ordered: prioritizeRomain(team.filter(aux => !aux.lead && !aux.coverage && aux.shift !== "night")),
+    ordered: rotatingTeammates.length ? rotatingTeammates : teammates,
     pointers,
     key: "leader-double",
     shift,
@@ -145,7 +150,7 @@ function pickLeaderDouble({ primary, team, pointers, load, shift, year, month, d
     month,
     day,
   });
-  if (teammate && dayDoubles) dayDoubles[primary] = teammate;
+  if (teammate && dayDoubles) dayDoubles[primary] = { worker: teammate, day };
   return teammate ? [teammate] : [];
 }
 
@@ -212,14 +217,13 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
   let previousDayWorker = null;
   let weekendWorker = null;
   let weekendHandover = initialWeekendRest[0] || null;
+  const leaderDoubles = {};
   let weekendKey = "";
   let previousWorked = new Set(initialWeekendRest);
-  const restAfterWeekend = new Set(initialWeekendRest);
 
   for (let day = 1; day <= daysInMonth(year, month); day += 1) {
     const weekend = isWeekendDay(year, month, day);
     const index = dayIndex(year, month, day);
-    if (index === 5) restAfterWeekend.clear();
     const availableTeam = index === 0 ? team.filter(aux => !previousWorked.has(aux.id)) : team;
     const morningTeam = index === 0 ? team : availableTeam;
     const mondayHandover = index === 0 ? weekendHandover : null;
@@ -230,7 +234,7 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
     }
 
     const plan = { day, weekend };
-    const dayDoubles = {};
+    const dayDoubles = leaderDoubles;
     if (weekend && weekendWorker && canWorkShift(morningTeam.find(aux => aux.id === weekendWorker), "morning", year, month, day)) {
       addShift(plan, "morning", weekendWorker, load, dayExtras({ primary: weekendWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
     } else {
@@ -283,11 +287,10 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
       shiftWorkers(plan[shift.id]).forEach(worker => {
         blocks.push({ day, shift: shift.id, worker, hours: shift.hours });
         workedToday.add(worker);
-        if (weekend) restAfterWeekend.add(worker);
       });
     });
     previousWorked = workedToday;
-    if (index === 0) restAfterWeekend.clear();
+    if (weekend && index === 6) weekendHandover = plan.afternoon?.worker || plan.morning?.worker || weekendHandover;
   }
 
   return { schedule, blocks, load };
@@ -307,9 +310,9 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   let previousOwner = null;
   let weekendWorker = null;
   let weekendHandover = initialWeekendRest[0] || null;
+  const leaderDoubles = {};
   let weekendKey = "";
   let previousWorked = new Set(initialWeekendRest);
-  const restAfterWeekend = new Set(initialWeekendRest);
 
   let start = 1;
   let patternIndex = 0;
@@ -341,12 +344,11 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   for (let day = 1; day <= totalDays; day += 1) {
     const weekend = isWeekendDay(year, month, day);
     const index = dayIndex(year, month, day);
-    if (index === 5) restAfterWeekend.clear();
     const availableTeam = index === 0 ? team.filter(aux => !previousWorked.has(aux.id)) : team;
     const morningTeam = index === 0 ? team : availableTeam;
     const mondayHandover = index === 0 ? weekendHandover : null;
     const plan = { day, weekend };
-    const dayDoubles = {};
+    const dayDoubles = leaderDoubles;
     const serviceIndex = blockStarts.findIndex(block => block.start <= day && day < block.start + block.serviceDays);
     const serviceBlock = blockStarts[serviceIndex];
     const previousBlock = blockStarts[serviceIndex - 1];
@@ -356,7 +358,8 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       : serviceOwner;
     if (weekend) {
       const key = `${year}-${month}-${dayIndex(year, month, day) === 5 ? day : day - 1}`;
-      if (!weekendWorker || key !== weekendKey) {
+      const weekendAux = availableTeam.find(aux => aux.id === weekendWorker);
+      if (!weekendWorker || key !== weekendKey || !canWorkShift(weekendAux, "morning", year, month, day)) {
         weekendKey = key;
         const weekendTeam = index === 5 ? availableTeam.filter(aux => !previousWorked.has(aux.id)) : availableTeam;
         weekendWorker = pickWeekendOwner({ team: weekendTeam.length ? weekendTeam : availableTeam, pointers, shift: "morning", year, month, day });
@@ -424,11 +427,10 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       shiftWorkers(plan[shift.id]).forEach(worker => {
         blocks.push({ day, shift: shift.id, worker, hours: shift.hours });
         workedToday.add(worker);
-        if (weekend) restAfterWeekend.add(worker);
       });
     });
     previousWorked = workedToday;
-    if (index === 0) restAfterWeekend.clear();
+    if (weekend && index === 6) weekendHandover = plan.afternoon?.worker || plan.morning?.worker || weekendHandover;
   }
 
   return { schedule, blocks, load };
