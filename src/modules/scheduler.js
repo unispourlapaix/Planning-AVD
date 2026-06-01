@@ -221,6 +221,7 @@ function pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, 
     exclude: [primary],
     preferLeader: false,
     preferWeekendOnly: false,
+    includeCoverage: true,
   });
   if (!teammate) return [];
   const idx = candidates.findIndex(aux => aux.id === teammate);
@@ -229,13 +230,13 @@ function pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, 
 }
 
 function nightExtras({ primary, team, pointers, load, year, month, day, weekend, dayDoubles }) {
+  const nightOnly = pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, weekend });
+  if (nightOnly.length) return nightOnly;
   const savedCoverageId = dayDoubles?.coverage?.[day];
   const savedCoverage = team.find(aux => aux.id === savedCoverageId);
   if (savedCoverage && savedCoverage.id !== primary && canWorkShift(savedCoverage, "night", year, month, day)) {
     return [savedCoverage.id];
   }
-  const nightOnly = pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, weekend });
-  if (nightOnly.length) return nightOnly;
   return dayExtras({ primary, team, pointers, load, shift: "night", year, month, day, weekend, dayDoubles });
 }
 
