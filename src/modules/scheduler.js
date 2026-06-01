@@ -1,27 +1,157 @@
 import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js";
 import { dayIndex, daysInMonth, isWeekendDay } from "./dates.js";
-const dayAllowed=(r,i)=>r==="weekdays"?i>=0&&i<=4:r==="weekend"?i===5||i===6:r==="saturday"?i===5:r==="sunday"?i===6:true;
-export function normalizeAuxiliary(a){return{active:true,status:"available",quota:DEFAULT_QUOTA,lead:false,coverage:false,night:false,days:"all",customDays:[0,1,2,3,4,5,6],shift:"all",...a}}
-export function canWorkDay(a,y,m,d){if(!a)return false;a=normalizeAuxiliary(a);if(!a.active||a.status==="absent")return false;const i=dayIndex(y,m,d);return a.days==="custom"?(a.customDays||[]).includes(i):dayAllowed(a.days,i)}
-export function canWorkShift(a,s,y,m,d){if(!a)return false;a=normalizeAuxiliary(a);if(!canWorkDay(a,y,m,d))return false;if(s==="night")return a.shift==="all"||a.shift==="night"||!!a.night;if(a.shift==="night")return false;if(a.shift==="morning")return s==="morning";if(a.shift==="afternoon")return s==="afternoon";return true}
-const isWeekendOnly=a=>a.days==="weekend"||a.days==="saturday"||a.days==="sunday",prioritizeRomain=t=>t.slice().sort((a,b)=>Number(/^romain\b/i.test(b.name||""))-Number(/^romain\b/i.test(a.name||"")));
-function pickSequential({ordered:t,pointers:p,key:k,shift:s,year:y,month:m,day:d}){const a=t.filter(x=>canWorkShift(x,s,y,m,d));if(!a.length)return null;const i=(p[k]||0)%a.length,x=a[i];return p[k]=(i+1)%a.length,x.id}
-function pickWeekdayOwner({team:t,pointers:p,shift:s,year:y,month:m,day:d,previous:v=null}){const b=t.filter(a=>a.shift!=="night"&&!isWeekendOnly(a)),l=b.find(a=>a.lead),o=prioritizeRomain(b.filter(a=>a.id!==l?.id)),r=l?[...o,l]:o,a=r.filter(x=>canWorkShift(x,s,y,m,d)).filter(x=>!x.lead||o.some(q=>canWorkShift(q,s,y,m,d)));if(!a.length)return null;const z=(p["weekday-owner"]||0)%a.length,c=a.slice(z).concat(a.slice(0,z)),x=c.find(q=>q.id!==v)||c[0],i=a.findIndex(q=>q.id===x.id);return p["weekday-owner"]=(i+1)%a.length,x.id}
-function pickWeekendOwner({team:t,pointers:p,shift:s,year:y,month:m,day:d}){return pickSequential({ordered:t.filter(a=>!a.lead&&a.shift!=="night"),pointers:p,key:"weekend-owner",shift:s,year:y,month:m,day:d})}
-function weekendOwnerTeam({team:t,previousWorked:w,shift:s,year:y,month:m,day:d}){const f=a=>a.shift!=="night"&&canWorkShift(a,s,y,m,d),b=t.filter(f),n=b.filter(a=>!a.lead),r=n.filter(a=>!w.has(a.id)),q=b.filter(a=>!w.has(a.id));return r.length?r:n.length?n:q.length?q:b}
-function orderedTeam(t,p,l,w){const b=t.filter(a=>a.active&&a.status!=="absent"),c=l?b.find(a=>a.lead):null;let o=b;if(w)o=[...b.filter(isWeekendOnly),...b.filter(a=>!isWeekendOnly(a))];else if(c){const n=b.filter(a=>a.id!==c.id);o=n.length?[...n,c]:[c]}if(!o.length)return[];const z=p%o.length;return o.slice(z).concat(o.slice(0,z))}
-function pickWorker({team:t,pointers:p,shift:s,year:y,month:m,day:d,previous:v,exclude:e=[],preferLeader:l=false,preferWeekendOnly:w=false}){const k=w?`weekend-${s}`:s,o=orderedTeam(t,p[k]||0,l,w).filter(a=>canWorkShift(a,s,y,m,d));if(!o.length)return null;const b=new Set([v,...e].filter(Boolean)),a=o.filter(x=>!b.has(x.id)),x=a[0]||o[0],i=o.findIndex(q=>q.id===x.id);return p[k]=(i>=0?(p[k]||0)+i+1:(p[k]||0)+1)%o.length,x.id}
-function shiftWorkers(e){return!e?[]:Array.isArray(e.workers)?e.workers.filter(Boolean):e.worker?[e.worker]:[]}
-function addShift(p,s,w,l,e=[],q=l){const d=SHIFT_DEFS.find(x=>x.id===s),a=[w,...e].filter(Boolean);p[s]={worker:w,workers:a,hours:d?.hours||0};a.forEach(i=>l[i]=(l[i]||0)+(d?.hours||0));if(w&&q!==l)q[w]=(q[w]||0)+(d?.hours||0)}
-function pickPreferredOrNext({preferred:r,team:t,pointers:p,shift:s,year:y,month:m,day:d,previous:v,preferLeader:l=false,preferWeekendOnly:w=false}){const a=t.find(x=>x.id===r);return a&&a.id!==v&&canWorkShift(a,s,y,m,d)?a.id:pickWorker({team:t,pointers:p,shift:s,year:y,month:m,day:d,previous:v,preferLeader:l,preferWeekendOnly:w})}
-function pickLeaderDouble({primary:r,team:t,pointers:p,shift:s,year:y,month:m,day:d,weekend:w,dayDoubles:b}){const a=t.find(x=>x.id===r);if(!a?.lead||w)return[];const q=b?.[r],c=t.find(x=>x.id===q?.worker);if(q?.day>=d-1&&c&&!c.coverage&&c.shift!=="night"&&canWorkShift(c,s,y,m,d))return q.day=d,[c.id];const n=prioritizeRomain(t.filter(x=>!x.lead&&!x.coverage&&x.shift!=="night")),o=q?.worker?n.filter(x=>x.id!==q.worker):n,z=pickSequential({ordered:o.length?o:n,pointers:p,key:"leader-double",shift:s,year:y,month:m,day:d});return z&&b&&(b[r]={worker:z,day:d}),z?[z]:[]}
-function pickCoverageDouble({primary:r,team:t,pointers:p,shift:s,year:y,month:m,day:d,dayDoubles:b}){const i=b?.coverage?.[d],a=t.find(x=>x.id===i);if(a&&a.id!==r&&a.coverage&&canWorkShift(a,s,y,m,d))return[a.id];const n=t.filter(x=>x.coverage&&x.id!==r),z=pickWorker({team:n,pointers:p,shift:s,year:y,month:m,day:d,previous:r,exclude:[r]});return z&&b&&((b.coverage||={})[d]=z),z?[z]:[]}
-function dayExtras(o){if(!o.primary)return[];const c=pickCoverageDouble(o);return c.length?c:pickLeaderDouble(o)}
-function pickNightOnlyDouble({primary:r,team:t,pointers:p,year:y,month:m,day:d,weekend:w}){if(t.find(x=>x.id===r)?.shift==="night")return[];const k=w?"weekend-night-double":"night-double",n=t.filter(x=>x.shift==="night"&&canWorkShift(x,"night",y,m,d)),z=pickWorker({team:n,pointers:{...p,night:p[k]||0},shift:"night",year:y,month:m,day:d,previous:r,exclude:[r]});if(!z)return[];const i=n.findIndex(x=>x.id===z);return p[k]=(i>=0?i+1:(p[k]||0)+1)%Math.max(1,n.length),[z]}
-function nightExtras(o){const n=pickNightOnlyDouble(o);if(n.length)return n;const a=o.team.find(x=>x.id===o.dayDoubles?.coverage?.[o.day]);return a&&a.id!==o.primary&&canWorkShift(a,"night",o.year,o.month,o.day)?[a.id]:dayExtras({...o,shift:"night"})}
-function build3({year:y,month:m,auxiliaries:u}){const t=u.map(normalizeAuxiliary).filter(a=>a.active),cycle=prioritizeRomain(t.filter(a=>a.shift!=="night"&&!isWeekendOnly(a))),schedule={},blocks=[],load=Object.fromEntries(t.map(a=>[a.id,0])),primaryLoad=Object.fromEntries(t.map(a=>[a.id,0])),pointers={morning:0,afternoon:0,night:0,"night-double":0,"weekend-night-double":0},dayDoubles={},total=daysInMonth(y,m),first=dayIndex(y,m,1);let previous=null;const owner=(d,s)=>{const index=dayIndex(y,m,d),week=Math.floor((first+d-1)/7),offset=index<=2?0:index<=4?1:2,i=(week+offset)%Math.max(1,cycle.length),ordered=cycle.slice(i).concat(cycle.slice(0,i));return ordered.find(a=>canWorkShift(a,s,y,m,d))?.id||pickWorker({team:t,pointers,shift:s,year:y,month:m,day:d,previous:null})};for(let d=1;d<=total;d++){const weekend=isWeekendDay(y,m,d),plan={day:d,weekend},morning=d===1?null:canWorkShift(t.find(a=>a.id===previous),"morning",y,m,d)?previous:owner(d,"morning");addShift(plan,"morning",morning,load,dayExtras({primary:morning,team:t,pointers,load,shift:"morning",year:y,month:m,day:d,weekend,dayDoubles}),primaryLoad);const pm=owner(d,"afternoon");addShift(plan,"afternoon",pm,load,dayExtras({primary:pm,team:t,pointers,load,shift:"afternoon",year:y,month:m,day:d,weekend,dayDoubles}),primaryLoad);const a=t.find(x=>x.id===pm),night=a&&canWorkShift(a,"night",y,m,d)?a.id:owner(d,"night");addShift(plan,"night",night,load,nightExtras({primary:night,team:t,pointers,load,year:y,month:m,day:d,weekend,dayDoubles}),primaryLoad);previous=pm;schedule[d]=plan;SHIFT_DEFS.forEach(s=>shiftWorkers(plan[s.id]).forEach(worker=>blocks.push({day:d,shift:s.id,worker,hours:s.hours})))}return{schedule,blocks,load}}
-function ctx(t){return{schedule:{},blocks:[],load:Object.fromEntries(t.map(a=>[a.id,0])),primaryLoad:Object.fromEntries(t.map(a=>[a.id,0])),pointers:{morning:0,afternoon:0,night:0,"weekday-owner":0,"weekend-owner":0,"night-double":0,"weekend-night-double":0},weekendWorker:null,weekendHandover:null,doubles:{},weekendKey:"",previousWorked:new Set}}
-function record(c,p,y,m){c.schedule[p.day]=p;const w=new Set;SHIFT_DEFS.forEach(s=>{shiftWorkers(p[s.id]).forEach(i=>c.blocks.push({day:p.day,shift:s.id,worker:i,hours:s.hours}));p[s.id]?.worker&&w.add(p[s.id].worker)});c.previousWorked=w;if(p.weekend&&dayIndex(y,m,p.day)===6)c.weekendHandover=p.afternoon?.worker||p.morning?.worker||c.weekendHandover}
-function build({year:y,month:m,auxiliaries:u,rotationDays:r}){const t=u.map(normalizeAuxiliary).filter(a=>a.active),c=ctx(t),total=daysInMonth(y,m),span=Math.max(1,Math.min(4,+r||1)),pattern=span===1?[1]:span===3?[3,2,2]:[span-1],starts=[],owners={};let previous=null;for(let start=1,i=0;start<=total;i++){const size=pattern[i%pattern.length],ownerDay=Array.from({length:size},(_,z)=>start+z).find(d=>d<=total&&!isWeekendDay(y,m,d)),owner=ownerDay?pickWeekdayOwner({team:t,pointers:c.pointers,shift:"afternoon",year:y,month:m,day:ownerDay,previous})||pickWorker({team:t,pointers:c.pointers,shift:"afternoon",year:y,month:m,day:ownerDay,previous,preferLeader:true}):previous;starts.push({start,size});owners[start]=owner;previous=owner;start+=size}for(let d=1;d<=total;d++){const weekend=isWeekendDay(y,m,d),di=dayIndex(y,m,d),plan={day:d,weekend},block=starts.find(b=>b.start<=d&&d<b.start+b.size),before=starts[starts.indexOf(block)-1];let owner=owners[block?.start],am=d===block?.start&&before?owners[before.start]:owner;if(weekend){const key=`${y}-${m}-${di===5?d:d-1}`;if(!c.weekendWorker||key!==c.weekendKey||!canWorkShift(t.find(a=>a.id===c.weekendWorker),"morning",y,m,d)){c.weekendKey=key;const team=di===5?weekendOwnerTeam({team:t,previousWorked:c.previousWorked,shift:"morning",year:y,month:m,day:d}):t;c.weekendWorker=pickWeekendOwner({team:team.length?team:t,pointers:c.pointers,shift:"morning",year:y,month:m,day:d});c.weekendHandover=c.weekendWorker}am=c.weekendWorker||am;owner=c.weekendWorker||owner}else{c.weekendWorker=null;c.weekendKey=""}if(di===0)am=c.weekendHandover||am;const morning=d===1?null:pickPreferredOrNext({preferred:am,team:t,pointers:c.pointers,shift:"morning",year:y,month:m,day:d,previous:null,preferLeader:!weekend,preferWeekendOnly:weekend});addShift(plan,"morning",morning,c.load,dayExtras({primary:morning,team:t,pointers:c.pointers,shift:"morning",year:y,month:m,day:d,weekend,dayDoubles:c.doubles}),c.primaryLoad);const pm=pickPreferredOrNext({preferred:owner,team:t,pointers:c.pointers,shift:"afternoon",year:y,month:m,day:d,previous:morning===owner?null:morning,preferLeader:!weekend,preferWeekendOnly:weekend});addShift(plan,"afternoon",pm,c.load,dayExtras({primary:pm,team:t,pointers:c.pointers,shift:"afternoon",year:y,month:m,day:d,weekend,dayDoubles:c.doubles}),c.primaryLoad);const a=t.find(x=>x.id===pm),night=a&&canWorkShift(a,"night",y,m,d)?pm:pickPreferredOrNext({preferred:owner,team:t,pointers:c.pointers,shift:"night",year:y,month:m,day:d,previous:morning,preferWeekendOnly:weekend});addShift(plan,"night",night,c.load,nightExtras({primary:night,team:t,pointers:c.pointers,year:y,month:m,day:d,weekend,dayDoubles:c.doubles}),c.primaryLoad);record(c,plan,y,m)}return{schedule:c.schedule,blocks:c.blocks,load:c.load}}
-export function buildSchedule({year,month,auxiliaries,rotationDays=1}){return +rotationDays===3?build3({year,month,auxiliaries}):build({year,month,auxiliaries,rotationDays})}
-export function calculateHours(schedule,auxiliaries){const h=Object.fromEntries(auxiliaries.map(a=>[a.id,{morning:0,afternoon:0,night:0,total:0,quota:Number(a.quota)||DEFAULT_QUOTA}]));Object.values(schedule).forEach(d=>SHIFT_DEFS.forEach(s=>shiftWorkers(d[s.id]).forEach(w=>{if(w&&h[w])h[w][s.id]+=s.hours,h[w].total+=s.hours})));return h}
+
+const dayAllowed = (rule, index) => {
+  if (rule === "weekdays") return index >= 0 && index <= 4;
+  if (rule === "weekend") return index === 5 || index === 6;
+  if (rule === "saturday") return index === 5;
+  if (rule === "sunday") return index === 6;
+  return true;
+};
+
+export function normalizeAuxiliary(aux) {
+  return { active: true, status: "available", quota: DEFAULT_QUOTA, lead: false, coverage: false, night: false, days: "all", customDays: [0, 1, 2, 3, 4, 5, 6], shift: "all", ...aux };
+}
+export function canWorkDay(aux, year, month, day) {
+  if (!aux) return false;
+  const a = normalizeAuxiliary(aux);
+  if (!a.active || a.status === "absent") return false;
+  const index = dayIndex(year, month, day);
+  if (a.days === "custom") return (a.customDays || []).includes(index);
+  return dayAllowed(a.days, index);
+}
+export function canWorkShift(aux, shift, year, month, day) {
+  if (!aux) return false;
+  const a = normalizeAuxiliary(aux);
+  if (!canWorkDay(a, year, month, day)) return false;
+  if (shift === "night") return a.shift === "all" || a.shift === "night" || !!a.night;
+  if (a.shift === "night") return false;
+  if (a.shift === "morning") return shift === "morning";
+  if (a.shift === "afternoon") return shift === "afternoon";
+  return true;
+}
+const isWeekendOnly = aux => aux.days === "weekend" || aux.days === "saturday" || aux.days === "sunday";
+const prioritizeRomain = team => team.slice().sort((a, b) => Number(/^romain\b/i.test(b.name || "")) - Number(/^romain\b/i.test(a.name || "")));
+function pickSequential({ ordered, pointers, key, shift, year, month, day }) {
+  const available = ordered.filter(aux => canWorkShift(aux, shift, year, month, day));
+  if (!available.length) return null;
+  const offset = (pointers[key] || 0) % available.length;
+  const picked = available[offset];
+  pointers[key] = (offset + 1) % available.length;
+  return picked.id;
+}
+function pickWeekdayOwner({ team, pointers, shift, year, month, day, previous = null }) {
+  const base = team.filter(aux => aux.shift !== "night" && !isWeekendOnly(aux));
+  const leader = base.find(aux => aux.lead);
+  const others = prioritizeRomain(base.filter(aux => aux.id !== leader?.id));
+  const ordered = leader ? [...others, leader] : others;
+  const available = ordered.filter(aux => canWorkShift(aux, shift, year, month, day)).filter(aux => !aux.lead || others.some(teammate => canWorkShift(teammate, shift, year, month, day)));
+  if (!available.length) return null;
+  const offset = (pointers["weekday-owner"] || 0) % available.length;
+  const rotated = available.slice(offset).concat(available.slice(0, offset));
+  const picked = rotated.find(aux => aux.id !== previous) || rotated[0];
+  pointers["weekday-owner"] = (available.findIndex(aux => aux.id === picked.id) + 1) % available.length;
+  return picked.id;
+}
+function pickWeekendOwner({ team, pointers, shift, year, month, day }) { return pickSequential({ ordered: team.filter(aux => !aux.lead && aux.shift !== "night"), pointers, key: "weekend-owner", shift, year, month, day }); }
+function weekendOwnerTeam({ team, previousWorked, shift, year, month, day }) {
+  const main = team.filter(aux => aux.shift !== "night" && canWorkShift(aux, shift, year, month, day));
+  const teammates = main.filter(aux => !aux.lead), restedTeammates = teammates.filter(aux => !previousWorked.has(aux.id)), rested = main.filter(aux => !previousWorked.has(aux.id));
+  return restedTeammates.length ? restedTeammates : teammates.length ? teammates : rested.length ? rested : main;
+}
+function orderedTeam(team, pointer, preferLeader, preferWeekendOnly) {
+  const base = team.filter(aux => aux.active && aux.status !== "absent"), leader = preferLeader ? base.find(aux => aux.lead) : null;
+  let ordered = base;
+  if (preferWeekendOnly) ordered = [...base.filter(isWeekendOnly), ...base.filter(aux => !isWeekendOnly(aux))];
+  else if (leader) { const others = base.filter(aux => aux.id !== leader.id); ordered = others.length ? [...others, leader] : [leader]; }
+  if (!ordered.length) return [];
+  const offset = pointer % ordered.length;
+  return ordered.slice(offset).concat(ordered.slice(0, offset));
+}
+function pickWorker({ team, pointers, shift, year, month, day, previous, exclude = [], preferLeader = false, preferWeekendOnly = false }) {
+  const key = preferWeekendOnly ? `weekend-${shift}` : shift, ordered = orderedTeam(team, pointers[key] || 0, preferLeader, preferWeekendOnly).filter(aux => canWorkShift(aux, shift, year, month, day));
+  if (!ordered.length) return null;
+  const blocked = new Set([previous, ...exclude].filter(Boolean)), candidates = ordered.filter(aux => !blocked.has(aux.id)), picked = candidates[0] || ordered[0], idx = ordered.findIndex(aux => aux.id === picked.id);
+  pointers[key] = (idx >= 0 ? (pointers[key] || 0) + idx + 1 : (pointers[key] || 0) + 1) % ordered.length;
+  return picked.id;
+}
+function shiftWorkers(entry) { return !entry ? [] : Array.isArray(entry.workers) ? entry.workers.filter(Boolean) : entry.worker ? [entry.worker] : []; }
+function addShift(dayPlan, shift, worker, load, extras = [], primaryLoad = load) {
+  const def = SHIFT_DEFS.find(item => item.id === shift), workers = [worker, ...extras].filter(Boolean);
+  dayPlan[shift] = { worker, workers, hours: def?.hours || 0 };
+  workers.forEach(id => { load[id] = (load[id] || 0) + (def?.hours || 0); });
+  if (worker && primaryLoad !== load) primaryLoad[worker] = (primaryLoad[worker] || 0) + (def?.hours || 0);
+}
+function pickPreferredOrNext({ preferred, team, pointers, shift, year, month, day, previous, preferLeader = false, preferWeekendOnly = false }) {
+  const aux = team.find(item => item.id === preferred);
+  return aux && aux.id !== previous && canWorkShift(aux, shift, year, month, day) ? aux.id : pickWorker({ team, pointers, shift, year, month, day, previous, preferLeader, preferWeekendOnly });
+}
+function pickLeaderDouble({ primary, team, pointers, shift, year, month, day, weekend, dayDoubles }) {
+  const primaryAux = team.find(aux => aux.id === primary);
+  if (!primaryAux?.lead || weekend) return [];
+  const saved = dayDoubles?.[primary], savedAux = team.find(aux => aux.id === saved?.worker);
+  if (saved?.day >= day - 1 && savedAux && !savedAux.coverage && savedAux.shift !== "night" && canWorkShift(savedAux, shift, year, month, day)) { saved.day = day; return [savedAux.id]; }
+  const teammates = prioritizeRomain(team.filter(aux => !aux.lead && !aux.coverage && aux.shift !== "night")), rotating = saved?.worker ? teammates.filter(aux => aux.id !== saved.worker) : teammates;
+  const teammate = pickSequential({ ordered: rotating.length ? rotating : teammates, pointers, key: "leader-double", shift, year, month, day });
+  if (teammate && dayDoubles) dayDoubles[primary] = { worker: teammate, day };
+  return teammate ? [teammate] : [];
+}
+function pickCoverageDouble({ primary, team, shift, year, month, day, dayDoubles }) {
+  const savedId = dayDoubles?.coverage?.[day], saved = team.find(aux => aux.id === savedId);
+  if (saved && saved.id !== primary && (saved.coverage || saved.lead) && canWorkShift(saved, shift, year, month, day)) return [saved.id];
+  const extraLoad = dayDoubles.extraLoad ||= {};
+  const candidates = team.filter(aux => (aux.coverage || aux.lead) && aux.shift !== "night" && aux.id !== primary).filter(aux => canWorkShift(aux, shift, year, month, day)).sort((a, b) => (extraLoad[a.id] || 0) - (extraLoad[b.id] || 0));
+  const teammate = candidates[0]?.id || null;
+  if (teammate) { dayDoubles.coverage ||= {}; dayDoubles.coverage[day] = teammate; extraLoad[teammate] = (extraLoad[teammate] || 0) + 1; }
+  return teammate ? [teammate] : [];
+}
+function dayExtras(options) { if (!options.primary) return []; const coverage = pickCoverageDouble(options); return coverage.length ? coverage : pickLeaderDouble(options); }
+function pickNightOnlyDouble({ primary, team, pointers, year, month, day, weekend }) {
+  if (team.find(aux => aux.id === primary)?.shift === "night") return [];
+  const key = weekend ? "weekend-night-double" : "night-double", candidates = team.filter(aux => aux.shift === "night" && canWorkShift(aux, "night", year, month, day));
+  const teammate = pickWorker({ team: candidates, pointers: { ...pointers, night: pointers[key] || 0 }, shift: "night", year, month, day, previous: primary, exclude: [primary] });
+  if (!teammate) return [];
+  const idx = candidates.findIndex(aux => aux.id === teammate);
+  pointers[key] = (idx >= 0 ? idx + 1 : (pointers[key] || 0) + 1) % Math.max(1, candidates.length);
+  return [teammate];
+}
+function nightExtras(options) {
+  const nightOnly = pickNightOnlyDouble(options);
+  if (nightOnly.length) return nightOnly;
+  const saved = options.team.find(aux => aux.id === options.dayDoubles?.coverage?.[options.day]);
+  return saved && saved.id !== options.primary && canWorkShift(saved, "night", options.year, options.month, options.day) ? [saved.id] : dayExtras({ ...options, shift: "night" });
+}
+function buildThreeDaySchedule({ year, month, auxiliaries }) {
+  const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active), cycle = prioritizeRomain(team.filter(aux => aux.shift !== "night" && !isWeekendOnly(aux))), schedule = {}, blocks = [], load = Object.fromEntries(team.map(aux => [aux.id, 0])), primaryLoad = { ...load }, pointers = { morning: 0, afternoon: 0, night: 0, "night-double": 0, "weekend-night-double": 0 }, dayDoubles = {}, total = daysInMonth(year, month), first = dayIndex(year, month, 1);
+  let previous = null;
+  const owner = (day, shift) => { const index = dayIndex(year, month, day), week = Math.floor((first + day - 1) / 7), offset = index <= 2 ? 0 : index <= 4 ? 1 : 2, preferred = (week + offset) % Math.max(1, cycle.length), ordered = cycle.slice(preferred).concat(cycle.slice(0, preferred)); return ordered.find(aux => canWorkShift(aux, shift, year, month, day))?.id || pickWorker({ team, pointers, shift, year, month, day, previous: null }); };
+  for (let day = 1; day <= total; day += 1) {
+    const weekend = isWeekendDay(year, month, day), plan = { day, weekend }, morning = day === 1 ? null : canWorkShift(team.find(aux => aux.id === previous), "morning", year, month, day) ? previous : owner(day, "morning");
+    addShift(plan, "morning", morning, load, dayExtras({ primary: morning, team, pointers, shift: "morning", year, month, day, weekend, dayDoubles }), primaryLoad);
+    const afternoon = owner(day, "afternoon"); addShift(plan, "afternoon", afternoon, load, dayExtras({ primary: afternoon, team, pointers, shift: "afternoon", year, month, day, weekend, dayDoubles }), primaryLoad);
+    const aux = team.find(item => item.id === afternoon), night = aux && canWorkShift(aux, "night", year, month, day) ? aux.id : owner(day, "night"); addShift(plan, "night", night, load, nightExtras({ primary: night, team, pointers, year, month, day, weekend, dayDoubles }), primaryLoad);
+    previous = afternoon; schedule[day] = plan; SHIFT_DEFS.forEach(shift => shiftWorkers(plan[shift.id]).forEach(worker => blocks.push({ day, shift: shift.id, worker, hours: shift.hours })));
+  }
+  return { schedule, blocks, load };
+}
+function buildGeneric({ year, month, auxiliaries, rotationDays }) {
+  const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active), schedule = {}, blocks = [], load = Object.fromEntries(team.map(aux => [aux.id, 0])), primaryLoad = { ...load }, pointers = { morning: 0, afternoon: 0, night: 0, "weekday-owner": 0, "weekend-owner": 0, "night-double": 0, "weekend-night-double": 0 }, dayDoubles = {}, total = daysInMonth(year, month), span = Math.max(1, Math.min(4, Number(rotationDays) || 1)), pattern = span === 1 ? [1] : [span - 1], starts = [], owners = {};
+  let previous = null, weekendWorker = null, weekendKey = "", weekendHandover = null, previousWorked = new Set();
+  for (let start = 1, i = 0; start <= total; i += 1) { const size = pattern[i % pattern.length], ownerDay = Array.from({ length: size }, (_, offset) => start + offset).find(day => day <= total && !isWeekendDay(year, month, day)), worker = ownerDay ? pickWeekdayOwner({ team, pointers, shift: "afternoon", year, month, day: ownerDay, previous }) || pickWorker({ team, pointers, shift: "afternoon", year, month, day: ownerDay, previous, preferLeader: true }) : previous; starts.push({ start, size }); owners[start] = worker; previous = worker; start += size; }
+  for (let day = 1; day <= total; day += 1) {
+    const weekend = isWeekendDay(year, month, day), index = dayIndex(year, month, day), plan = { day, weekend }, block = starts.find(item => item.start <= day && day < item.start + item.size), before = starts[starts.indexOf(block) - 1]; let worker = owners[block?.start], morning = day === block?.start && before ? owners[before.start] : worker;
+    if (weekend) { const key = `${year}-${month}-${index === 5 ? day : day - 1}`; if (!weekendWorker || key !== weekendKey || !canWorkShift(team.find(aux => aux.id === weekendWorker), "morning", year, month, day)) { weekendKey = key; const available = index === 5 ? weekendOwnerTeam({ team, previousWorked, shift: "morning", year, month, day }) : team; weekendWorker = pickWeekendOwner({ team: available.length ? available : team, pointers, shift: "morning", year, month, day }); weekendHandover = weekendWorker; } morning = weekendWorker || morning; worker = weekendWorker || worker; } else { weekendWorker = null; weekendKey = ""; }
+    if (index === 0) morning = weekendHandover || morning;
+    const am = day === 1 ? null : pickPreferredOrNext({ preferred: morning, team, pointers, shift: "morning", year, month, day, previous: null, preferLeader: !weekend, preferWeekendOnly: weekend }); addShift(plan, "morning", am, load, dayExtras({ primary: am, team, pointers, shift: "morning", year, month, day, weekend, dayDoubles }), primaryLoad);
+    const pm = pickPreferredOrNext({ preferred: worker, team, pointers, shift: "afternoon", year, month, day, previous: am === worker ? null : am, preferLeader: !weekend, preferWeekendOnly: weekend }); addShift(plan, "afternoon", pm, load, dayExtras({ primary: pm, team, pointers, shift: "afternoon", year, month, day, weekend, dayDoubles }), primaryLoad);
+    const aux = team.find(item => item.id === pm), night = aux && canWorkShift(aux, "night", year, month, day) ? pm : pickPreferredOrNext({ preferred: worker, team, pointers, shift: "night", year, month, day, previous: am, preferWeekendOnly: weekend }); addShift(plan, "night", night, load, nightExtras({ primary: night, team, pointers, year, month, day, weekend, dayDoubles }), primaryLoad);
+    schedule[day] = plan; const worked = new Set(); SHIFT_DEFS.forEach(shift => { shiftWorkers(plan[shift.id]).forEach(id => blocks.push({ day, shift: shift.id, worker: id, hours: shift.hours })); if (plan[shift.id]?.worker) worked.add(plan[shift.id].worker); }); previousWorked = worked; if (weekend && index === 6) weekendHandover = plan.afternoon?.worker || plan.morning?.worker || weekendHandover;
+  }
+  return { schedule, blocks, load };
+}
+export function buildSchedule({ year, month, auxiliaries, rotationDays = 1 }) { return Number(rotationDays) === 3 ? buildThreeDaySchedule({ year, month, auxiliaries }) : buildGeneric({ year, month, auxiliaries, rotationDays }); }
+export function calculateHours(schedule, auxiliaries) {
+  const hours = Object.fromEntries(auxiliaries.map(aux => [aux.id, { morning: 0, afternoon: 0, night: 0, total: 0, quota: Number(aux.quota) || DEFAULT_QUOTA }]));
+  Object.values(schedule).forEach(day => SHIFT_DEFS.forEach(shift => shiftWorkers(day[shift.id]).forEach(worker => { if (!worker || !hours[worker]) return; hours[worker][shift.id] += shift.hours; hours[worker].total += shift.hours; })));
+  return hours;
+}
