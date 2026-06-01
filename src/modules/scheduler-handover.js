@@ -11,8 +11,6 @@ const withPrimary = (entry, worker) => ({
 
 export function buildSchedule(options) {
   const result = buildBaseSchedule(options);
-  if (Number(options.rotationDays) !== 3) return result;
-
   const schedule = result.schedule;
   const days = Object.keys(schedule).map(Number);
   const weekendCycle = [];
