@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./mailto-gmail.js?v=20260601";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
