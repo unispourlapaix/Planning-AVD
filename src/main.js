@@ -6,7 +6,7 @@ globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260601-share-planning"),
+  import("./App.js?v=20260601-restored-valid"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
