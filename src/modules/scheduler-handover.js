@@ -14,6 +14,17 @@ export function buildSchedule(options) {
   const schedule = result.schedule;
   const days = Object.keys(schedule).map(Number);
   const available = options.auxiliaries.filter(aux => aux.active !== false && aux.status !== "absent");
+  const firstDay = days[0];
+  const firstPlan = schedule[firstDay];
+  if (firstPlan && !firstPlan.morning?.worker) {
+    const afternoonWorker = firstPlan.afternoon?.worker;
+    const afternoonAux = available.find(aux => aux.id === afternoonWorker);
+    const fallback = available.find(aux => canWorkShift(aux, "morning", options.year, options.month, firstDay));
+    const morningWorker = afternoonAux && canWorkShift(afternoonAux, "morning", options.year, options.month, firstDay)
+      ? afternoonAux.id
+      : fallback?.id;
+    if (morningWorker) firstPlan.morning = withPrimary(firstPlan.morning, morningWorker);
+  }
   const leader = available.find(aux => aux.lead);
   const others = available.filter(aux => aux.id !== leader?.id);
   const leaderIndex = Math.min(2, others.length);
