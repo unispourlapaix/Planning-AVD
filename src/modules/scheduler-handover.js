@@ -32,12 +32,28 @@ export function buildSchedule(options) {
   if (leader) weekendCycle.splice(leaderIndex, 0, leader.id);
 
   days.filter(day => new Date(options.year, options.month, day).getDay() === 6).forEach((day, index) => {
+    const friday = schedule[day - 1];
     const saturday = schedule[day];
     const sunday = schedule[day + 1];
-    const weekendWorker = weekendCycle[index] || leader?.id || weekendCycle[index % weekendCycle.length];
+    const fridayWorker = friday?.afternoon?.worker;
+    const fridayAux = available.find(aux => aux.id === fridayWorker);
+    if (fridayAux && canWorkShift(fridayAux, "morning", options.year, options.month, day)) {
+      saturday.morning = withPrimary(saturday.morning, fridayAux.id);
+    }
+    const weekendWorker = weekendCycle
+      .slice(index)
+      .concat(weekendCycle.slice(0, index))
+      .find(id => {
+        const aux = available.find(item => item.id === id);
+        return canWorkShift(aux, "afternoon", options.year, options.month, day)
+          && canWorkShift(aux, "morning", options.year, options.month, day + 1);
+      });
     if (!weekendWorker || !sunday) return;
     saturday.afternoon = withPrimary(saturday.afternoon, weekendWorker);
-    saturday.night = withPrimary(saturday.night, weekendWorker);
+    const weekendAux = available.find(aux => aux.id === weekendWorker);
+    if (canWorkShift(weekendAux, "night", options.year, options.month, day)) {
+      saturday.night = withPrimary(saturday.night, weekendWorker);
+    }
     sunday.morning = withPrimary(sunday.morning, weekendWorker);
   });
 
