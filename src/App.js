@@ -197,7 +197,6 @@ function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
       const workers = shiftWorkerIds(plan?.[shift.id]);
       const worker = workers[0];
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
-      const c = colorFor(index);
       return h("button", { className: "slot editable-slot", key: shift.id, onClick: () => onEditSlot({ day, shift: shift.id }) },
         h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
         h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? workers.map(id => auxName(auxiliaries, id)).join(" + ") : "A definir"),
@@ -275,7 +274,11 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
 }
 
 function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
-  const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => aux.id === id ? { ...aux, ...patch } : aux));
+  const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => ({
+    ...aux,
+    ...(patch.lead === true && aux.id !== id ? { lead: false } : {}),
+    ...(aux.id === id ? patch : {}),
+  })));
   const addAux = () => setAuxiliaries(list => {
     if (list.length >= MAX_AUXILIARIES) return list;
     const id = `P${list.length + 1}`;
@@ -347,9 +350,11 @@ function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays
           onClick: () => patchAux(aux.id, { customDays: checked ? aux.customDays.filter(item => item !== dayIndex) : [...(aux.customDays || []), dayIndex] }),
         }, label);
       })) : null,
-      h(Checkbox, { checked: aux.lead, onChange: value => patchAux(aux.id, { lead: value }), label: "Chef d'equipe prioritaire en semaine" }),
+      h(Checkbox, { checked: aux.lead, onChange: value => patchAux(aux.id, { lead: value }), label: "Chef d'equipe : doublon pendant son tour" }),
       h(Checkbox, { checked: !!aux.coverage, onChange: value => patchAux(aux.id, { coverage: value }), label: "Comblage en doublon" }),
-      h(Checkbox, { checked: aux.night || aux.shift === "all", onChange: value => patchAux(aux.id, { night: value }), label: aux.shift === "all" ? "Nuit incluse avec Jour et nuit" : "Peut faire la surveillance de nuit 12h" }),
+      aux.shift === "all"
+        ? h("div", { className: "muted" }, "Jour et nuit : surveillance de nuit incluse.")
+        : h(Checkbox, { checked: aux.night, onChange: value => patchAux(aux.id, { night: value }), label: "Peut faire la surveillance de nuit 12h" }),
     ))),
   );
 }
