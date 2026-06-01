@@ -6,10 +6,11 @@ const uniqueEmails = auxiliaries => [...new Set(auxiliaries
   .map(aux => String(aux.email || "").trim().toLowerCase())
   .filter(Boolean))];
 
-const buildGmailUrl = ({ recipients, subject, body }) => {
+const buildGmailUrl = ({ sender, recipients, subject, body }) => {
   const url = new URL("https://mail.google.com/mail/");
   url.searchParams.set("view", "cm");
   url.searchParams.set("fs", "1");
+  if (sender) url.searchParams.set("to", sender);
   url.searchParams.set("bcc", recipients.join(","));
   url.searchParams.set("su", subject);
   url.searchParams.set("body", body);
@@ -32,7 +33,7 @@ export async function sharePlanningByEmail({ db, user, year, month, auxiliaries,
     "",
     "Votre planning reste personnel et visible uniquement apres connexion.",
   ].join("\n");
-  const gmailUrl = buildGmailUrl({ recipients, subject, body });
+  const gmailUrl = buildGmailUrl({ sender: user.email, recipients, subject, body });
   const gmailTab = window.open("about:blank", "_blank");
 
   const count = await publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours });
