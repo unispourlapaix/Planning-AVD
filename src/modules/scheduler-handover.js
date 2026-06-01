@@ -13,20 +13,15 @@ export function buildSchedule(options) {
   const result = buildBaseSchedule(options);
   const schedule = result.schedule;
   const days = Object.keys(schedule).map(Number);
-  const weekendCycle = [];
-  days.forEach(day => {
-    if (new Date(options.year, options.month, day).getDay() !== 6) return;
-    const worker = schedule[day]?.afternoon?.worker;
-    if (worker && !weekendCycle.includes(worker)) weekendCycle.push(worker);
-  });
-  options.auxiliaries
-    .filter(aux => aux.active !== false && aux.status !== "absent")
-    .forEach(aux => { if (!weekendCycle.includes(aux.id)) weekendCycle.push(aux.id); });
+  const available = options.auxiliaries.filter(aux => aux.active !== false && aux.status !== "absent");
+  const leader = available.find(aux => aux.lead);
+  const others = available.filter(aux => aux.id !== leader?.id);
+  const weekendCycle = [...others, ...(leader ? [leader] : [])].map(aux => aux.id);
 
   days.filter(day => new Date(options.year, options.month, day).getDay() === 6).forEach((day, index) => {
     const saturday = schedule[day];
     const sunday = schedule[day + 1];
-    const weekendWorker = weekendCycle[index % weekendCycle.length];
+    const weekendWorker = weekendCycle[index] || leader?.id || weekendCycle[index % weekendCycle.length];
     if (!weekendWorker || !sunday) return;
     saturday.afternoon = withPrimary(saturday.afternoon, weekendWorker);
     saturday.night = withPrimary(saturday.night, weekendWorker);
