@@ -16,7 +16,9 @@ export function buildSchedule(options) {
   const available = options.auxiliaries.filter(aux => aux.active !== false && aux.status !== "absent");
   const leader = available.find(aux => aux.lead);
   const others = available.filter(aux => aux.id !== leader?.id);
-  const weekendCycle = [...others, ...(leader ? [leader] : [])].map(aux => aux.id);
+  const leaderIndex = Math.min(2, others.length);
+  const weekendCycle = others.map(aux => aux.id);
+  if (leader) weekendCycle.splice(leaderIndex, 0, leader.id);
 
   days.filter(day => new Date(options.year, options.month, day).getDay() === 6).forEach((day, index) => {
     const saturday = schedule[day];
