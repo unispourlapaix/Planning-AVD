@@ -1,5 +1,12 @@
-import App from "./App.js";
-import { h } from "./ui.js";
+import React from "react";
+import ReactDOM from "react-dom/client";
 
+globalThis.React = React;
+globalThis.ReactDOM = ReactDOM;
+
+const [{ default: App }, { h }] = await Promise.all([
+  import("./App.js"),
+  import("./ui.js"),
+]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));
