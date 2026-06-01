@@ -67,8 +67,20 @@ function pickWeekdayOwner({ team, pointers, shift, year, month, day }) {
 }
 
 function pickWeekendOwner({ team, pointers, shift, year, month, day }) {
-  const ordered = team.filter(aux => aux.shift !== "night");
+  const teammates = team.filter(aux => !aux.coverage && !aux.lead && aux.shift !== "night");
+  const ordered = teammates.some(aux => canWorkShift(aux, shift, year, month, day))
+    ? teammates
+    : team.filter(aux => !aux.coverage && aux.shift !== "night");
   return pickSequential({ ordered, pointers, key: "weekend-owner", shift, year, month, day });
+}
+
+function weekendOwnerTeam({ team, previousWorked, shift, year, month, day }) {
+  const canCover = aux => !aux.coverage && aux.shift !== "night" && canWorkShift(aux, shift, year, month, day);
+  const main = team.filter(canCover);
+  const teammates = main.filter(aux => !aux.lead);
+  const restedTeammates = teammates.filter(aux => !previousWorked.has(aux.id));
+  const rested = main.filter(aux => !previousWorked.has(aux.id));
+  return restedTeammates.length ? restedTeammates : teammates.length ? teammates : rested.length ? rested : main;
 }
 
 function orderedTeam(team, pointer, preferLeader, preferWeekendOnly) {
@@ -89,9 +101,10 @@ function orderedTeam(team, pointer, preferLeader, preferWeekendOnly) {
   return ordered.slice(offset).concat(ordered.slice(0, offset));
 }
 
-function pickWorker({ team, pointers, load, shift, year, month, day, previous, exclude = [], preferLeader = false, preferWeekendOnly = false }) {
+function pickWorker({ team, pointers, load, shift, year, month, day, previous, exclude = [], preferLeader = false, preferWeekendOnly = false, includeCoverage = false }) {
   const key = preferWeekendOnly ? `weekend-${shift}` : shift;
   const ordered = orderedTeam(team, pointers[key] || 0, preferLeader, preferWeekendOnly)
+    .filter(aux => includeCoverage || !aux.coverage)
     .filter(aux => canWorkShift(aux, shift, year, month, day));
 
   if (!ordered.length) return null;
@@ -115,13 +128,16 @@ function shiftWorkers(entry) {
   return entry.worker ? [entry.worker] : [];
 }
 
-function addShift(dayPlan, shift, worker, load, extras = []) {
+function addShift(dayPlan, shift, worker, load, extras = [], primaryLoad = load) {
   const def = SHIFT_DEFS.find(item => item.id === shift);
   const workers = [worker, ...extras].filter(Boolean);
   dayPlan[shift] = { worker, workers, hours: def?.hours || 0 };
   workers.forEach(id => {
     load[id] = (load[id] || 0) + (def?.hours || 0);
   });
+  if (worker && primaryLoad !== load) {
+    primaryLoad[worker] = (primaryLoad[worker] || 0) + (def?.hours || 0);
+  }
 }
 
 function pickPreferredOrNext({ preferred, team, pointers, load, shift, year, month, day, previous, preferLeader = false, preferWeekendOnly = false }) {
@@ -168,6 +184,7 @@ function pickCoverageDouble({ primary, team, pointers, load, shift, year, month,
     exclude: [primary],
     preferLeader: false,
     preferWeekendOnly: false,
+    includeCoverage: true,
   });
   return teammate ? [teammate] : [];
 }
@@ -213,6 +230,7 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
   const schedule = {};
   const blocks = [];
   const load = Object.fromEntries(team.map(aux => [aux.id, 0]));
+  const primaryLoad = Object.fromEntries(team.map(aux => [aux.id, 0]));
   const pointers = { morning: 0, afternoon: 0, night: 0, "weekday-owner": 0, "weekend-owner": 0, "night-double": 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0, "weekend-night-double": 0 };
   let previousDayWorker = null;
   let weekendWorker = null;
@@ -236,22 +254,21 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
     const plan = { day, weekend };
     const dayDoubles = leaderDoubles;
     if (weekend && weekendWorker && canWorkShift(morningTeam.find(aux => aux.id === weekendWorker), "morning", year, month, day)) {
-      addShift(plan, "morning", weekendWorker, load, dayExtras({ primary: weekendWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
+      addShift(plan, "morning", weekendWorker, load, dayExtras({ primary: weekendWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }), primaryLoad);
     } else {
-      const weekendTeam = weekend && index === 5
-        ? availableTeam.filter(aux => !previousWorked.has(aux.id))
+      const eligibleWeekendTeam = weekend && index === 5
+        ? weekendOwnerTeam({ team: morningTeam, previousWorked, shift: "morning", year, month, day })
         : morningTeam;
-      const eligibleWeekendTeam = weekendTeam.length ? weekendTeam : morningTeam;
       const worker = mondayHandover || (weekend
         ? pickWeekendOwner({ team: eligibleWeekendTeam, pointers, shift: "morning", year, month, day })
         : pickWeekdayOwner({ team: morningTeam, pointers, shift: "morning", year, month, day }))
         || pickWorker({
-          team: morningTeam, pointers, load, shift: "morning", year, month, day,
+          team: morningTeam, pointers, load: primaryLoad, shift: "morning", year, month, day,
           previous: previousDayWorker,
           preferLeader: !weekend,
           preferWeekendOnly: weekend,
         });
-      addShift(plan, "morning", worker, load, dayExtras({ primary: worker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
+      addShift(plan, "morning", worker, load, dayExtras({ primary: worker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }), primaryLoad);
       if (weekend) {
         weekendWorker = worker;
         weekendHandover = worker;
@@ -262,23 +279,23 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
     const afternoonWorker = morningAux && canWorkShift(morningAux, "afternoon", year, month, day)
       ? morningAux.id
       : pickWorker({
-          team: availableTeam, pointers, load, shift: "afternoon", year, month, day,
+          team: availableTeam, pointers, load: primaryLoad, shift: "afternoon", year, month, day,
           previous: plan.morning?.worker,
           preferLeader: !weekend,
           preferWeekendOnly: weekend,
         });
-    addShift(plan, "afternoon", afternoonWorker, load, dayExtras({ primary: afternoonWorker, team: availableTeam, pointers, load, shift: "afternoon", year, month, day, weekend, dayDoubles }));
+    addShift(plan, "afternoon", afternoonWorker, load, dayExtras({ primary: afternoonWorker, team: availableTeam, pointers, load, shift: "afternoon", year, month, day, weekend, dayDoubles }), primaryLoad);
 
     const afternoonAux = availableTeam.find(aux => aux.id === afternoonWorker);
     const nightWorker = afternoonAux && canWorkShift(afternoonAux, "night", year, month, day)
       ? afternoonAux.id
       : pickWorker({
-          team: availableTeam, pointers, load, shift: "night", year, month, day,
+          team: availableTeam, pointers, load: primaryLoad, shift: "night", year, month, day,
           previous: plan.morning?.worker,
           preferLeader: false,
           preferWeekendOnly: weekend,
         });
-    addShift(plan, "night", nightWorker, load, nightExtras({ primary: nightWorker, team: availableTeam, pointers, load, year, month, day, weekend, dayDoubles }));
+    addShift(plan, "night", nightWorker, load, nightExtras({ primary: nightWorker, team: availableTeam, pointers, load, year, month, day, weekend, dayDoubles }), primaryLoad);
 
     previousDayWorker = plan.afternoon?.worker || plan.morning?.worker || previousDayWorker;
     schedule[day] = plan;
@@ -286,8 +303,8 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
     SHIFT_DEFS.forEach(shift => {
       shiftWorkers(plan[shift.id]).forEach(worker => {
         blocks.push({ day, shift: shift.id, worker, hours: shift.hours });
-        workedToday.add(worker);
       });
+      if (plan[shift.id]?.worker) workedToday.add(plan[shift.id].worker);
     });
     previousWorked = workedToday;
     if (weekend && index === 6) weekendHandover = plan.afternoon?.worker || plan.morning?.worker || weekendHandover;
@@ -301,6 +318,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
   const schedule = {};
   const blocks = [];
   const load = Object.fromEntries(team.map(aux => [aux.id, 0]));
+  const primaryLoad = Object.fromEntries(team.map(aux => [aux.id, 0]));
   const pointers = { morning: 0, afternoon: 0, night: 0, "weekday-owner": 0, "weekend-owner": 0, "night-double": 0, "weekend-morning": 0, "weekend-afternoon": 0, "weekend-night": 0, "weekend-night-double": 0 };
   const totalDays = daysInMonth(year, month);
   const span = Math.min(4, Math.max(2, Number(rotationDays) || 2));
@@ -325,7 +343,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
         || pickWorker({
           team,
           pointers,
-          load,
+          load: primaryLoad,
           shift: "afternoon",
           year,
           month,
@@ -361,7 +379,9 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       const weekendAux = availableTeam.find(aux => aux.id === weekendWorker);
       if (!weekendWorker || key !== weekendKey || !canWorkShift(weekendAux, "morning", year, month, day)) {
         weekendKey = key;
-        const weekendTeam = index === 5 ? availableTeam.filter(aux => !previousWorked.has(aux.id)) : availableTeam;
+        const weekendTeam = index === 5
+          ? weekendOwnerTeam({ team: availableTeam, previousWorked, shift: "morning", year, month, day })
+          : availableTeam;
         weekendWorker = pickWeekendOwner({ team: weekendTeam.length ? weekendTeam : availableTeam, pointers, shift: "morning", year, month, day });
         weekendHandover = weekendWorker;
       }
@@ -377,7 +397,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       preferred: morningOwner,
       team: morningTeam,
       pointers,
-      load,
+      load: primaryLoad,
       shift: "morning",
       year,
       month,
@@ -386,13 +406,13 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       preferLeader: !weekend,
       preferWeekendOnly: weekend,
     });
-    addShift(plan, "morning", morningWorker, load, dayExtras({ primary: morningWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }));
+    addShift(plan, "morning", morningWorker, load, dayExtras({ primary: morningWorker, team: morningTeam, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }), primaryLoad);
 
     const afternoonWorker = pickPreferredOrNext({
       preferred: serviceOwner,
       team: availableTeam,
       pointers,
-      load,
+      load: primaryLoad,
       shift: "afternoon",
       year,
       month,
@@ -401,7 +421,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
       preferLeader: !weekend,
       preferWeekendOnly: weekend,
     });
-    addShift(plan, "afternoon", afternoonWorker, load, dayExtras({ primary: afternoonWorker, team: availableTeam, pointers, load, shift: "afternoon", year, month, day, weekend, dayDoubles }));
+    addShift(plan, "afternoon", afternoonWorker, load, dayExtras({ primary: afternoonWorker, team: availableTeam, pointers, load, shift: "afternoon", year, month, day, weekend, dayDoubles }), primaryLoad);
 
     const afternoonAux = availableTeam.find(aux => aux.id === afternoonWorker);
     const nightWorker = afternoonAux && canWorkShift(afternoonAux, "night", year, month, day)
@@ -410,7 +430,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
           preferred: serviceOwner,
           team: availableTeam,
           pointers,
-          load,
+          load: primaryLoad,
           shift: "night",
           year,
           month,
@@ -419,15 +439,15 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
           preferLeader: false,
           preferWeekendOnly: weekend,
         });
-    addShift(plan, "night", nightWorker, load, nightExtras({ primary: nightWorker, team: availableTeam, pointers, load, year, month, day, weekend, dayDoubles }));
+    addShift(plan, "night", nightWorker, load, nightExtras({ primary: nightWorker, team: availableTeam, pointers, load, year, month, day, weekend, dayDoubles }), primaryLoad);
 
     schedule[day] = plan;
     const workedToday = new Set();
     SHIFT_DEFS.forEach(shift => {
       shiftWorkers(plan[shift.id]).forEach(worker => {
         blocks.push({ day, shift: shift.id, worker, hours: shift.hours });
-        workedToday.add(worker);
       });
+      if (plan[shift.id]?.worker) workedToday.add(plan[shift.id].worker);
     });
     previousWorked = workedToday;
     if (weekend && index === 6) weekendHandover = plan.afternoon?.worker || plan.morning?.worker || weekendHandover;
@@ -448,7 +468,8 @@ function previousWeekendRest({ year, month, auxiliaries, rotationDays }) {
   const rest = new Set();
   [previousTotal].forEach(day => {
     SHIFT_DEFS.forEach(shift => {
-      shiftWorkers(previous.schedule[day]?.[shift.id]).forEach(worker => rest.add(worker));
+      const worker = previous.schedule[day]?.[shift.id]?.worker;
+      if (worker) rest.add(worker);
     });
   });
   return [...rest];
