@@ -6,10 +6,14 @@ const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.fi
 
 export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
+  const formatNames = ids => ids.map((id, index) => {
+    const name = findName(id);
+    return index === 0 ? name : name.trim().charAt(0).toUpperCase();
+  }).join(" + ");
   const dayRows = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1).map(day => {
     const plan = schedule[day] || {};
     const lines = SHIFT_DEFS.map(shift => {
-      const names = shiftWorkerIds(plan[shift.id]).map(findName).join(" + ") || "A definir";
+      const names = formatNames(shiftWorkerIds(plan[shift.id])) || "A definir";
       return `<div class="slot"><b>${SHIFT_LABEL[shift.id]}</b><span>${esc(names)}</span><em>${shift.hours}h</em></div>`;
     }).join("");
     return `<td><div class="date">${day} ${dayName(year, month, day)}</div>${lines}</td>`;
