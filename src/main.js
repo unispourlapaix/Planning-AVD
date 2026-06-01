@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "./mailto-gmail.js?v=20260601";
+import { initPlanningShareButton } from "./modules/share-button.js?v=20260601";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
@@ -11,3 +11,4 @@ const [{ default: App }, { h }] = await Promise.all([
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));
+initPlanningShareButton();
