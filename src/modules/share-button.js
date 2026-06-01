@@ -24,8 +24,16 @@ const waitForActions = () => new Promise(resolve => {
   find();
 });
 
-export function initPlanningShareButton() {
-  if (!globalThis.firebase?.auth || !globalThis.firebase?.firestore) return;
+const waitForFirebase = () => new Promise(resolve => {
+  const find = () => {
+    if (globalThis.firebase?.auth && globalThis.firebase?.firestore) resolve();
+    else setTimeout(find, 120);
+  };
+  find();
+});
+
+export async function initPlanningShareButton() {
+  await waitForFirebase();
   const auth = firebase.auth();
   const db = firebase.firestore();
 
