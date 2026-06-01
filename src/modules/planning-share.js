@@ -21,7 +21,6 @@ export async function sharePlanningByEmail({ db, user, year, month, auxiliaries,
   const recipients = uniqueEmails(auxiliaries);
   if (!recipients.length) throw new Error("Ajoutez les emails des auxiliaires dans Reglages.");
 
-  const count = await publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours });
   const appUrl = `${window.location.origin}${window.location.pathname}`;
   const subject = `Votre planning Planning-AVD - ${MONTHS[month]} ${year}`;
   const body = [
@@ -33,7 +32,11 @@ export async function sharePlanningByEmail({ db, user, year, month, auxiliaries,
     "",
     "Votre planning reste personnel et visible uniquement apres connexion.",
   ].join("\n");
+  const gmailUrl = buildGmailUrl({ recipients, subject, body });
+  const gmailTab = window.open("about:blank", "_blank");
 
-  window.location.href = buildGmailUrl({ recipients, subject, body });
+  const count = await publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours });
+  if (gmailTab) gmailTab.location.href = gmailUrl;
+  else window.location.href = gmailUrl;
   return count;
 }
