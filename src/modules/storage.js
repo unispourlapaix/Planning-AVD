@@ -1,6 +1,11 @@
 const LOCAL_KEY = "planning-avd-state-v2";
+const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
+const migrateState = state => {
+  if (!state || state.rotationRevision === ROTATION_REVISION) return state;
+  return { ...state, overrides: {}, rotationRevision: ROTATION_REVISION };
+};
 
 export const defaultState = () => {
   const now = new Date();
@@ -15,11 +20,11 @@ export const defaultState = () => {
 };
 
 export async function loadState({ db, user }) {
-  const local = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
+  const local = migrateState(JSON.parse(localStorage.getItem(LOCAL_KEY) || "null"));
   if (!db || !user?.uid) return local;
   try {
     const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
-    return snap.exists ? snap.data().value : local;
+    return snap.exists ? migrateState(snap.data().value) : local;
   } catch (error) {
     console.warn("Lecture cloud impossible, repli local.", error);
     return local;
@@ -27,7 +32,7 @@ export async function loadState({ db, user }) {
 }
 
 export async function saveState({ db, user, state }) {
-  const value = { ...state, updatedAt: new Date().toISOString() };
+  const value = { ...state, rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return;
   try {
