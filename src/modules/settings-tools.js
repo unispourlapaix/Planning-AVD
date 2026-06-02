@@ -18,7 +18,7 @@ const buildPanel = () => {
 };
 
 const refreshSettingsTools = () => {
-  const config = document.querySelector(".app:not(.personal-app) > .layout > .layout");
+  const config = document.querySelector(".app:not(.personal-app) .rotation-options")?.closest(".layout");
   const sources = TOOL_LABELS.map(label => findSourceButton(label)).filter(Boolean);
   sources.forEach(button => button.classList.add("settings-tool-source"));
 
