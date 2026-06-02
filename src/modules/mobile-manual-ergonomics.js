@@ -76,6 +76,11 @@ export function initMobileManualErgonomics() {
         .app:not(.personal-app) .topbar>.tabs .tab:first-child{display:none}
         .app:not(.personal-app) .topbar>.tabs .tab{display:flex;min-width:0;min-height:31px;gap:3px;padding:5px 3px;border-radius:6px;font-size:clamp(9px,2.8vw,11px);white-space:nowrap}
         .app:not(.personal-app) .topbar>.tabs .tab-icon{font-size:13px}
+        .app:not(.personal-app) .calendar{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow-x:visible}
+        .app:not(.personal-app) .calendar>.dow{display:none}
+        .app:not(.personal-app) .day-card{min-width:0;min-height:132px;padding:6px;gap:4px}
+        .app:not(.personal-app) .slot-name{white-space:normal;overflow-wrap:anywhere;text-overflow:clip;line-height:1.1}
+        .app:not(.personal-app) .week-days{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
         .personal-app{padding:6px}
         .personal-app::before{display:none}
         .personal-app .topbar{position:sticky;top:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 7px;padding:6px;border-radius:0 0 9px 9px;background:rgba(255,255,255,.94);overflow:visible}
@@ -96,6 +101,10 @@ export function initMobileManualErgonomics() {
         .personal-app .panel{padding:8px}
         .personal-app .personal-summary{gap:6px;font-size:11px}
         .personal-app .personal-summary h3{font-size:12px}
+        .personal-app .week-days,.personal-app .personal-month{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow-x:visible}
+        .personal-app .day-card{min-width:0;min-height:128px;padding:6px;gap:4px}
+        .personal-app .personal-slot{min-width:0;grid-template-columns:minmax(0,1fr);gap:2px;padding:4px;font-size:10px}
+        .personal-app .personal-slot span{min-width:0;overflow-wrap:anywhere}
       }
       @media (max-width:900px) and (orientation:landscape){
         .personal-app{padding:6px}
