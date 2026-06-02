@@ -24,6 +24,12 @@ const waitForActions = () => new Promise(resolve => {
   find();
 });
 
+const renameSaveButton = actions => {
+  const saveButton = [...actions.querySelectorAll("button")]
+    .find(item => item.textContent.includes("Publier"));
+  if (saveButton) saveButton.textContent = "☁ Sauvegarder";
+};
+
 const waitForFirebase = () => new Promise(resolve => {
   const find = () => {
     if (globalThis.firebase?.auth && globalThis.firebase?.firestore) resolve();
@@ -33,6 +39,10 @@ const waitForFirebase = () => new Promise(resolve => {
 });
 
 export async function initPlanningShareButton() {
+  const initialActions = await waitForActions();
+  renameSaveButton(initialActions);
+  new MutationObserver(() => renameSaveButton(initialActions))
+    .observe(initialActions, { childList: true, subtree: true, characterData: true });
   await waitForFirebase();
   const auth = firebase.auth();
   const db = firebase.firestore();
@@ -45,9 +55,7 @@ export async function initPlanningShareButton() {
 
     const actions = await waitForActions();
     if (document.getElementById("planning-share-button")) return;
-    const saveButton = [...actions.querySelectorAll("button")]
-      .find(item => item.textContent.includes("Publier"));
-    if (saveButton) saveButton.textContent = "☁ Sauvegarder";
+    renameSaveButton(actions);
     const button = document.createElement("button");
     button.id = "planning-share-button";
     button.className = "btn active";
