@@ -37,10 +37,22 @@ export function initVisualShiftLabels() {
     document.head.appendChild(style);
   }
 
-  refreshLabels();
-  new MutationObserver(refreshLabels).observe(document.body, {
+  const options = {
     childList: true,
     subtree: true,
-    characterData: true,
+  };
+  let scheduled = false;
+  const observer = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(() => {
+      observer.disconnect();
+      refreshLabels();
+      observer.observe(document.body, options);
+      scheduled = false;
+    }, 0);
   });
+
+  refreshLabels();
+  observer.observe(document.body, options);
 }
