@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260602-module-1-stacked";
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-module-2-share";
+import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260602-module-3-team-calendar-safe";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
@@ -14,3 +15,4 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));
 initVisualShiftLabels();
 initPlanningShareButton();
+initPersonalTeamCalendar();
