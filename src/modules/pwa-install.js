@@ -9,7 +9,9 @@ const installHelp = () => {
 
 export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {}));
+    const register = () => navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+    if (document.readyState === "complete") register();
+    else window.addEventListener("load", register, { once: true });
   }
 
   let installPrompt = null;
@@ -37,7 +39,7 @@ export function initPwaInstall() {
     actionRow.appendChild(button);
   };
 
-  addButton();
-  new MutationObserver(addButton).observe(document.body, { childList: true, subtree: true });
+  setTimeout(addButton, 0);
+  setTimeout(addButton, 1200);
   window.addEventListener("appinstalled", () => document.querySelector(".pwa-install-button")?.remove());
 }
