@@ -1,4 +1,4 @@
-const CACHE_NAME = "planning-avd-shell-v1";
+const CACHE_NAME = "planning-avd-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
