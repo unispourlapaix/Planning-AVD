@@ -43,6 +43,20 @@ export function initMobileManualErgonomics() {
       .editable-slot.manual-override{border-color:rgba(212,106,168,.72);box-shadow:inset 3px 0 0 rgba(212,106,168,.78)}
       .editable-slot.manual-override::after{content:"";position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:#d46aa8;box-shadow:0 0 0 2px rgba(255,255,255,.92)}
       @media (max-width:560px) and (orientation:portrait){
+        .app:not(.personal-app){padding:6px}
+        .app:not(.personal-app)::before{display:none}
+        .app:not(.personal-app) .topbar{position:sticky;top:0;display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:6px;border-radius:0 0 9px 9px;background:rgba(255,255,255,.94)}
+        .app:not(.personal-app) .topbar>.title-row{gap:5px}
+        .app:not(.personal-app) .topbar h1{font-size:14px}
+        .app:not(.personal-app) .topbar .action-row{gap:3px;max-width:68%;flex-wrap:wrap}
+        .app:not(.personal-app) .topbar .action-row .btn{min-height:27px;padding:5px 6px;border-radius:6px;font-size:10px}
+        .app:not(.personal-app) .topbar>.month-row{display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:center;gap:4px}
+        .app:not(.personal-app) .topbar>.month-row h2{min-width:0;margin:0;font-size:14px;text-align:center}
+        .app:not(.personal-app) .topbar>.month-row .btn{width:30px;height:28px;border-radius:6px;font-size:19px}
+        .app:not(.personal-app) .topbar>.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;width:100%}
+        .app:not(.personal-app) .topbar>.tabs .tab:first-child{display:none}
+        .app:not(.personal-app) .topbar>.tabs .tab{display:flex;min-width:0;min-height:31px;gap:3px;padding:5px 3px;border-radius:6px;font-size:clamp(9px,2.8vw,11px);white-space:nowrap}
+        .app:not(.personal-app) .topbar>.tabs .tab-icon{font-size:13px}
         .personal-app{padding:6px}
         .personal-app::before{display:none}
         .personal-app .topbar{position:sticky;top:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 7px;padding:6px;border-radius:0 0 9px 9px;background:rgba(255,255,255,.94);overflow:visible}
