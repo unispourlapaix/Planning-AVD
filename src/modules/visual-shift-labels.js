@@ -30,9 +30,9 @@ export function initVisualShiftLabels() {
     const style = document.createElement("style");
     style.id = "visual-shift-labels-style";
     style.textContent = `
-      .slot{grid-template-columns:54px minmax(0,1fr)}
-      .slot-label{font-size:7px;line-height:1.05;padding:3px 1px;letter-spacing:0}
-      .personal-slot{grid-template-columns:54px minmax(0,1fr)}
+      .slot,.personal-slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px}
+      .slot-label{display:block;font-size:7px;line-height:1.05;padding:1px 0 0;letter-spacing:0;text-align:left}
+      .slot-name{display:block;min-width:0}
     `;
     document.head.appendChild(style);
   }
