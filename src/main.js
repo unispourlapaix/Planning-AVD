@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260602-module-1-safe";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
@@ -10,3 +11,4 @@ const [{ default: App }, { h }] = await Promise.all([
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));
+initVisualShiftLabels();
