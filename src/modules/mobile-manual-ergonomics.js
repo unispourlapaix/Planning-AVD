@@ -64,10 +64,10 @@ export function initMobileManualErgonomics() {
         .app:not(.personal-app){padding:6px}
         .app:not(.personal-app)::before{display:none}
         .app:not(.personal-app) .topbar{position:sticky;top:0;display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:6px;border-radius:0 0 9px 9px;background:rgba(255,255,255,.94)}
-        .app:not(.personal-app) .topbar>.title-row{gap:5px}
+        .app:not(.personal-app) .topbar>.title-row{display:grid;grid-template-columns:minmax(0,1fr);gap:5px}
         .app:not(.personal-app) .topbar h1{font-size:14px}
-        .app:not(.personal-app) .topbar .action-row{gap:3px;max-width:68%;flex-wrap:wrap}
-        .app:not(.personal-app) .topbar .action-row .btn{min-height:27px;padding:5px 6px;border-radius:6px;font-size:10px}
+        .app:not(.personal-app) .topbar .action-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;width:100%;max-width:none}
+        .app:not(.personal-app) .topbar .action-row .btn{min-width:0;min-height:27px;padding:5px 2px;border-radius:6px;font-size:clamp(7px,2.35vw,10px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .app:not(.personal-app) .topbar>.month-row{display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:center;gap:4px}
         .app:not(.personal-app) .topbar>.month-row h2{min-width:0;margin:0;font-size:14px;text-align:center}
         .app:not(.personal-app) .topbar>.month-row h2.mobile-month-access{cursor:pointer;padding:5px;border-radius:6px}
