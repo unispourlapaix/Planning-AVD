@@ -9,6 +9,19 @@ const refreshLabels = () => {
     const label = LABELS[node.textContent.trim()];
     if (label) node.textContent = label;
   });
+
+  const auxiliaryNames = Array.from(document.querySelectorAll(".summary .pill"))
+    .map(node => node.textContent.split("·").pop().trim())
+    .filter(Boolean);
+  document.querySelectorAll(".slot-name").forEach(node => {
+    const parts = node.textContent.split(" + ");
+    if (parts.length < 2) return;
+    node.textContent = parts.map((part, index) => {
+      if (index === 0 || part.trim().length !== 1) return part;
+      const name = auxiliaryNames.find(item => item.toUpperCase().startsWith(part.trim().toUpperCase()));
+      return name ? name.slice(0, 3) : part;
+    }).join(" + ");
+  });
 };
 
 export function initVisualShiftLabels() {
