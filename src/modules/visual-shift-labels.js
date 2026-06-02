@@ -30,7 +30,7 @@ export function initVisualShiftLabels() {
     const style = document.createElement("style");
     style.id = "visual-shift-labels-style";
     style.textContent = `
-      .slot,.personal-slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px}
+      .slot,.week-days .slot,.personal-slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;align-items:start}
       .slot-label{display:block;font-size:7px;line-height:1.05;padding:1px 0 0;letter-spacing:0;text-align:left}
       .slot-name{display:block;min-width:0}
     `;
