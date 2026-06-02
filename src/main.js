@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260602-module-1-safe";
+import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260602-module-1-stacked";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
