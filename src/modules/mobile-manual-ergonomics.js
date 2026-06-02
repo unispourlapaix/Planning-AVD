@@ -18,7 +18,25 @@ const readVisibleMonth = () => {
   return month >= 0 ? { year: Number(match[2]), month } : null;
 };
 
+const enhanceMonthAccess = () => {
+  const title = document.querySelector(".app:not(.personal-app) .topbar>.month-row h2");
+  if (!title || title.dataset.mobileMonthAccess) return;
+  title.dataset.mobileMonthAccess = "true";
+  title.classList.add("mobile-month-access");
+  title.title = "Afficher le calendrier du mois";
+  title.setAttribute("role", "button");
+  title.tabIndex = 0;
+  const openMonth = () => document.querySelector(".app:not(.personal-app) .topbar>.tabs .tab:first-child")?.click();
+  title.addEventListener("click", openMonth);
+  title.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openMonth();
+  });
+};
+
 const refreshManualMarkers = () => {
+  enhanceMonthAccess();
   const visible = readVisibleMonth();
   if (!visible) return;
   const overrides = readState().overrides || {};
@@ -52,6 +70,7 @@ export function initMobileManualErgonomics() {
         .app:not(.personal-app) .topbar .action-row .btn{min-height:27px;padding:5px 6px;border-radius:6px;font-size:10px}
         .app:not(.personal-app) .topbar>.month-row{display:grid;grid-template-columns:30px minmax(0,1fr) 30px;align-items:center;gap:4px}
         .app:not(.personal-app) .topbar>.month-row h2{min-width:0;margin:0;font-size:14px;text-align:center}
+        .app:not(.personal-app) .topbar>.month-row h2.mobile-month-access{cursor:pointer;padding:5px;border-radius:6px}
         .app:not(.personal-app) .topbar>.month-row .btn{width:30px;height:28px;border-radius:6px;font-size:19px}
         .app:not(.personal-app) .topbar>.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;width:100%}
         .app:not(.personal-app) .topbar>.tabs .tab:first-child{display:none}
