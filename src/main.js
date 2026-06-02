@@ -4,6 +4,7 @@ import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=202606
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-module-2-share";
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260602-module-3-team-calendar-safe";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260602-module-4-install-safe";
+import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260602-module-5";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
@@ -18,3 +19,4 @@ initVisualShiftLabels();
 initPlanningShareButton();
 initPersonalTeamCalendar();
 initPwaInstall();
+initMobileManualErgonomics();
