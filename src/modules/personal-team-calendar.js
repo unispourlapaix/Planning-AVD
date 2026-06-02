@@ -2,10 +2,95 @@ import { MONTHS } from "./constants.js";
 
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
-const shiftLabels = { morning: "AM", afternoon: "PM", night: "SR" };
-const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }[char]));
-const waitForFirebase = () => new Promise(resolve => { const find = () => globalThis.firebase?.auth && globalThis.firebase?.firestore ? resolve() : setTimeout(find, 120); find(); });
-const readVisibleMonth = () => { const title = document.querySelector(".personal-app .month-row h2")?.textContent || ""; const match = title.match(/^(.*)\s+(\d{4})$/); const month = MONTHS.indexOf(match?.[1]); return month >= 0 ? { year: Number(match[2]), month } : null; };
-const ensureStyle = () => { if (document.getElementById("personal-team-calendar-style")) return; const style = document.createElement("style"); style.id = "personal-team-calendar-style"; style.textContent = `.team-month-panel{margin-top:14px}.team-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.team-month-dow{font-size:11px;font-weight:800;text-align:center;color:#746d61;padding:5px}.team-month-day{min-height:108px;padding:7px;border:1px solid rgba(137,126,108,.25);border-radius:7px;background:rgba(255,255,255,.72)}.team-month-day.weekend{background:rgba(242,233,255,.7)}.team-month-date{font-weight:900;margin-bottom:5px}.team-month-slot{display:grid;grid-template-columns:22px 1fr;gap:4px;font-size:11px;line-height:1.25;margin-top:4px}.team-month-slot b{color:#746d61}.team-month-slot span{color:#366e94;font-weight:700;overflow-wrap:anywhere}@media(max-width:760px){.team-month-grid{min-width:900px}.team-month-scroll{overflow:auto}}`; document.head.appendChild(style); };
-const render = ({ calendar = [], year, month }) => { const layout = document.querySelector(".personal-app .layout"); if (!layout) return; document.getElementById("personal-team-calendar")?.remove(); const panel = document.createElement("section"); panel.id = "personal-team-calendar"; panel.className = "panel team-month-panel"; const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7; const blanks = Array.from({ length: firstOffset }, () => "<div></div>").join(""); const days = calendar.map(item => { const weekend = [0, 6].includes(new Date(year, month, item.day).getDay()) ? " weekend" : ""; const slots = ["morning", "afternoon", "night"].map(shift => { const names = (item.shifts?.[shift] || []).map(escapeHtml).join(" + ") || "Repos"; return `<div class="team-month-slot"><b>${shiftLabels[shift]}</b><span>${names}</span></div>`; }).join(""); return `<div class="team-month-day${weekend}"><div class="team-month-date">${item.day}</div>${slots}</div>`; }).join(""); panel.innerHTML = `<h3>Planning equipe - ${MONTHS[month]} ${year}</h3><div class="team-month-scroll"><div class="team-month-grid"><div class="team-month-dow">L</div><div class="team-month-dow">M</div><div class="team-month-dow">M</div><div class="team-month-dow">J</div><div class="team-month-dow">V</div><div class="team-month-dow">S</div><div class="team-month-dow">D</div>${blanks}${days}</div></div>`; layout.appendChild(panel); };
-export async function initPersonalTeamCalendar() { ensureStyle(); await waitForFirebase(); const auth = firebase.auth(); const db = firebase.firestore(); let unsubscribe = null; let activeKey = ""; const subscribe = user => { const visible = readVisibleMonth(); if (!user?.email || !visible || !document.querySelector(".personal-app")) return; const key = `${user.email}-${visible.year}-${visible.month}`; if (key === activeKey) return; unsubscribe?.(); activeKey = key; unsubscribe = db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month)).onSnapshot(snap => render({ calendar: snap.data()?.calendar || [], ...visible })); }; auth.onAuthStateChanged(async user => { unsubscribe?.(); unsubscribe = null; activeKey = ""; document.getElementById("personal-team-calendar")?.remove(); if (!user?.uid) return; const admin = await db.collection("planning-avd-admins").doc(user.uid).get().catch(() => null); if (admin?.exists) return; const refresh = () => subscribe(user); refresh(); new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true }); }); }
+const shiftLabels = { morning: "Matin", afternoon: "Après-midi", night: "Soir" };
+const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({
+  "<": "&lt;",
+  ">": "&gt;",
+  "&": "&amp;",
+  "\"": "&quot;",
+}[char]));
+
+const waitForFirebase = () => new Promise(resolve => {
+  const find = () => {
+    if (globalThis.firebase?.auth && globalThis.firebase?.firestore) resolve();
+    else setTimeout(find, 120);
+  };
+  find();
+});
+
+const readVisibleMonth = () => {
+  const title = document.querySelector(".personal-app .month-row h2")?.textContent || "";
+  const match = title.match(/^(.*)\s+(\d{4})$/);
+  const month = MONTHS.indexOf(match?.[1]);
+  return month >= 0 ? { year: Number(match[2]), month } : null;
+};
+
+const ensureStyle = () => {
+  if (document.getElementById("personal-team-calendar-style")) return;
+  const style = document.createElement("style");
+  style.id = "personal-team-calendar-style";
+  style.textContent = `
+    .team-month-panel{margin-top:14px}.team-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}
+    .team-month-dow{font-size:11px;font-weight:800;text-align:center;color:#746d61;padding:5px}
+    .team-month-day{min-height:108px;padding:7px;border:1px solid rgba(137,126,108,.25);border-radius:7px;background:rgba(255,255,255,.72)}
+    .team-month-day.weekend{background:rgba(242,233,255,.7)}.team-month-date{font-weight:900;margin-bottom:5px}
+    .team-month-slot{display:grid;grid-template-columns:54px 1fr;gap:3px;font-size:11px;line-height:1.25;margin-top:4px}
+    .team-month-slot b{color:#746d61;font-size:8px;line-height:1.05}.team-month-slot span{color:#366e94;font-weight:700;overflow-wrap:anywhere}
+    @media(max-width:760px){.team-month-grid{min-width:900px}.team-month-scroll{overflow:auto}}
+  `;
+  document.head.appendChild(style);
+};
+
+const render = ({ calendar = [], year, month }) => {
+  const layout = document.querySelector(".personal-app .layout");
+  if (!layout) return;
+  document.getElementById("personal-team-calendar")?.remove();
+  const panel = document.createElement("section");
+  panel.id = "personal-team-calendar";
+  panel.className = "panel team-month-panel";
+  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const blanks = Array.from({ length: firstOffset }, () => "<div></div>").join("");
+  const days = calendar.map(item => {
+    const weekend = [0, 6].includes(new Date(year, month, item.day).getDay()) ? " weekend" : "";
+    const slots = ["morning", "afternoon", "night"].map(shift => {
+      const names = (item.shifts?.[shift] || []).map(escapeHtml).join(" + ") || "Repos";
+      return `<div class="team-month-slot"><b>${shiftLabels[shift]}</b><span>${names}</span></div>`;
+    }).join("");
+    return `<div class="team-month-day${weekend}"><div class="team-month-date">${item.day}</div>${slots}</div>`;
+  }).join("");
+  panel.innerHTML = `<h3>Planning equipe - ${MONTHS[month]} ${year}</h3><div class="team-month-scroll"><div class="team-month-grid"><div class="team-month-dow">L</div><div class="team-month-dow">M</div><div class="team-month-dow">M</div><div class="team-month-dow">J</div><div class="team-month-dow">V</div><div class="team-month-dow">S</div><div class="team-month-dow">D</div>${blanks}${days}</div></div>`;
+  layout.appendChild(panel);
+};
+
+export async function initPersonalTeamCalendar() {
+  ensureStyle();
+  await waitForFirebase();
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  let unsubscribe = null;
+  let activeKey = "";
+
+  const subscribe = user => {
+    const visible = readVisibleMonth();
+    if (!user?.email || !visible || !document.querySelector(".personal-app")) return;
+    const key = `${user.email}-${visible.year}-${visible.month}`;
+    if (key === activeKey) return;
+    unsubscribe?.();
+    activeKey = key;
+    unsubscribe = db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
+      .onSnapshot(snap => render({ calendar: snap.data()?.calendar || [], ...visible }));
+  };
+
+  auth.onAuthStateChanged(async user => {
+    unsubscribe?.();
+    unsubscribe = null;
+    activeKey = "";
+    document.getElementById("personal-team-calendar")?.remove();
+    if (!user?.uid) return;
+    const admin = await db.collection("planning-avd-admins").doc(user.uid).get().catch(() => null);
+    if (admin?.exists) return;
+    const refresh = () => subscribe(user);
+    refresh();
+    new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+}
