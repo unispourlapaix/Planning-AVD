@@ -45,6 +45,9 @@ export async function initPlanningShareButton() {
 
     const actions = await waitForActions();
     if (document.getElementById("planning-share-button")) return;
+    const saveButton = [...actions.querySelectorAll("button")]
+      .find(item => item.textContent.includes("Publier"));
+    if (saveButton) saveButton.textContent = "☁ Sauvegarder";
     const button = document.createElement("button");
     button.id = "planning-share-button";
     button.className = "btn active";
