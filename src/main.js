@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-wait-firebase";
+import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-save-label";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
