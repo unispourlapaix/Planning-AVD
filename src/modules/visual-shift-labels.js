@@ -16,11 +16,12 @@ const refreshLabels = () => {
   document.querySelectorAll(".slot-name").forEach(node => {
     const parts = node.textContent.split(" + ");
     if (parts.length < 2) return;
-    node.textContent = parts.map((part, index) => {
+    const label = parts.map((part, index) => {
       if (index === 0 || part.trim().length !== 1) return part;
       const name = auxiliaryNames.find(item => item.toUpperCase().startsWith(part.trim().toUpperCase()));
       return name ? name.slice(0, 3) : part;
     }).join(" + ");
+    if (node.textContent !== label) node.textContent = label;
   });
 };
 
