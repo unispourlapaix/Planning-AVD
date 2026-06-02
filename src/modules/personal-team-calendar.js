@@ -34,8 +34,8 @@ const ensureStyle = () => {
     .team-month-dow{font-size:11px;font-weight:800;text-align:center;color:#746d61;padding:5px}
     .team-month-day{min-height:108px;padding:7px;border:1px solid rgba(137,126,108,.25);border-radius:7px;background:rgba(255,255,255,.72)}
     .team-month-day.weekend{background:rgba(242,233,255,.7)}.team-month-date{font-weight:900;margin-bottom:5px}
-    .team-month-slot{display:grid;grid-template-columns:54px 1fr;gap:3px;font-size:11px;line-height:1.25;margin-top:4px}
-    .team-month-slot b{color:#746d61;font-size:8px;line-height:1.05}.team-month-slot span{color:#366e94;font-weight:700;overflow-wrap:anywhere}
+    .team-month-slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;font-size:11px;line-height:1.25;margin-top:4px}
+    .team-month-slot b{display:block;color:#746d61;font-size:8px;line-height:1.05}.team-month-slot span{color:#366e94;font-weight:700;overflow-wrap:anywhere}
     @media(max-width:760px){.team-month-grid{min-width:900px}.team-month-scroll{overflow:auto}}
   `;
   document.head.appendChild(style);
@@ -69,6 +69,7 @@ export async function initPersonalTeamCalendar() {
   const db = firebase.firestore();
   let unsubscribe = null;
   let activeKey = "";
+  let pageObserver = null;
 
   const subscribe = user => {
     const visible = readVisibleMonth();
@@ -78,12 +79,14 @@ export async function initPersonalTeamCalendar() {
     unsubscribe?.();
     activeKey = key;
     unsubscribe = db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
-      .onSnapshot(snap => render({ calendar: snap.data()?.calendar || [], ...visible }));
+      .onSnapshot(snap => render({ calendar: snap.data()?.calendar || [], ...visible }), () => {});
   };
 
   auth.onAuthStateChanged(async user => {
     unsubscribe?.();
     unsubscribe = null;
+    pageObserver?.disconnect();
+    pageObserver = null;
     activeKey = "";
     document.getElementById("personal-team-calendar")?.remove();
     if (!user?.uid) return;
@@ -91,6 +94,7 @@ export async function initPersonalTeamCalendar() {
     if (admin?.exists) return;
     const refresh = () => subscribe(user);
     refresh();
-    new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true });
+    pageObserver = new MutationObserver(refresh);
+    pageObserver.observe(document.body, { childList: true, subtree: true });
   });
 }
