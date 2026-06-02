@@ -5,6 +5,7 @@ import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-mo
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260602-module-3-team-calendar-safe";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260602-module-4-install-safe";
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260602-module-6-admin-mobile-tabs-month-access";
+import { initSettingsTools } from "./modules/settings-tools.js?v=20260602-module-7";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
@@ -20,3 +21,4 @@ initPlanningShareButton();
 initPersonalTeamCalendar();
 initPwaInstall();
 initMobileManualErgonomics();
+initSettingsTools();
