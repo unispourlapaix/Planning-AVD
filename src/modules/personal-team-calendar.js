@@ -3,7 +3,7 @@ import { MONTHS } from "./constants.js";
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const shiftLabels = { morning: "Matin", afternoon: "Après-midi", night: "Soir" };
+const shiftLabels = { morning: "Matin 11h", afternoon: "Après-midi 17h", night: "Soir" };
 const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
   ">": "&gt;",
