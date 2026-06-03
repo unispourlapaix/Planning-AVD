@@ -9,7 +9,7 @@
   "display": "standalone",
   "background_color": "#f8f5ef",
   "theme_color": "#f8f5ef",
-  "orientation": "landscape",
+  "orientation": "any",
   "icons": [
     {
       "src": "./icons/planning-avd-192.png",
