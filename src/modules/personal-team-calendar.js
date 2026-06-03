@@ -2,6 +2,7 @@ import { MONTHS } from "./constants.js";
 
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
+const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const shiftLabels = { morning: "Matin", afternoon: "Après-midi", night: "Soir" };
 const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
@@ -25,41 +26,80 @@ const readVisibleMonth = () => {
   return month >= 0 ? { year: Number(match[2]), month } : null;
 };
 
+const monthGrid = (year, month) => {
+  const first = new Date(year, month, 1);
+  const days = new Date(year, month + 1, 0).getDate();
+  const offset = (first.getDay() + 6) % 7;
+  return [
+    ...Array.from({ length: offset }, () => null),
+    ...Array.from({ length: days }, (_, index) => index + 1),
+  ];
+};
+
+const weekStarts = (year, month) => {
+  const days = new Date(year, month + 1, 0).getDate();
+  const starts = [];
+  for (let day = 1; day <= days; day += 7) starts.push(day);
+  return starts;
+};
+
 const ensureStyle = () => {
   if (document.getElementById("personal-team-calendar-style")) return;
   const style = document.createElement("style");
   style.id = "personal-team-calendar-style";
   style.textContent = `
-    .team-month-panel{margin-top:14px}.team-month-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}
-    .team-month-dow{font-size:11px;font-weight:800;text-align:center;color:#746d61;padding:5px}
-    .team-month-day{min-height:108px;padding:7px;border:1px solid rgba(137,126,108,.25);border-radius:7px;background:rgba(255,255,255,.72)}
-    .team-month-day.weekend{background:rgba(242,233,255,.7)}.team-month-date{font-weight:900;margin-bottom:5px}
-    .team-month-slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;font-size:11px;line-height:1.25;margin-top:4px}
-    .team-month-slot b{display:block;color:#746d61;font-size:8px;line-height:1.05}.team-month-slot span{color:#366e94;font-weight:700;overflow-wrap:anywhere}
-    @media(max-width:760px){.team-month-grid{min-width:900px}.team-month-scroll{overflow:auto}}
+    .personal-app>.layout>.week-grid,.personal-app>.layout>.personal-month{display:none!important}
+    .team-admin-view{display:grid;gap:12px}
+    .team-admin-view h3{margin:0 0 8px}
+    .team-admin-view .slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;align-items:start}
+    .team-admin-view .slot-name{white-space:normal;overflow-wrap:anywhere;text-overflow:clip;line-height:1.1}
+    .team-admin-view .slot-label{display:block;font-size:7px;line-height:1.05;padding:1px 0 0;text-align:left}
   `;
   document.head.appendChild(style);
+};
+
+const activePersonalView = () => {
+  const active = document.querySelector(".personal-app .personal-tabs .btn.active")?.textContent || "";
+  return active.includes("Mois") ? "month" : "week";
+};
+
+const slotHtml = (item, shift) => {
+  const names = (item?.shifts?.[shift] || []).map(escapeHtml).join(" + ") || "Repos";
+  return `<div class="slot"><span class="slot-label">${shiftLabels[shift]}</span><span class="slot-name">${names}</span></div>`;
+};
+
+const dayHtml = (item, year, month) => {
+  if (!item) return `<div class="day-card empty"></div>`;
+  const date = new Date(year, month, item.day);
+  const tone = date.getDay() === 6 ? " saturday" : date.getDay() === 0 ? " sunday" : "";
+  return `<div class="day-card${tone}">
+    <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</span></div>
+    ${["morning", "afternoon", "night"].map(shift => slotHtml(item, shift)).join("")}
+  </div>`;
 };
 
 const render = ({ calendar = [], year, month }) => {
   const layout = document.querySelector(".personal-app .layout");
   if (!layout) return;
   document.getElementById("personal-team-calendar")?.remove();
-  const panel = document.createElement("section");
-  panel.id = "personal-team-calendar";
-  panel.className = "panel team-month-panel";
-  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
-  const blanks = Array.from({ length: firstOffset }, () => "<div></div>").join("");
-  const days = calendar.map(item => {
-    const weekend = [0, 6].includes(new Date(year, month, item.day).getDay()) ? " weekend" : "";
-    const slots = ["morning", "afternoon", "night"].map(shift => {
-      const names = (item.shifts?.[shift] || []).map(escapeHtml).join(" + ") || "Repos";
-      return `<div class="team-month-slot"><b>${shiftLabels[shift]}</b><span>${names}</span></div>`;
+  if (!calendar.length) return;
+  const byDay = Object.fromEntries(calendar.map(item => [item.day, item]));
+  const view = activePersonalView();
+  const section = document.createElement("section");
+  section.id = "personal-team-calendar";
+  section.className = "team-admin-view";
+  if (view === "month") {
+    section.innerHTML = `<div class="calendar">
+      ${DAYS_SHORT.map((day, index) => `<div class="dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}">${day}</div>`).join("")}
+      ${monthGrid(year, month).map(day => day ? dayHtml(byDay[day], year, month) : dayHtml(null, year, month)).join("")}
+    </div>`;
+  } else {
+    section.innerHTML = weekStarts(year, month).map(start => {
+      const days = Array.from({ length: 7 }, (_, index) => start + index).filter(day => byDay[day]);
+      return `<section class="panel"><h3>Semaine du ${start} ${MONTHS[month]}</h3><div class="week-days">${days.map(day => dayHtml(byDay[day], year, month)).join("")}</div></section>`;
     }).join("");
-    return `<div class="team-month-day${weekend}"><div class="team-month-date">${item.day}</div>${slots}</div>`;
-  }).join("");
-  panel.innerHTML = `<h3>Planning equipe - ${MONTHS[month]} ${year}</h3><div class="team-month-scroll"><div class="team-month-grid"><div class="team-month-dow">L</div><div class="team-month-dow">M</div><div class="team-month-dow">M</div><div class="team-month-dow">J</div><div class="team-month-dow">V</div><div class="team-month-dow">S</div><div class="team-month-dow">D</div>${blanks}${days}</div></div>`;
-  layout.appendChild(panel);
+  }
+  layout.appendChild(section);
 };
 
 export async function initPersonalTeamCalendar() {
@@ -69,17 +109,32 @@ export async function initPersonalTeamCalendar() {
   const db = firebase.firestore();
   let unsubscribe = null;
   let activeKey = "";
+  let lastPayload = null;
+  let lastRenderedView = "";
   let pageObserver = null;
 
   const subscribe = user => {
     const visible = readVisibleMonth();
     if (!user?.email || !visible || !document.querySelector(".personal-app")) return;
     const key = `${user.email}-${visible.year}-${visible.month}`;
-    if (key === activeKey) return;
+    const view = activePersonalView();
+    if (key === activeKey) {
+      if (lastPayload && view !== lastRenderedView) {
+        render(lastPayload);
+        lastRenderedView = view;
+      }
+      return;
+    }
     unsubscribe?.();
     activeKey = key;
+    lastPayload = null;
+    lastRenderedView = "";
     unsubscribe = db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
-      .onSnapshot(snap => render({ calendar: snap.data()?.calendar || [], ...visible }), () => {});
+      .onSnapshot(snap => {
+        lastPayload = { calendar: snap.data()?.calendar || [], ...visible };
+        lastRenderedView = activePersonalView();
+        render(lastPayload);
+      }, () => {});
   };
 
   auth.onAuthStateChanged(async user => {
