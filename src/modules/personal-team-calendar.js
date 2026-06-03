@@ -48,7 +48,7 @@ const ensureStyle = () => {
   const style = document.createElement("style");
   style.id = "personal-team-calendar-style";
   style.textContent = `
-    .personal-app>.layout>.week-grid,.personal-app>.layout>.personal-month{display:none!important}
+    .personal-app.team-calendar-ready>.layout>.week-grid,.personal-app.team-calendar-ready>.layout>.personal-month{display:none!important}
     .team-admin-view{display:grid;gap:12px}
     .team-admin-view h3{margin:0 0 8px}
     .team-admin-view .slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;align-items:start}
@@ -80,8 +80,10 @@ const dayHtml = (item, year, month) => {
 
 const render = ({ calendar = [], year, month }) => {
   const layout = document.querySelector(".personal-app .layout");
+  const app = document.querySelector(".personal-app");
   if (!layout) return;
   document.getElementById("personal-team-calendar")?.remove();
+  app?.classList.remove("team-calendar-ready");
   if (!calendar.length) return;
   const byDay = Object.fromEntries(calendar.map(item => [item.day, item]));
   const view = activePersonalView();
@@ -100,6 +102,7 @@ const render = ({ calendar = [], year, month }) => {
     }).join("");
   }
   layout.appendChild(section);
+  app?.classList.add("team-calendar-ready");
 };
 
 export async function initPersonalTeamCalendar() {
@@ -144,6 +147,7 @@ export async function initPersonalTeamCalendar() {
     pageObserver = null;
     activeKey = "";
     document.getElementById("personal-team-calendar")?.remove();
+    document.querySelector(".personal-app")?.classList.remove("team-calendar-ready");
     if (!user?.uid) return;
     const admin = await db.collection("planning-avd-admins").doc(user.uid).get().catch(() => null);
     if (admin?.exists) return;
