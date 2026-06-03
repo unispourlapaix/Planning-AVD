@@ -1,6 +1,6 @@
 const LABELS = {
-  AM: "Matin",
-  PM: "Après-midi",
+  AM: "Matin 11h",
+  PM: "Après-midi 17h",
   SR: "Soir",
 };
 
