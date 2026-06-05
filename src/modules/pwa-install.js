@@ -2,22 +2,45 @@ const isStandalone = () => window.matchMedia("(display-mode: standalone)").match
 
 const installHelp = () => {
   const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  alert(isiOS
-    ? "Pour installer Planning-AVD : ouvrez le menu Partager puis choisissez Ajouter à l'écran d'accueil."
-    : "Pour installer Planning-AVD : ouvrez le menu du navigateur puis choisissez Installer ou Ajouter à l'écran d'accueil.");
+  const isFirefox = /firefox|fxios/i.test(navigator.userAgent);
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const message = isiOS
+    ? "Installation iPhone/iPad : ouvrez le bouton Partager, puis Ajouter à l'écran d'accueil."
+    : isFirefox
+      ? "Firefox ne laisse pas toujours le site ouvrir l'installation automatiquement. Ouvrez le menu du navigateur, puis Installer ou Ajouter à l'écran d'accueil."
+      : isAndroid
+        ? "Si le bouton automatique ne s'ouvre pas encore, rechargez la page puis ouvrez le menu du navigateur et choisissez Installer l'application."
+        : "Si le bouton automatique ne s'ouvre pas encore, ouvrez le menu du navigateur puis choisissez Installer Planning-AVD.";
+  alert(message);
+};
+
+const wait = timeout => new Promise(resolve => setTimeout(resolve, timeout));
+
+const getInstallPrompt = () => window.__planningAvdInstallPrompt || null;
+
+const setButtonReady = button => {
+  button.classList.add("is-ready");
+  button.title = "Installer Planning-AVD sur cet appareil";
 };
 
 export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
-    const register = () => navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
-    if (document.readyState === "complete") register();
-    else window.addEventListener("load", register, { once: true });
+    navigator.serviceWorker
+      .register("./sw.js", { scope: "./", updateViaCache: "none" })
+      .then(registration => registration.update().catch(() => {}))
+      .catch(() => {});
   }
 
-  let installPrompt = null;
+  let installPrompt = getInstallPrompt();
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault();
     installPrompt = event;
+    window.__planningAvdInstallPrompt = event;
+    document.querySelectorAll(".pwa-install-button").forEach(setButtonReady);
+  });
+  window.addEventListener("planning-avd-install-ready", () => {
+    installPrompt = getInstallPrompt();
+    document.querySelectorAll(".pwa-install-button").forEach(setButtonReady);
   });
 
   const addButton = () => {
@@ -29,10 +52,22 @@ export function initPwaInstall() {
     button.type = "button";
     button.textContent = "Installer";
     button.title = "Installer Planning-AVD sur cet appareil";
+    if (installPrompt || getInstallPrompt()) setButtonReady(button);
     button.addEventListener("click", async () => {
+      if (isStandalone()) return button.remove();
+      if (!installPrompt) installPrompt = getInstallPrompt();
+      if (!installPrompt && navigator.serviceWorker?.ready) {
+        button.disabled = true;
+        button.textContent = "Préparation";
+        await Promise.race([navigator.serviceWorker.ready, wait(1800)]).catch(() => {});
+        installPrompt = getInstallPrompt();
+        button.disabled = false;
+        button.textContent = "Installer";
+      }
       if (!installPrompt) return installHelp();
-      installPrompt.prompt();
-      await installPrompt.userChoice;
+      await installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => {});
+      if (window.__planningAvdInstallPrompt === installPrompt) window.__planningAvdInstallPrompt = null;
       installPrompt = null;
       if (isStandalone()) button.remove();
     });
