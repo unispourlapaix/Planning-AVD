@@ -2,8 +2,18 @@ const isStandalone = () => window.matchMedia("(display-mode: standalone)").match
 const isiOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isFirefox = () => /firefox|fxios/i.test(navigator.userAgent);
 const isAndroid = () => /android/i.test(navigator.userAgent);
+const isEdge = () => /edg\//i.test(navigator.userAgent);
 const needsManualInstall = () => isiOS() || isFirefox();
 const installLabel = () => needsManualInstall() ? "Ajouter" : "Installer";
+const INSTALL_RELOAD_KEY = "planning-avd-edge-install-reload";
+
+const getAppScope = () => {
+  const currentUrl = new URL(window.location.href);
+  if (currentUrl.pathname === "/Planning-AVD" || currentUrl.pathname.startsWith("/Planning-AVD/")) {
+    return new URL("/Planning-AVD/", currentUrl.origin);
+  }
+  return new URL("./", currentUrl.href);
+};
 
 const installHelp = () => {
   const message = isiOS()
@@ -12,6 +22,8 @@ const installHelp = () => {
       ? "Firefox Android : ouvrez le menu du navigateur, puis Ajouter à l'écran d'accueil."
       : isFirefox()
         ? "Firefox ordinateur ne propose pas l'installation automatique comme Chrome ou Edge. Gardez l'onglet ouvert ou créez un raccourci depuis le navigateur."
+      : isEdge()
+        ? "Edge : si la fenetre ne s'ouvre pas, ouvrez le menu du navigateur, puis Applications, puis Installer ce site comme une application."
       : isAndroid()
         ? "Si le bouton automatique ne s'ouvre pas encore, rechargez la page puis ouvrez le menu du navigateur et choisissez Installer l'application."
         : "Si le bouton automatique ne s'ouvre pas encore, ouvrez le menu du navigateur puis choisissez Installer Planning-AVD.";
@@ -22,6 +34,19 @@ const wait = timeout => new Promise(resolve => setTimeout(resolve, timeout));
 
 const getInstallPrompt = () => window.__planningAvdInstallPrompt || null;
 
+const reloadOnceForInstall = button => {
+  try {
+    if (sessionStorage.getItem(INSTALL_RELOAD_KEY) === "done") return false;
+    sessionStorage.setItem(INSTALL_RELOAD_KEY, "done");
+  } catch {
+    return false;
+  }
+  button.disabled = true;
+  button.textContent = "Activation";
+  window.location.reload();
+  return true;
+};
+
 const setButtonReady = button => {
   button.classList.add("is-ready");
   button.title = "Installer Planning-AVD sur cet appareil";
@@ -29,7 +54,7 @@ const setButtonReady = button => {
 
 export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
-    const appScope = new URL("./", window.location.href);
+    const appScope = getAppScope();
     const serviceWorkerUrl = new URL("sw.js", appScope);
     navigator.serviceWorker
       .register(serviceWorkerUrl.href, { scope: appScope.pathname, updateViaCache: "none" })
@@ -42,6 +67,9 @@ export function initPwaInstall() {
     event.preventDefault();
     installPrompt = event;
     window.__planningAvdInstallPrompt = event;
+    try {
+      sessionStorage.removeItem(INSTALL_RELOAD_KEY);
+    } catch {}
     document.querySelectorAll(".pwa-install-button").forEach(setButtonReady);
   });
   window.addEventListener("planning-avd-install-ready", () => {
@@ -71,6 +99,7 @@ export function initPwaInstall() {
         button.disabled = false;
         button.textContent = installLabel();
       }
+      if (!installPrompt && reloadOnceForInstall(button)) return;
       if (!installPrompt) return installHelp();
       await installPrompt.prompt();
       await installPrompt.userChoice.catch(() => {});
