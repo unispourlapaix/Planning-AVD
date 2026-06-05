@@ -24,7 +24,7 @@ const installHelp = () => {
       : isFirefox()
         ? "Firefox ordinateur ne propose pas l'installation automatique comme Chrome ou Edge. Gardez l'onglet ouvert ou créez un raccourci depuis le navigateur."
       : isEdge()
-        ? "Edge n'a pas encore donne la fenetre native. Rechargez la page, puis cherchez l'icone application dans la barre d'adresse pour installer Planning-AVD."
+        ? "Planning-AVD est pret comme app. Edge bloque seulement le bouton automatique ici : ouvrez le menu Edge, puis Applications, puis Installer Planning-AVD. Si Edge ecrit Installer ce site comme une application, c'est bien l'app Planning-AVD."
       : isAndroid()
         ? "Si le bouton automatique ne s'ouvre pas encore, rechargez la page puis ouvrez le menu du navigateur et choisissez Installer l'application."
         : "Si le bouton automatique ne s'ouvre pas encore, ouvrez le menu du navigateur puis choisissez Installer Planning-AVD.";
@@ -63,6 +63,12 @@ const setButtonReady = button => {
   button.title = "Installer Planning-AVD sur cet appareil";
 };
 
+const setButtonWaiting = button => {
+  if (needsManualInstall()) return;
+  button.classList.remove("is-ready");
+  button.title = "Edge peut demander une installation manuelle si le bouton natif n'est pas disponible";
+};
+
 export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
     const appScope = getAppScope();
@@ -99,6 +105,7 @@ export function initPwaInstall() {
     button.textContent = installLabel();
     button.title = needsManualInstall() ? "Voir comment ajouter Planning-AVD" : "Installer Planning-AVD sur cet appareil";
     if (installPrompt || getInstallPrompt()) setButtonReady(button);
+    else setButtonWaiting(button);
     button.addEventListener("click", async () => {
       if (isStandalone()) return button.remove();
       if (needsManualInstall()) return installHelp();
