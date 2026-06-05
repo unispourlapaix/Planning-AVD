@@ -4,7 +4,7 @@ const isFirefox = () => /firefox|fxios/i.test(navigator.userAgent);
 const isAndroid = () => /android/i.test(navigator.userAgent);
 const isEdge = () => /edg\//i.test(navigator.userAgent);
 const needsManualInstall = () => isiOS() || isFirefox();
-const installLabel = () => needsManualInstall() ? "Ajouter" : "Installer";
+const installLabel = () => needsManualInstall() ? "Ajouter" : "Installer l'app";
 const INSTALL_RELOAD_KEY = "planning-avd-edge-install-reload";
 
 const getAppScope = () => {
@@ -23,7 +23,7 @@ const installHelp = () => {
       : isFirefox()
         ? "Firefox ordinateur ne propose pas l'installation automatique comme Chrome ou Edge. Gardez l'onglet ouvert ou créez un raccourci depuis le navigateur."
       : isEdge()
-        ? "Edge : si la fenetre ne s'ouvre pas, ouvrez le menu du navigateur, puis Applications, puis Installer ce site comme une application."
+        ? "Edge n'a pas encore donne la fenetre native. Rechargez la page, puis cherchez l'icone application dans la barre d'adresse pour installer Planning-AVD."
       : isAndroid()
         ? "Si le bouton automatique ne s'ouvre pas encore, rechargez la page puis ouvrez le menu du navigateur et choisissez Installer l'application."
         : "Si le bouton automatique ne s'ouvre pas encore, ouvrez le menu du navigateur puis choisissez Installer Planning-AVD.";
