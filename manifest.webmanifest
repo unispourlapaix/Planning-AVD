@@ -7,7 +7,7 @@
   "start_url": "/Planning-AVD/",
   "scope": "/Planning-AVD/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": ["standalone"],
   "background_color": "#f8f5ef",
   "theme_color": "#f8f5ef",
   "orientation": "any",
@@ -18,13 +18,25 @@
       "src": "./icons/planning-avd-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/planning-avd-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "./icons/planning-avd-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/planning-avd-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
