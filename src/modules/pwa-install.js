@@ -29,8 +29,10 @@ const setButtonReady = button => {
 
 export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
+    const appScope = new URL("./", window.location.href);
+    const serviceWorkerUrl = new URL("sw.js", appScope);
     navigator.serviceWorker
-      .register("./sw.js", { scope: "./", updateViaCache: "none" })
+      .register(serviceWorkerUrl.href, { scope: appScope.pathname, updateViaCache: "none" })
       .then(registration => registration.update().catch(() => {}))
       .catch(() => {});
   }
