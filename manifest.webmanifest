@@ -4,8 +4,8 @@
   "short_name": "Planning-AVD",
   "description": "Planning prive des auxiliaires de vie",
   "lang": "fr",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/Planning-AVD/",
+  "scope": "/Planning-AVD/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#f8f5ef",
@@ -18,7 +18,7 @@
       "src": "./icons/planning-avd-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "./icons/planning-avd-512.png",
