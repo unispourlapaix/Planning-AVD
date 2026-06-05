@@ -5,7 +5,8 @@ const isAndroid = () => /android/i.test(navigator.userAgent);
 const isEdge = () => /edg\//i.test(navigator.userAgent);
 const needsManualInstall = () => isiOS() || isFirefox();
 const installLabel = () => needsManualInstall() ? "Ajouter" : "Installer l'app";
-const INSTALL_RELOAD_KEY = "planning-avd-edge-install-reload";
+const INSTALL_RELOAD_KEY = "planning-avd-edge-app-install-reload";
+const CONTROL_RELOAD_KEY = "planning-avd-edge-app-controlled";
 
 const getAppScope = () => {
   const currentUrl = new URL(window.location.href);
@@ -47,6 +48,16 @@ const reloadOnceForInstall = button => {
   return true;
 };
 
+const reloadOnceAfterControl = async () => {
+  if (!("serviceWorker" in navigator) || navigator.serviceWorker.controller) return;
+  try {
+    if (sessionStorage.getItem(CONTROL_RELOAD_KEY) === "done") return;
+    sessionStorage.setItem(CONTROL_RELOAD_KEY, "done");
+    await Promise.race([navigator.serviceWorker.ready, wait(2200)]);
+    if (!navigator.serviceWorker.controller) window.location.reload();
+  } catch {}
+};
+
 const setButtonReady = button => {
   button.classList.add("is-ready");
   button.title = "Installer Planning-AVD sur cet appareil";
@@ -58,7 +69,7 @@ export function initPwaInstall() {
     const serviceWorkerUrl = new URL("sw.js", appScope);
     navigator.serviceWorker
       .register(serviceWorkerUrl.href, { scope: appScope.pathname, updateViaCache: "none" })
-      .then(registration => registration.update().catch(() => {}))
+      .then(registration => registration.update().catch(() => {}).finally(reloadOnceAfterControl))
       .catch(() => {});
   }
 
@@ -69,6 +80,7 @@ export function initPwaInstall() {
     window.__planningAvdInstallPrompt = event;
     try {
       sessionStorage.removeItem(INSTALL_RELOAD_KEY);
+      sessionStorage.removeItem(CONTROL_RELOAD_KEY);
     } catch {}
     document.querySelectorAll(".pwa-install-button").forEach(setButtonReady);
   });
@@ -95,6 +107,7 @@ export function initPwaInstall() {
         button.disabled = true;
         button.textContent = "Préparation";
         await Promise.race([navigator.serviceWorker.ready, wait(1800)]).catch(() => {});
+        if (!navigator.serviceWorker.controller && reloadOnceForInstall(button)) return;
         installPrompt = getInstallPrompt();
         button.disabled = false;
         button.textContent = installLabel();
