@@ -13,6 +13,14 @@
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/planning-avd-192.png" />
     <title>Planning-AVD</title>
     <link rel="stylesheet" href="./src/styles.css?v=20260601-toolbar" />
+    <script>
+      window.__planningAvdInstallPrompt = null;
+      window.addEventListener("beforeinstallprompt", event => {
+        event.preventDefault();
+        window.__planningAvdInstallPrompt = event;
+        window.dispatchEvent(new Event("planning-avd-install-ready"));
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
@@ -26,6 +34,6 @@
         }
       }
     </script>
-    <script type="module" src="./src/main.js?v=20260603-shift-times"></script>
+    <script type="module" src="./src/main.js?v=20260606-install-button"></script>
   </body>
 </html>
