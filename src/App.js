@@ -4,6 +4,7 @@ import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler-handover.js";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import { defaultState, isAdminUser, loadState, publishPersonalPlannings, saveState, subscribePersonalPlanning } from "./modules/storage.js";
+import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
@@ -24,6 +25,7 @@ const ICON_PATHS = {
   clock: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2"],
   settings: ["M4 7h10M18 7h2M4 17h2M10 17h10M8 14v6M16 4v6"],
   file: ["M6 3h8l4 4v14H6V3ZM14 3v5h5M8 13h8M8 17h6"],
+  sparkles: ["M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15ZM5 14l.7 1.8L8 16.5l-2.3.7L5 19l-.7-1.8L2 16.5l2.3-.7L5 14Z"],
   save: ["M5 4h12l2 2v14H5V4ZM8 4v6h8V4M8 20v-6h8v6"],
   restore: ["M4 7v6h6M5 13a7 7 0 1 0 2-7"],
   cloud: ["M7 18a4 4 0 0 1 .7-7.9A6 6 0 0 1 19 12a3 3 0 0 1 0 6H7ZM10 15l2 2 4-5"],
@@ -123,7 +125,7 @@ const extractBackupJson = text => {
   return (match ? match[1] : raw).trim();
 };
 
-function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onReport, onShareBackup, onRestoreBackup, onPublish }) {
+function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -140,6 +142,7 @@ function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMo
     h("div", { className: "title-row" },
       h("div", null, h("h1", null, "Planning-AVD"), h("div", { className: "muted" }, authState.user ? `Cloud actif : ${authState.user.email}` : "Sauvegarde locale, connexion Google disponible")),
       h("div", { className: "action-row" },
+        h(Button, { onClick: onCleanView }, h(IconLabel, { icon: "sparkles", label: "Vue propre" })),
         h(Button, { onClick: onReport }, h(IconLabel, { icon: "file", label: "Rapport" })),
         h(Button, { onClick: onShareBackup }, h(IconLabel, { icon: "save", label: "Sauvegarde" })),
         h(Button, { onClick: onRestoreBackup }, h(IconLabel, { icon: "restore", label: "Restaurer" })),
@@ -512,6 +515,14 @@ export default function App() {
     win.focus();
   };
 
+  const openCleanView = () => {
+    const html = buildCleanPlanningHtml({ year, month, auxiliaries: activeAux, schedule });
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+  };
+
   const publishPlanning = async () => {
     try {
       const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours });
@@ -594,6 +605,7 @@ export default function App() {
       setMonth,
       onLogin: () => signInWithGoogle(authState.auth).catch(error => alert(error.message)),
       onLogout: () => signOut(authState.auth),
+      onCleanView: openCleanView,
       onReport: openReport,
       onShareBackup: shareBackup,
       onRestoreBackup: restoreBackup,
