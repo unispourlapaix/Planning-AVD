@@ -11,12 +11,19 @@ export default function InstallBanner() {
   React.useEffect(() => {
     // [ID-PWA-03] The install prompt can only be opened after the browser gives this event.
     const dismissed = localStorage.getItem(DISMISSED_KEY) === "1";
+    const showExistingPrompt = () => {
+      const existingPrompt = window.__planningAvdInstallPrompt;
+      if (!existingPrompt || dismissed) return;
+      setInstallEvent(existingPrompt);
+      setShowInstall(true);
+    };
     const onInstallPrompt = event => {
       event.preventDefault();
       if (dismissed) return;
       setInstallEvent(event);
       setShowInstall(true);
     };
+    const onInstallReady = () => showExistingPrompt();
     const onAppInstalled = () => {
       setShowInstall(false);
       setInstallEvent(null);
@@ -27,11 +34,14 @@ export default function InstallBanner() {
       setUpdateReady(true);
     };
 
+    showExistingPrompt();
     window.addEventListener("beforeinstallprompt", onInstallPrompt);
+    window.addEventListener("planning-avd-install-ready", onInstallReady);
     window.addEventListener("appinstalled", onAppInstalled);
     window.addEventListener("planning-avd-update-ready", onUpdateReady);
     return () => {
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
+      window.removeEventListener("planning-avd-install-ready", onInstallReady);
       window.removeEventListener("appinstalled", onAppInstalled);
       window.removeEventListener("planning-avd-update-ready", onUpdateReady);
     };
