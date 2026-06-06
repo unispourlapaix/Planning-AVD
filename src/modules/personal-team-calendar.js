@@ -59,6 +59,7 @@ const ensureStyle = () => {
 };
 
 const activePersonalView = () => {
+  if (document.querySelector(".personal-app .month-title-btn.active")) return "month";
   const active = document.querySelector(".personal-app .personal-tabs .btn.active")?.textContent || "";
   return active.includes("Mois") ? "month" : "week";
 };
