@@ -14,7 +14,7 @@ export default defineConfig({
       injectRegister: false,
       manifestFilename: "manifest.json",
       includeManifestIcons: false,
-      includeAssets: ["apple-touch-icon.png", "icons/planning-avd-192.png", "icons/planning-avd-512.png", "offline.html"],
+      includeAssets: ["favicon.ico", "apple-touch-icon.png", "icons/planning-avd-favicon.png", "icons/planning-avd-192.png", "icons/planning-avd-512.png", "offline.html"],
       manifest: {
         id: appBase,
         name: "Planning-AVD",
@@ -28,8 +28,8 @@ export default defineConfig({
         background_color: "#f8f5ef",
         theme_color: "#f8f5ef",
         icons: [
-          { src: `${appBase}icons/planning-avd-192.png?v=20260606-icon-redraw`, sizes: "192x192", type: "image/png", purpose: "any maskable" },
-          { src: `${appBase}icons/planning-avd-512.png?v=20260606-icon-redraw`, sizes: "512x512", type: "image/png", purpose: "any maskable" },
+          { src: `${appBase}icons/planning-avd-192.png?v=20260606-transparent-icons`, sizes: "192x192", type: "image/png", purpose: "any maskable" },
+          { src: `${appBase}icons/planning-avd-512.png?v=20260606-transparent-icons`, sizes: "512x512", type: "image/png", purpose: "any maskable" },
         ],
       },
       workbox: {
