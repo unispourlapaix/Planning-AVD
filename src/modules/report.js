@@ -3,6 +3,21 @@ import { dayName, daysInMonth } from "./dates.js";
 
 const esc = value => String(value ?? "").replace(/[<>&]/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char]));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
+const displayHours = (raw = {}, fallbackQuota = 0) => {
+  const quota = Number(raw.quota ?? fallbackQuota) || 0;
+  const rawTotal = Number(raw.total) || 0;
+  const factor = rawTotal > quota && rawTotal > 0 ? quota / rawTotal : 1;
+  const capShift = value => Math.round((Number(value) || 0) * factor * 100) / 100;
+  const total = Math.min(rawTotal, quota);
+  return {
+    morning: capShift(raw.morning),
+    afternoon: capShift(raw.afternoon),
+    night: capShift(raw.night),
+    total,
+    quota,
+    pause: Math.max(0, Math.round((quota - total) * 100) / 100),
+  };
+};
 
 export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
@@ -22,8 +37,8 @@ export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
   for (let i = 0; i < dayRows.length; i += 7) rows.push(`<tr>${dayRows.slice(i, i + 7).join("")}</tr>`);
 
   const hourRows = auxiliaries.map(aux => {
-    const h = hours[aux.id] || { total: 0, quota: aux.quota || 0 };
-    return `<tr><td>${esc(aux.name)}</td><td>${h.morning}</td><td>${h.afternoon}</td><td>${h.night}</td><td>${h.total}</td><td>${h.quota}</td><td>${Math.round((h.quota - h.total) * 100) / 100}</td></tr>`;
+    const h = displayHours(hours[aux.id], aux.quota);
+    return `<tr><td>${esc(aux.name)}</td><td>${h.morning}</td><td>${h.afternoon}</td><td>${h.night}</td><td>${h.total}</td><td>${h.quota}</td><td>${h.pause}</td></tr>`;
   }).join("");
 
   return `<!doctype html><html><head><title>Rapport Planning-AVD</title><style>
