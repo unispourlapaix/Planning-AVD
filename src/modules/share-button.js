@@ -4,6 +4,7 @@ import { loadState } from "./storage.js";
 import { sharePlanningByEmail } from "./planning-share.js?v=20260602-email-fields";
 
 const LOCAL_KEY = "planning-avd-state-v2";
+const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
 const overrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 const applyOverrides = ({ schedule, overrides = {}, year, month }) => Object.fromEntries(
   Object.entries(schedule).map(([day, plan]) => [day, {
@@ -27,7 +28,7 @@ const waitForActions = () => new Promise(resolve => {
 const renameSaveButton = actions => {
   const saveButton = [...actions.querySelectorAll("button")]
     .find(item => item.textContent.includes("Publier"));
-  if (saveButton) saveButton.textContent = "☁ Sauvegarder";
+  if (saveButton) saveButton.innerHTML = `${lineIcon("M7 18a4 4 0 0 1 .7-7.9A6 6 0 0 1 19 12a3 3 0 0 1 0 6H7ZM10 15l2 2 4-5")}<span>Sauvegarder</span>`;
 };
 
 const waitForFirebase = () => new Promise(resolve => {
@@ -59,7 +60,7 @@ export async function initPlanningShareButton() {
     const button = document.createElement("button");
     button.id = "planning-share-button";
     button.className = "btn active";
-    button.textContent = "✉ Partager planning";
+    button.innerHTML = `${lineIcon("M4 6h16v12H4V6ZM4 7l8 6 8-6")}<span>Partager planning</span>`;
     button.addEventListener("click", async () => {
       try {
         const local = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
