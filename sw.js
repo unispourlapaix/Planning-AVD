@@ -1,14 +1,9 @@
-const CACHE_NAME = "planning-avd-app-v20260606-source-safe";
+const CACHE_NAME = "planning-avd-app-v20260606-icon-safe";
 const APP_SCOPE_PATH = new URL("./", self.location.href).pathname;
 const APP_SHELL_URL = new URL("./", self.location.href).href;
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./manifest.json",
-  "./manifest.webmanifest",
-  "./icons/planning-avd-192.png",
-  "./icons/planning-avd-512.png",
-  "./apple-touch-icon.png",
 ].map(path => new URL(path, self.location.href).href);
 const offlineResponse = () => new Response("Planning-AVD est indisponible hors connexion.", {
   headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -18,10 +13,6 @@ const offlineResponse = () => new Response("Planning-AVD est indisponible hors c
 const isPlanningAvdRequest = url =>
   url.origin === self.location.origin
   && (url.pathname === APP_SCOPE_PATH || url.pathname.startsWith(APP_SCOPE_PATH));
-
-const isSourceFileRequest = url =>
-  url.pathname.startsWith(`${APP_SCOPE_PATH}src/`)
-  || url.pathname.endsWith(".jsx");
 
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -43,28 +34,14 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || !isPlanningAvdRequest(url)) return;
-  if (isSourceFileRequest(url)) return;
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(APP_SHELL_URL, copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => caches.match(APP_SHELL_URL).then(response => response || offlineResponse())),
-    );
-    return;
-  }
+  if (event.request.mode !== "navigate") return;
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
-        }
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(APP_SHELL_URL, copy)).catch(() => {});
         return response;
       })
-      .catch(() => caches.match(event.request).then(response => response || caches.match(APP_SHELL_URL)).then(response => response || offlineResponse())),
+      .catch(() => caches.match(APP_SHELL_URL).then(response => response || offlineResponse())),
   );
 });
