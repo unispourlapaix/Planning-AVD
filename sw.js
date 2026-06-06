@@ -1,4 +1,4 @@
-const CACHE_NAME = "planning-avd-app-v20260606";
+const CACHE_NAME = "planning-avd-app-v20260606-source-safe";
 const APP_SCOPE_PATH = new URL("./", self.location.href).pathname;
 const APP_SHELL_URL = new URL("./", self.location.href).href;
 const PRECACHE_URLS = [
@@ -18,6 +18,10 @@ const offlineResponse = () => new Response("Planning-AVD est indisponible hors c
 const isPlanningAvdRequest = url =>
   url.origin === self.location.origin
   && (url.pathname === APP_SCOPE_PATH || url.pathname.startsWith(APP_SCOPE_PATH));
+
+const isSourceFileRequest = url =>
+  url.pathname.startsWith(`${APP_SCOPE_PATH}src/`)
+  || url.pathname.endsWith(".jsx");
 
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -39,6 +43,7 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || !isPlanningAvdRequest(url)) return;
+  if (isSourceFileRequest(url)) return;
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
