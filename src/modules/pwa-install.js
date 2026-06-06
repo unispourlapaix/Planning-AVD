@@ -58,6 +58,26 @@ const reloadOnceAfterControl = async () => {
   } catch {}
 };
 
+const notifyUpdateReady = registration => {
+  const updateServiceWorker = () => {
+    if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    window.location.reload();
+  };
+  window.dispatchEvent(new CustomEvent("planning-avd-update-ready", { detail: { updateServiceWorker } }));
+};
+
+const watchServiceWorkerUpdate = registration => {
+  if (registration.waiting) notifyUpdateReady(registration);
+  registration.addEventListener("updatefound", () => {
+    const worker = registration.installing;
+    if (!worker) return;
+    worker.addEventListener("statechange", () => {
+      if (worker.state === "installed" && navigator.serviceWorker.controller) notifyUpdateReady(registration);
+      if (worker.state === "activated") window.dispatchEvent(new Event("planning-avd-offline-ready"));
+    });
+  });
+};
+
 const setButtonReady = button => {
   button.classList.add("is-ready");
   button.title = "Installer Planning-AVD sur cet appareil";
@@ -73,9 +93,13 @@ export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
     const appScope = getAppScope();
     const serviceWorkerUrl = new URL("sw.js", appScope);
+    // [ID-PWA-04] This uses a real browser URL so GitHub Pages can load source files safely.
     navigator.serviceWorker
       .register(serviceWorkerUrl.href, { scope: appScope.pathname, updateViaCache: "none" })
-      .then(registration => registration.update().catch(() => {}).finally(reloadOnceAfterControl))
+      .then(registration => {
+        watchServiceWorkerUpdate(registration);
+        return registration.update().catch(() => {}).finally(reloadOnceAfterControl);
+      })
       .catch(() => {});
   }
 
