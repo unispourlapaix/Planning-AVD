@@ -49,6 +49,22 @@ h2 { font-size: 16px; }
 .rotation-options .btn small { font-weight: 700; color: #746d61; line-height: 1.2; }
 .rotation-options .btn.active small { color: rgba(255,255,255,.82); }
 .layout { display: grid; gap: 12px; margin-top: 12px; }
+.pwa-banner-host { width: min(1220px, 100%); margin: 0 auto; padding: 0 14px; position: relative; z-index: 6; }
+.install-banner {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(208,220,225,.92);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.98), 0 10px 24px rgba(84,111,124,.12);
+}
+.install-banner strong { display: block; color: #344753; font-weight: 900; }
+.install-banner span { color: #697981; font-size: 12px; font-weight: 700; }
+.install-banner-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .pill { border-radius: 999px; padding: 5px 8px; font-weight: 900; font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
 .calendar { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
@@ -122,6 +138,7 @@ h2 { font-size: 16px; }
   .topbar > .title-row { align-items: flex-start; gap: 6px; }
   .topbar .action-row { max-width: none; }
   .topbar .action-row .btn { padding: 6px; font-size: 11px; }
+  .install-banner { align-items: stretch; flex-direction: column; }
   .tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .tab { display: grid; min-height: 45px; padding: 5px 3px; font-size: 11px; }
 }
