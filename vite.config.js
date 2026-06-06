@@ -39,7 +39,7 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,json}"],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.origin === "https://firestore.googleapis.com" || url.pathname.startsWith("/api/"),
+            urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith("/api/"),
             handler: "NetworkFirst",
             options: {
               cacheName: "planning-avd-api",
