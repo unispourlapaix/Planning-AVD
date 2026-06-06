@@ -12,7 +12,7 @@ globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260606-clean-planning"),
+  import("./App.js?v=20260606-manual-overrides"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
