@@ -1,9 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { registerSW } from "virtual:pwa-register";
+import InstallBanner from "./components/InstallBanner.jsx";
 import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260603-shift-times";
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-module-2-share";
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260603-shift-times";
-import { initPwaInstall } from "./modules/pwa-install.js?v=20260606-edge-clear";
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260602-module-10-action-row";
 import { initSettingsTools } from "./modules/settings-tools.js?v=20260602-module-9-settings-only";
 
@@ -16,9 +17,22 @@ const [{ default: App }, { h }] = await Promise.all([
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));
+const bannerHost = document.createElement("div");
+bannerHost.className = "pwa-banner-host";
+document.body.prepend(bannerHost);
+ReactDOM.createRoot(bannerHost).render(React.createElement(InstallBanner));
+// [ID-PWA-04] Vite PWA owns the service worker and tells the UI when an update is ready.
+let applyServiceWorkerUpdate = () => window.location.reload();
+applyServiceWorkerUpdate = registerSW({
+  onNeedRefresh() {
+    window.dispatchEvent(new CustomEvent("planning-avd-update-ready", { detail: { updateServiceWorker: applyServiceWorkerUpdate } }));
+  },
+  onOfflineReady() {
+    window.dispatchEvent(new Event("planning-avd-offline-ready"));
+  },
+});
 initVisualShiftLabels();
 initPlanningShareButton();
 initPersonalTeamCalendar();
-initPwaInstall();
 initMobileManualErgonomics();
 initSettingsTools();
