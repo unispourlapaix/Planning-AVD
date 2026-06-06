@@ -5,6 +5,7 @@ import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import { defaultState, isAdminUser, loadState, publishPersonalPlannings, saveState, subscribePersonalPlanning } from "./modules/storage.js";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
+import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
@@ -108,7 +109,7 @@ const displayHours = (raw = {}, fallbackQuota = 0) => {
     pause: Math.max(0, Math.round((quota - total) * 100) / 100),
   };
 };
-const overrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
+const overrideKey = manualOverrideKey;
 const applyOverrides = ({ schedule, overrides, year, month }) => Object.fromEntries(Object.entries(schedule).map(([day, plan]) => [
   day,
   {
@@ -261,7 +262,26 @@ function RotationAudit({ checks }) {
   );
 }
 
-function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
+function ManualOverridesPanel({ items, onReset }) {
+  if (!items.length) return null;
+  const visible = items.slice(0, 8);
+  return h("section", { className: "panel manual-panel" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Modifications manuelles"),
+        h("div", { className: "muted" }, `${items.length} creneau(x) ajuste(s) a la main ce mois-ci.`),
+      ),
+    ),
+    h("div", { className: "manual-list" }, visible.map(item => h("div", { key: item.key, className: "manual-item" },
+      h("span", { className: "manual-chip" }, `${item.day} ${item.monthLabel}`),
+      h("span", null, h("b", null, item.shiftLabel), h("small", null, item.workerName)),
+      h(Button, { onClick: () => onReset(item.key) }, "Auto"),
+    ))),
+    items.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${items.length - visible.length} autre(s) modification(s).`) : null,
+  );
+}
+
+function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot }) {
   if (!day) return h("div", { className: "day-card empty" });
   return h("div", { className: `day-card${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
@@ -270,29 +290,38 @@ function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
       const worker = workers[0];
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
       const c = colorFor(index);
-      return h("button", { className: "slot editable-slot", key: shift.id, onClick: () => onEditSlot({ day, shift: shift.id }) },
+      const manual = !!overrides?.[overrideKey(year, month, day, shift.id)];
+      return h("button", {
+        className: `slot editable-slot${manual ? " manual-slot" : ""}`,
+        key: shift.id,
+        title: manual ? "Modification manuelle" : SHIFT_LABEL[shift.id],
+        onClick: () => onEditSlot({ day, shift: shift.id }),
+      },
         h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
-        h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
+        h("span", { className: "slot-content" },
+          h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
+          manual ? h("span", { className: "manual-badge" }, "Mod.") : null,
+        ),
       );
     }),
   );
 }
 
-function MonthView({ year, month, schedule, auxiliaries, onEditSlot }) {
+function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot }) {
   return h("section", { className: "layout" },
     h("div", { className: "calendar" },
       DAYS_SHORT.map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
-      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries, onEditSlot })),
+      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot })),
     ),
   );
 }
 
-function WeekView({ year, month, schedule, auxiliaries, onEditSlot }) {
+function WeekView({ year, month, schedule, auxiliaries, overrides, onEditSlot }) {
   return h("section", { className: "week-grid" }, weekStarts(year, month).map(start => {
     const days = Array.from({ length: 7 }, (_, i) => start + i).filter(day => schedule[day]);
     return h("div", { className: "panel", key: start },
       h("h3", null, `Semaine du ${start} ${MONTHS[month]}`),
-      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries, onEditSlot }))),
+      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries, overrides, onEditSlot }))),
     );
   }));
 }
@@ -506,6 +535,7 @@ export default function App() {
   const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
   const hours = useMemo(() => calculateHours(schedule, auxiliaries), [schedule, auxiliaries]);
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
+  const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
 
   const openReport = () => {
     const html = buildReportHtml({ year, month, auxiliaries: activeAux, schedule, hours });
@@ -614,8 +644,9 @@ export default function App() {
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
       h(RotationAudit, { checks: rotationChecks }),
-      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, onEditSlot: setSlotEdit }) : null,
-      view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, onEditSlot: setSlotEdit }) : null,
+      h(ManualOverridesPanel, { items: manualOverrides, onReset: key => setOverrides(current => { const next = { ...current }; delete next[key]; return next; }) }),
+      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit }) : null,
+      view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
