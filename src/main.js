@@ -4,6 +4,7 @@ import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=202606
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260607-modern-icons";
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260607-modern-icons";
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260602-module-10-action-row";
+import { initPersonalMobileView } from "./modules/personal-mobile-view.js?v=20260606-personal-mobile";
 import { initSettingsTools } from "./modules/settings-tools.js?v=20260602-module-9-settings-only";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260606-direct-sw";
 import { initPrivateDisplay } from "./modules/private-display.js?v=20260606-private-display";
@@ -12,7 +13,7 @@ globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260606-manual-overrides"),
+  import("./App.js?v=20260606-personal-mobile"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
@@ -22,5 +23,6 @@ initVisualShiftLabels();
 initPlanningShareButton();
 initPersonalTeamCalendar();
 initMobileManualErgonomics();
+initPersonalMobileView();
 initSettingsTools();
 initPrivateDisplay();
