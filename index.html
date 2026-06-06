@@ -19,6 +19,13 @@
         window.__planningAvdInstallPrompt = event;
         window.dispatchEvent(new Event("planning-avd-install-ready"));
       });
+      window.addEventListener("DOMContentLoaded", () => {
+        if (document.querySelector('link[rel="manifest"]')) return;
+        const manifestLink = document.createElement("link");
+        manifestLink.rel = "manifest";
+        manifestLink.href = "./manifest.json";
+        document.head.appendChild(manifestLink);
+      });
     </script>
   </head>
   <body>
@@ -33,6 +40,6 @@
         }
       }
     </script>
-    <script type="module" src="./src/main.js?v=20260606-pwa-vite"></script>
+    <script type="module" src="./src/main.js?v=20260606-direct-sw"></script>
   </body>
 </html>
