@@ -1,6 +1,5 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import InstallBanner from "./components/InstallBanner.jsx";
 import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260603-shift-times";
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260602-module-2-share";
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260603-shift-times";
@@ -17,10 +16,6 @@ const [{ default: App }, { h }] = await Promise.all([
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));
-const bannerHost = document.createElement("div");
-bannerHost.className = "pwa-banner-host";
-document.body.prepend(bannerHost);
-ReactDOM.createRoot(bannerHost).render(React.createElement(InstallBanner));
 initPwaInstall();
 initVisualShiftLabels();
 initPlanningShareButton();
