@@ -10,7 +10,7 @@
   "display_override": ["standalone"],
   "background_color": "#f8f5ef",
   "theme_color": "#f8f5ef",
-  "orientation": "any",
+  "orientation": "portrait",
   "categories": ["productivity", "utilities"],
   "prefer_related_applications": false,
   "icons": [
