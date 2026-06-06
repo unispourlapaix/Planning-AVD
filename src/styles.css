@@ -111,6 +111,31 @@ h2 { font-size: 16px; }
 .audit-item.warning .audit-dot { background: #f0b66e; box-shadow: 0 0 0 3px rgba(240,182,110,.18); }
 .audit-item.danger { border-color: rgba(224,138,138,.68); background: rgba(255,244,246,.9); }
 .audit-item.danger .audit-dot { background: #e08a8a; box-shadow: 0 0 0 3px rgba(224,138,138,.2); }
+.manual-panel { display: grid; gap: 10px; border-color: rgba(212,106,168,.28); background: rgba(255,252,255,.82); }
+.manual-panel h3 { margin: 0 0 3px; }
+.manual-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.manual-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(224,214,229,.9);
+  background: rgba(255,255,255,.72);
+}
+.manual-item b { display: block; color: #344753; font-size: 12px; line-height: 1.1; }
+.manual-item small { display: block; color: #d46aa8; font-weight: 900; line-height: 1.1; margin-top: 2px; }
+.manual-item .btn { padding: 5px 8px; font-size: 11px; }
+.manual-chip {
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: #fff0f7;
+  color: #8e2d62;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
 .calendar { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
 .dow { padding: 6px 4px; border-radius: 7px; font-size: 12px; color: #687a83; font-weight: 900; text-align: center; text-transform: uppercase; }
 .dow.saturday, .calendar > .dow:nth-child(6) { color: #4e7f99; background: rgba(218,239,249,.72); }
@@ -125,8 +150,22 @@ h2 { font-size: 16px; }
 .slot { display: grid; grid-template-columns: 32px 1fr; gap: 5px; align-items: center; padding: 5px; border-radius: 7px; background: rgba(255,255,255,.76); border: 1px solid rgba(215,225,228,.92); min-width: 0; }
 .editable-slot { width: 100%; text-align: left; color: inherit; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .editable-slot:hover, .editable-slot:focus-visible { border-color: #a8b99a; box-shadow: 0 6px 16px rgba(102,122,142,.16); transform: translateY(-1px); outline: none; }
+.manual-slot { border-color: rgba(212,106,168,.48); background: linear-gradient(90deg, rgba(255,240,247,.96), rgba(255,255,255,.82)); box-shadow: inset 3px 0 0 rgba(212,106,168,.42); }
+.manual-slot .slot-label { color: #8e2d62; border-color: rgba(212,106,168,.34); }
 .slot-label { color: #6c7b83; font-size: 10px; font-weight: 900; background: rgba(255,255,255,.92); border: 1px solid #dfe8eb; border-radius: 5px; text-align: center; padding: 3px 2px; }
+.slot-content { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .slot-name { font-size: 11px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manual-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 1px 4px;
+  background: #fff0f7;
+  color: #8e2d62;
+  border: 1px solid rgba(212,106,168,.36);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.25;
+}
 .panel { border-radius: 8px; padding: 12px; }
 .week-grid, .hours-grid { display: grid; gap: 8px; }
 .week-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
