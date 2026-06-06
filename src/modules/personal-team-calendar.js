@@ -64,7 +64,8 @@ const activePersonalView = () => {
 };
 
 const slotHtml = (item, shift) => {
-  const names = (item?.shifts?.[shift] || []).map(escapeHtml).join(" + ") || "Repos";
+  const primaryName = (item?.shifts?.[shift] || []).filter(Boolean)[0];
+  const names = primaryName ? escapeHtml(primaryName) : "Repos";
   return `<div class="slot"><span class="slot-label">${shiftLabels[shift]}</span><span class="slot-name">${names}</span></div>`;
 };
 
