@@ -17,10 +17,36 @@ const ROTATION_OPTIONS = [
 ];
 const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
 const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
+const ICON_PATHS = {
+  calendar: ["M7 3v4M17 3v4M4 9h16M6 5h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z"],
+  week: ["M4 5h16M4 12h16M4 19h16M8 5v14M16 5v14"],
+  clock: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2"],
+  settings: ["M4 7h10M18 7h2M4 17h2M10 17h10M8 14v6M16 4v6"],
+  file: ["M6 3h8l4 4v14H6V3ZM14 3v5h5M8 13h8M8 17h6"],
+  save: ["M5 4h12l2 2v14H5V4ZM8 4v6h8V4M8 20v-6h8v6"],
+  restore: ["M4 7v6h6M5 13a7 7 0 1 0 2-7"],
+  cloud: ["M7 18a4 4 0 0 1 .7-7.9A6 6 0 0 1 19 12a3 3 0 0 1 0 6H7ZM10 15l2 2 4-5"],
+  login: ["M10 17l5-5-5-5M15 12H3M21 5v14"],
+  logout: ["M14 17l5-5-5-5M19 12H7M3 5v14"],
+  print: ["M7 8V3h10v5M7 17H5a3 3 0 0 1 0-6h14a3 3 0 0 1 0 6h-2M7 14h10v7H7v-7Z"],
+  chevronLeft: ["M15 6l-6 6 6 6"],
+  chevronRight: ["M9 6l6 6-6 6"],
+  close: ["M6 6l12 12M18 6L6 18"],
+};
 const dayTone = (year, month, day) => {
   const index = new Date(year, month, day).getDay();
   return index === 6 ? " saturday" : index === 0 ? " sunday" : "";
 };
+function Icon({ name }) {
+  return h("svg", {
+    className: "icon",
+    viewBox: "0 0 24 24",
+    "aria-hidden": "true",
+  }, (ICON_PATHS[name] || []).map((d, index) => h("path", { key: index, d })));
+}
+function IconLabel({ icon, label }) {
+  return h(React.Fragment, null, h(Icon, { name: icon }), h("span", null, label));
+}
 
 const cloneDefaultAux = () => DEFAULT_AUXILIARIES.map(aux => ({ ...aux, customDays: [...aux.customDays] }));
 const normalizeAuxiliaries = (saved) => {
@@ -63,6 +89,22 @@ const planningNames = (auxiliaries, ids) => ids
   })
   .join(" + ");
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
+const displayHours = (raw = {}, fallbackQuota = 0) => {
+  const quota = Number(raw.quota ?? fallbackQuota) || 0;
+  const rawTotal = Number(raw.total) || 0;
+  const factor = rawTotal > quota && rawTotal > 0 ? quota / rawTotal : 1;
+  const capShift = value => Math.round((Number(value) || 0) * factor * 100) / 100;
+  const total = Math.min(rawTotal, quota);
+  return {
+    ...raw,
+    morning: capShift(raw.morning),
+    afternoon: capShift(raw.afternoon),
+    night: capShift(raw.night),
+    total,
+    quota,
+    pause: Math.max(0, Math.round((quota - total) * 100) / 100),
+  };
+};
 const overrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 const applyOverrides = ({ schedule, overrides, year, month }) => Object.fromEntries(Object.entries(schedule).map(([day, plan]) => [
   day,
@@ -88,37 +130,36 @@ function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMo
   };
 
   const tabs = [
-    ["month", "📅", "Mois"],
-    ["week", "📋", "Semaine"],
-    ["hours", "⏱", "Heures"],
-    ["config", "⚙️", "Réglages"],
+    ["week", "week", "Semaine"],
+    ["hours", "clock", "Heures"],
+    ["config", "settings", "Réglages"],
   ];
 
   return h("header", { className: "topbar" },
     h("div", { className: "title-row" },
       h("div", null, h("h1", null, "Planning-AVD"), h("div", { className: "muted" }, authState.user ? `Cloud actif : ${authState.user.email}` : "Sauvegarde locale, connexion Google disponible")),
       h("div", { className: "action-row" },
-        h(Button, { onClick: onReport }, "📄 Rapport"),
-        h(Button, { onClick: onShareBackup }, "✉️ Sauvegarde"),
-        h(Button, { onClick: onRestoreBackup }, "↩ Restaurer"),
-        authState.user && isAdmin ? h(Button, { active: true, onClick: onPublish }, "☁ Publier") : null,
+        h(Button, { onClick: onReport }, h(IconLabel, { icon: "file", label: "Rapport" })),
+        h(Button, { onClick: onShareBackup }, h(IconLabel, { icon: "save", label: "Sauvegarde" })),
+        h(Button, { onClick: onRestoreBackup }, h(IconLabel, { icon: "restore", label: "Restaurer" })),
+        authState.user && isAdmin ? h(Button, { active: true, onClick: onPublish }, h(IconLabel, { icon: "cloud", label: "Sauvegarder" })) : null,
         authState.user
-          ? h(Button, { active: true, onClick: onLogout }, "Connecté")
-          : h(Button, { onClick: onLogin }, "Connexion Google"),
+          ? h(Button, { active: true, onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Connecté" }))
+          : h(Button, { onClick: onLogin }, h(IconLabel, { icon: "login", label: "Connexion Google" })),
       ),
     ),
     authState.error ? h("div", { className: "muted" }, authState.error) : null,
     h("div", { className: "month-row" },
-      h(Button, { onClick: () => moveMonth(-1) }, "‹"),
-      h("h2", { style: { margin: 0 } }, `${MONTHS[month]} ${year}`),
-      h(Button, { onClick: () => moveMonth(1) }, "›"),
+      h(Button, { className: "icon-only", onClick: () => moveMonth(-1), title: "Mois precedent" }, h(Icon, { name: "chevronLeft" })),
+      h("h2", { style: { margin: 0 } }, h(Button, { active: view === "month", className: "month-title-btn", onClick: () => setView("month"), title: "Vue mensuelle" }, h(IconLabel, { icon: "calendar", label: `${MONTHS[month]} ${year}` }))),
+      h(Button, { className: "icon-only", onClick: () => moveMonth(1), title: "Mois suivant" }, h(Icon, { name: "chevronRight" })),
     ),
     h("nav", { className: "tabs" }, tabs.map(tab => h(Button, {
       key: tab[0],
       active: view === tab[0],
       className: "tab",
       onClick: () => setView(tab[0]),
-    }, h("span", { className: "tab-icon" }, tab[1]), h("span", null, tab[2])))),
+    }, h(Icon, { name: tab[1] }), h("span", null, tab[2])))),
   );
 }
 
@@ -129,7 +170,7 @@ function PersonalDayCard({ day, entries, year, month }) {
       const entry = entries.find(item => item.shift === shift.id);
       return h("div", { className: `personal-slot ${entry ? "scheduled" : ""}`, key: shift.id },
         h("span", { className: "slot-label" }, SHIFT_COMPACT_LABEL[shift.id]),
-        h("span", null, entry ? `${SHIFT_LABEL[shift.id]} · ${entry.hours}h` : "Repos"),
+        h("span", null, entry ? SHIFT_LABEL[shift.id] : "Repos"),
       );
     }),
   );
@@ -147,24 +188,22 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
   const weekGroups = [];
   for (let day = 1; day <= Object.keys(byDay).length; day += 7) weekGroups.push(Array.from({ length: 7 }, (_, index) => day + index).filter(item => byDay[item]));
-  const hData = planning?.hours || {};
   return h("main", { className: "app personal-app" },
     h("header", { className: "topbar" },
       h("div", { className: "title-row" },
         h("div", null, h("h1", null, "Mon planning"), h("div", { className: "muted" }, authState.user?.email || "")),
         h("div", { className: "action-row" },
-          h(Button, { onClick: () => window.print() }, "🖨 Imprimer"),
-          h(Button, { onClick: onLogout }, "Déconnexion"),
+          h(Button, { onClick: () => window.print() }, h(IconLabel, { icon: "print", label: "Imprimer" })),
+          h(Button, { onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Déconnexion" })),
         ),
       ),
       h("div", { className: "month-row" },
-        h(Button, { onClick: () => moveMonth(-1) }, "‹"),
-        h("h2", { style: { margin: 0 } }, `${MONTHS[month]} ${year}`),
-        h(Button, { onClick: () => moveMonth(1) }, "›"),
+        h(Button, { className: "icon-only", onClick: () => moveMonth(-1), title: "Mois precedent" }, h(Icon, { name: "chevronLeft" })),
+        h("h2", { style: { margin: 0 } }, h(Button, { active: personalView === "month", className: "month-title-btn", onClick: () => setPersonalView("month"), title: "Vue mensuelle" }, h(IconLabel, { icon: "calendar", label: `${MONTHS[month]} ${year}` }))),
+        h(Button, { className: "icon-only", onClick: () => moveMonth(1), title: "Mois suivant" }, h(Icon, { name: "chevronRight" })),
       ),
       h("nav", { className: "tabs personal-tabs" },
-        h(Button, { active: personalView === "week", onClick: () => setPersonalView("week") }, "📋 Semaines"),
-        h(Button, { active: personalView === "month", onClick: () => setPersonalView("month") }, "📅 Mois"),
+        h(Button, { active: personalView === "week", className: "tab", onClick: () => setPersonalView("week") }, h(IconLabel, { icon: "week", label: "Semaines" })),
       ),
     ),
     h("section", { className: "layout" },
@@ -172,7 +211,6 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       planning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel publié par votre administrateur.")),
-            h("b", null, `${hData.total || 0}h / ${hData.quota || 0}h`),
           )
         : h("div", { className: "panel" }, h("h3", null, "Planning en attente"), h("div", { className: "muted" }, "Votre administrateur n'a pas encore publié de planning pour ce mois.")),
       planning && personalView === "week"
@@ -190,7 +228,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
 
 function Summary({ auxiliaries, hours }) {
   return h("section", { className: "summary" }, auxiliaries.map((aux, index) => {
-    const hData = hours[aux.id] || { total: 0, quota: aux.quota || 0 };
+    const hData = displayHours(hours[aux.id], aux.quota);
     const c = colorFor(index);
     return h("div", { className: "panel", key: aux.id },
       h("div", { className: "pill", style: { background: c.light, color: c.text } }, aux.lead ? "Chef" : "Auxiliaire", " · ", aux.name),
@@ -208,6 +246,7 @@ function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
       const workers = shiftWorkerIds(plan?.[shift.id]);
       const worker = workers[0];
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
+      const c = colorFor(index);
       return h("button", { className: "slot editable-slot", key: shift.id, onClick: () => onEditSlot({ day, shift: shift.id }) },
         h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
         h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
@@ -242,7 +281,7 @@ function HoursView({ auxiliaries, hours }) {
       h("p", { className: "muted" }, "Les heures sont reparties automatiquement sur les jours travailles : 6h matin, 6h apres-midi, 12h nuit. Le moteur respecte les options activees sur chaque auxiliaire et garde le tour a tour."),
     ),
     auxiliaries.map((aux, index) => {
-      const hData = hours[aux.id] || {};
+      const hData = displayHours(hours[aux.id], aux.quota);
       const c = colorFor(index);
       return h("div", { className: "panel", key: aux.id },
         h("div", { className: "title-row" },
@@ -253,7 +292,7 @@ function HoursView({ auxiliaries, hours }) {
           h("span", null, `Matin : ${hData.morning || 0}h`),
           h("span", null, `Apres-midi : ${hData.afternoon || 0}h`),
           h("span", null, `Nuit : ${hData.night || 0}h`),
-          h("span", null, `En pause : ${Math.round(((hData.quota || aux.quota) - (hData.total || 0)) * 100) / 100}h`),
+          h("span", null, `En pause : ${hData.pause}h`),
         ),
       );
     }),
@@ -272,7 +311,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
           h("h3", null, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[month]}`),
           h("div", { className: "muted" }, "Choisir l'intervenant pour ce créneau."),
         ),
-        h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, "×"),
+        h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
       h("div", { className: "worker-options" }, available.map((aux, index) => h(Button, {
         key: aux.id,
