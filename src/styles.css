@@ -24,7 +24,7 @@ button { cursor: pointer; }
 .topbar > .title-row .muted { max-width: 310px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar > .month-row { justify-content: center; gap: 5px; }
 .topbar > .month-row h2 { min-width: 130px; text-align: center; }
-.topbar > .month-row .btn { width: 30px; height: 30px; padding: 0; font-size: 20px; line-height: 1; }
+.topbar > .month-row .icon-only { width: 30px; height: 30px; padding: 0; font-size: 20px; line-height: 1; }
 h1, h2, h3, .brand { font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif; letter-spacing: 0; }
 h1 { margin: 0; font-size: 19px; color: #344753; }
 h2 { font-size: 16px; }
@@ -37,13 +37,34 @@ h2 { font-size: 16px; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,.98), 0 5px 14px rgba(102,122,142,.11);
   font-weight: 800;
   padding: 9px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .btn.active { background: #6f8fa1; color: #fff; border-color: #6f8fa1; }
-.tabs { display: grid; grid-template-columns: repeat(4, minmax(84px, 1fr)); gap: 5px; }
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 5px; }
 .tab { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 5px; line-height: 1; padding: 7px 9px; }
-.tab-icon { font-size: 15px; }
 .topbar .action-row { justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
 .topbar .action-row .btn { padding: 7px 8px; font-size: 12px; white-space: nowrap; }
+.month-title-btn {
+  min-width: 150px;
+  height: 32px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif;
+  font-size: 15px;
+}
 .rotation-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 10px; }
 .rotation-options .btn { min-height: 76px; display: grid; gap: 4px; text-align: left; align-content: center; }
 .rotation-options .btn small { font-weight: 700; color: #746d61; line-height: 1.2; }
@@ -109,10 +130,11 @@ h2 { font-size: 16px; }
 .slot-editor { width: min(460px, 100%); max-height: min(620px, 90vh); overflow: auto; display: grid; gap: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.94); border: 1px solid rgba(255,255,255,.98); box-shadow: 0 24px 54px rgba(67,80,94,.24); }
 .slot-editor h3 { margin: 0 0 4px; }
 .icon-btn { width: 38px; height: 38px; padding: 0; font-size: 24px; line-height: 1; }
+.icon-btn .icon { width: 20px; height: 20px; }
 .worker-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .worker-options .btn { display: flex; align-items: center; gap: 8px; text-align: left; }
 .worker-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
-.personal-tabs { grid-template-columns: repeat(2, 1fr); }
+.personal-tabs { grid-template-columns: minmax(0, 1fr); }
 .personal-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .personal-summary h3 { margin: 0 0 4px; }
 .personal-month { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
@@ -139,6 +161,7 @@ h2 { font-size: 16px; }
   .topbar .action-row { max-width: none; }
   .topbar .action-row .btn { padding: 6px; font-size: 11px; }
   .install-banner { align-items: stretch; flex-direction: column; }
-  .tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .month-title-btn { min-width: 0; width: min(190px, 58vw); font-size: 13px; }
+  .tabs { grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)); }
   .tab { display: grid; min-height: 45px; padding: 5px 3px; font-size: 11px; }
 }
