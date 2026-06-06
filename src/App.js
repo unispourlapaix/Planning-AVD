@@ -5,6 +5,7 @@ import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import { defaultState, isAdminUser, loadState, publishPersonalPlannings, saveState, subscribePersonalPlanning } from "./modules/storage.js";
 import { buildReportHtml } from "./modules/report.js";
+import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useState } = React;
@@ -236,6 +237,25 @@ function Summary({ auxiliaries, hours }) {
       h("div", { className: "progress" }, h("span", { style: { width: `${Math.min(100, Math.round((hData.total / Math.max(1, hData.quota)) * 100))}%`, background: c.solid } })),
     );
   }));
+}
+
+function RotationAudit({ checks }) {
+  const visible = checks.slice(0, 6);
+  const critical = checks.filter(item => item.level === "danger").length;
+  const title = critical ? `${critical} point(s) a corriger` : checks[0]?.level === "ok" ? "Roulement coherent" : "Controle du roulement";
+  return h("section", { className: "panel audit-panel" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Verification du roulement"),
+        h("div", { className: "muted" }, title),
+      ),
+    ),
+    h("div", { className: "audit-list" }, visible.map((item, index) => h("div", { key: `${item.title}-${index}`, className: `audit-item ${item.level}` },
+      h("span", { className: "audit-dot" }),
+      h("span", null, h("b", null, item.title), h("small", null, item.detail)),
+    ))),
+    checks.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${checks.length - visible.length} autre(s) point(s) detecte(s).`) : null,
+  );
 }
 
 function DayCard({ day, year, month, plan, auxiliaries, onEditSlot }) {
@@ -482,6 +502,7 @@ export default function App() {
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
   const hours = useMemo(() => calculateHours(schedule, auxiliaries), [schedule, auxiliaries]);
+  const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
 
   const openReport = () => {
     const html = buildReportHtml({ year, month, auxiliaries: activeAux, schedule, hours });
@@ -580,6 +601,7 @@ export default function App() {
     }),
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
+      h(RotationAudit, { checks: rotationChecks }),
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, onEditSlot: setSlotEdit }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, onEditSlot: setSlotEdit }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
