@@ -12,7 +12,7 @@ globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260607-modern-icons"),
+  import("./App.js?v=20260606-rotation-audit"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
