@@ -2,6 +2,23 @@ const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
+const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
+const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
+const displayHours = (raw = {}, fallbackQuota = 0) => {
+  const quota = Number(raw.quota ?? fallbackQuota) || 0;
+  const rawTotal = Number(raw.total) || 0;
+  const factor = rawTotal > quota && rawTotal > 0 ? quota / rawTotal : 1;
+  const capShift = value => Math.round((Number(value) || 0) * factor * 100) / 100;
+  const total = Math.min(rawTotal, quota);
+  return {
+    morning: capShift(raw.morning),
+    afternoon: capShift(raw.afternoon),
+    night: capShift(raw.night),
+    total,
+    quota,
+    pause: Math.max(0, Math.round((quota - total) * 100) / 100),
+  };
+};
 const migrateState = state => {
   if (!state || state.rotationRevision === ROTATION_REVISION) return state;
   return { ...state, overrides: {}, rotationRevision: ROTATION_REVISION };
@@ -9,7 +26,14 @@ const migrateState = state => {
 
 export const defaultState = () => {
   const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth(), view: "month", rotationDays: 1, auxiliaries: null, updatedAt: "" };
+  return {
+    year: now.getFullYear(),
+    month: now.getMonth(),
+    view: "month",
+    rotationDays: 1,
+    auxiliaries: null,
+    updatedAt: "",
+  };
 };
 
 export async function loadState({ db, user }) {
@@ -18,7 +42,10 @@ export async function loadState({ db, user }) {
   try {
     const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
     return snap.exists ? migrateState(snap.data().value) : local;
-  } catch (error) { console.warn("Lecture cloud impossible, repli local.", error); return local; }
+  } catch (error) {
+    console.warn("Lecture cloud impossible, repli local.", error);
+    return local;
+  }
 }
 
 export async function saveState({ db, user, state }) {
@@ -26,14 +53,25 @@ export async function saveState({ db, user, state }) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return;
   try {
-    await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({ value, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: user.email || "" }, { merge: true });
-  } catch (error) { console.warn("Sauvegarde cloud impossible, conservee en local.", error); }
+    await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({
+      value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: user.email || "",
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Sauvegarde cloud impossible, conservee en local.", error);
+  }
 }
 
 export async function isAdminUser({ db, user }) {
   if (!db || !user?.uid) return false;
-  try { const snap = await db.collection("planning-avd-admins").doc(user.uid).get(); return snap.exists; }
-  catch (error) { console.warn("Verification admin impossible.", error); return false; }
+  try {
+    const snap = await db.collection("planning-avd-admins").doc(user.uid).get();
+    return snap.exists;
+  } catch (error) {
+    console.warn("Verification admin impossible.", error);
+    return false;
+  }
 }
 
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
@@ -51,21 +89,30 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
   const calendar = Object.values(schedule).map(plan => ({
     day: plan.day,
     shifts: Object.fromEntries(["morning", "afternoon", "night"].map(shift => {
-      const workers = Array.isArray(plan?.[shift]?.workers) ? plan[shift].workers : [plan?.[shift]?.worker];
-      return [shift, workers.filter(Boolean).map(findName)];
+      const worker = primaryWorkerId(plan?.[shift]);
+      return [shift, worker ? [findName(worker)] : []];
     })),
   }));
   active.forEach(aux => {
     const entries = [];
     Object.values(schedule).forEach(plan => {
       ["morning", "afternoon", "night"].forEach(shift => {
-        const workers = Array.isArray(plan?.[shift]?.workers) ? plan[shift].workers : [plan?.[shift]?.worker];
-        if (workers.filter(Boolean).includes(aux.id)) entries.push({ day: plan.day, shift, hours: plan[shift]?.hours || 0 });
+        if (primaryWorkerId(plan?.[shift]) === aux.id) entries.push({ day: plan.day, shift });
       });
     });
     const email = String(aux.email).trim().toLowerCase();
     const ref = db.collection("planning-avd-shares").doc(emailKey(email)).collection("months").doc(monthKey(year, month));
-    batch.set(ref, { email, name: aux.name, year, month, entries, calendar, hours: hours[aux.id] || { morning: 0, afternoon: 0, night: 0, total: 0, quota: Number(aux.quota) || 0 }, publishedAt: firebase.firestore.FieldValue.serverTimestamp(), publishedBy: user.email || "" });
+    batch.set(ref, {
+      email,
+      name: aux.name,
+      year,
+      month,
+      entries,
+      calendar,
+      hours: displayHours(hours[aux.id], aux.quota),
+      publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      publishedBy: user.email || "",
+    });
   });
   await batch.commit();
   return active.length;
