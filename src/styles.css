@@ -88,6 +88,29 @@ h2 { font-size: 16px; }
 .install-banner-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .pill { border-radius: 999px; padding: 5px 8px; font-weight: 900; font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
+.audit-panel { display: grid; gap: 10px; }
+.audit-panel h3 { margin: 0 0 3px; }
+.audit-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+.audit-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(213,225,229,.9);
+  background: rgba(255,255,255,.72);
+}
+.audit-item b { display: block; color: #344753; font-size: 12px; }
+.audit-item small { display: block; color: #687a83; font-weight: 700; line-height: 1.25; margin-top: 2px; }
+.audit-dot { width: 9px; height: 9px; border-radius: 99px; margin-top: 4px; background: #78c8c0; box-shadow: 0 0 0 3px rgba(120,200,192,.16); }
+.audit-item.ok { border-color: rgba(174,216,195,.9); background: rgba(239,250,244,.84); }
+.audit-item.info .audit-dot { background: #7bafd4; box-shadow: 0 0 0 3px rgba(123,175,212,.16); }
+.audit-item.warning { border-color: rgba(240,182,110,.62); background: rgba(255,249,239,.9); }
+.audit-item.warning .audit-dot { background: #f0b66e; box-shadow: 0 0 0 3px rgba(240,182,110,.18); }
+.audit-item.danger { border-color: rgba(224,138,138,.68); background: rgba(255,244,246,.9); }
+.audit-item.danger .audit-dot { background: #e08a8a; box-shadow: 0 0 0 3px rgba(224,138,138,.2); }
 .calendar { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
 .dow { padding: 6px 4px; border-radius: 7px; font-size: 12px; color: #687a83; font-weight: 900; text-align: center; text-transform: uppercase; }
 .dow.saturday, .calendar > .dow:nth-child(6) { color: #4e7f99; background: rgba(218,239,249,.72); }
