@@ -4,6 +4,7 @@ const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerC
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const shiftLabels = { morning: "Matin 11h", afternoon: "Après-midi 17h", night: "Soir" };
+const shiftOrder = ["morning", "afternoon", "night"];
 const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
   ">": "&gt;",
@@ -49,11 +50,50 @@ const ensureStyle = () => {
   style.id = "personal-team-calendar-style";
   style.textContent = `
     .personal-app.team-calendar-ready>.layout>.week-grid,.personal-app.team-calendar-ready>.layout>.personal-month{display:none!important}
-    .team-admin-view{display:grid;gap:12px}
-    .team-admin-view h3{margin:0 0 8px}
-    .team-admin-view .slot{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;align-items:start}
-    .team-admin-view .slot-name{white-space:normal;overflow-wrap:anywhere;text-overflow:clip;line-height:1.1}
-    .team-admin-view .slot-label{display:block;font-size:7px;line-height:1.05;padding:1px 0 0;text-align:left}
+    .team-admin-view{display:grid;gap:10px}
+    .team-admin-view h3{margin:0 0 8px;font-size:13px;color:#405662}
+    .team-admin-view .calendar,.team-admin-view .week-days{align-items:stretch}
+    .team-admin-view .day-card{position:relative;overflow:hidden}
+    .team-admin-view .day-card.empty{min-height:0;opacity:.28}
+    .team-admin-view .slot{
+      --slot-accent:#9bb6c6;
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      gap:2px;
+      align-items:start;
+      min-width:0;
+      padding:5px 6px;
+      border-radius:7px;
+      background:rgba(255,255,255,.78);
+      border:1px solid rgba(218,228,232,.9);
+      box-shadow:inset 3px 0 0 var(--slot-accent);
+    }
+    .team-admin-view .slot.morning{--slot-accent:#7eb6d4}
+    .team-admin-view .slot.afternoon{--slot-accent:#e5a0c6}
+    .team-admin-view .slot.night{--slot-accent:#a99ade}
+    .team-admin-view .slot-name{
+      min-width:0;
+      color:#3f5967;
+      font-size:11px;
+      font-weight:900;
+      line-height:1.08;
+      white-space:normal;
+      overflow-wrap:anywhere;
+      text-overflow:clip;
+    }
+    .team-admin-view .slot-label{
+      display:block;
+      padding:0;
+      border:0;
+      background:transparent;
+      color:var(--slot-accent);
+      font-size:7px;
+      font-weight:900;
+      line-height:1;
+      text-align:left;
+      text-transform:uppercase;
+    }
+    .team-admin-view .slot-rest{color:#9a948b;font-weight:800}
   `;
   document.head.appendChild(style);
 };
@@ -65,9 +105,10 @@ const activePersonalView = () => {
 };
 
 const slotHtml = (item, shift) => {
+  // Vue auxiliaire : uniquement le titulaire principal, les doublons restent cotes admin.
   const primaryName = (item?.shifts?.[shift] || []).filter(Boolean)[0];
-  const names = primaryName ? escapeHtml(primaryName) : "Repos";
-  return `<div class="slot"><span class="slot-label">${shiftLabels[shift]}</span><span class="slot-name">${names}</span></div>`;
+  const name = primaryName ? escapeHtml(primaryName) : `<span class="slot-rest">Repos</span>`;
+  return `<div class="slot ${shift}"><span class="slot-label">${shiftLabels[shift]}</span><span class="slot-name">${name}</span></div>`;
 };
 
 const dayHtml = (item, year, month) => {
@@ -76,7 +117,7 @@ const dayHtml = (item, year, month) => {
   const tone = date.getDay() === 6 ? " saturday" : date.getDay() === 0 ? " sunday" : "";
   return `<div class="day-card${tone}">
     <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</span></div>
-    ${["morning", "afternoon", "night"].map(shift => slotHtml(item, shift)).join("")}
+    ${shiftOrder.map(shift => slotHtml(item, shift)).join("")}
   </div>`;
 };
 
