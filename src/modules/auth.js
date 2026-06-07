@@ -40,7 +40,7 @@ export async function initGoogleAuth(onChange) {
 }
 
 export async function signInWithGoogle(auth) {
-  if (!auth || !window.firebase) throw new Error("Connexion Google non disponible");
+  if (!auth || !window.firebase) throw new Error("Connexion non disponible");
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   await auth.signInWithPopup(provider);
