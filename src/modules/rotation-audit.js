@@ -1,9 +1,11 @@
 import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js";
 import { dayIndex, daysInMonth } from "./dates.js";
-import { canWorkShift } from "./scheduler-handover.js";
+import { canWorkShift } from "./scheduler-handover.js?v=20260607-weekend-one";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primary = entry => workers(entry)[0] || "";
+const isNightHandoverMorning = (schedule, day, shift, id) =>
+  shift === "morning" && day > 1 && primary(schedule[day - 1]?.night) === id;
 
 const auxName = (auxiliaries, id) => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
 const compactDays = days => days.slice(0, 4).join(", ") + (days.length > 4 ? ` +${days.length - 4}` : "");
@@ -35,7 +37,7 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
       if (!ids.length) undefinedSlots.push(`${day} ${SHIFT_LABEL[shift.id]}`);
       ids.forEach(id => {
         const aux = byId[id];
-        if (!aux || !canWorkShift(aux, shift.id, year, month, day)) {
+        if (!aux || (!canWorkShift(aux, shift.id, year, month, day) && !isNightHandoverMorning(schedule, day, shift.id, id))) {
           invalidSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
         }
       });
@@ -82,7 +84,7 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
     .filter(aux => (weekendOwnerCount[aux.id] || 0) === 0)
     .forEach(aux => add("info", "Week-end absent du tour", `${aux.name} peut faire un week-end mais n'en a pas encore dans ${MONTHS[month]}.`));
 
-  const maxStreak = Math.max(2, Number(rotationDays) || 1);
+  const maxStreak = Number(rotationDays) >= 2 ? Number(rotationDays) + 2 : 3;
   let currentOwner = "";
   let streakStart = 0;
   let streak = 0;
