@@ -26,7 +26,10 @@ const enhanceMonthAccess = () => {
   title.title = "Afficher le calendrier du mois";
   title.setAttribute("role", "button");
   title.tabIndex = 0;
-  const openMonth = () => document.querySelector(".app:not(.personal-app) .topbar>.tabs .tab:first-child")?.click();
+  const openMonth = event => {
+    if (event?.target?.closest?.(".month-title-btn")) return;
+    title.querySelector(".month-title-btn")?.click();
+  };
   title.addEventListener("click", openMonth);
   title.addEventListener("keydown", event => {
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -72,8 +75,7 @@ export function initMobileManualErgonomics() {
         .app:not(.personal-app) .topbar>.month-row h2{min-width:0;margin:0;font-size:14px;text-align:center}
         .app:not(.personal-app) .topbar>.month-row h2.mobile-month-access{cursor:pointer;padding:5px;border-radius:6px}
         .app:not(.personal-app) .topbar>.month-row .btn{width:30px;height:28px;border-radius:6px;font-size:19px}
-        .app:not(.personal-app) .topbar>.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;width:100%}
-        .app:not(.personal-app) .topbar>.tabs .tab:first-child{display:none}
+        .app:not(.personal-app) .topbar>.tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;width:100%}
         .app:not(.personal-app) .topbar>.tabs .tab{display:flex;min-width:0;min-height:31px;gap:3px;padding:5px 3px;border-radius:6px;font-size:clamp(9px,2.8vw,11px);white-space:nowrap}
         .app:not(.personal-app) .topbar>.tabs .tab-icon{font-size:13px}
         .app:not(.personal-app) .calendar{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow-x:visible}

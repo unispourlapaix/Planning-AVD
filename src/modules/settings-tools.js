@@ -1,6 +1,6 @@
-const TOOL_LABELS = ["Rapport", "Sauvegarde", "Restaurer"];
+const TOOL_LABELS = ["Heures", "Rapport", "Sauvegarde", "Restaurer"];
 
-const findSourceButton = label => [...document.querySelectorAll(".app:not(.personal-app) .topbar .action-row .btn")]
+const findSourceButton = label => [...document.querySelectorAll(".app:not(.personal-app) .topbar .action-row .btn, .app:not(.personal-app) .topbar>.tabs .tab")]
   .find(button => button.textContent.includes(label));
 
 const buildPanel = () => {
@@ -10,7 +10,7 @@ const buildPanel = () => {
   panel.innerHTML = `
     <div>
       <h3>Données et rapport</h3>
-      <div class="muted">Imprimer le rapport ou transférer une sauvegarde complète.</div>
+      <div class="muted">Consulter les heures, imprimer le rapport ou transférer une sauvegarde complète.</div>
     </div>
     <div class="settings-actions"></div>
   `;
@@ -60,7 +60,7 @@ export function initSettingsTools() {
       .settings-actions{display:flex;flex-wrap:wrap;gap:5px}
       @media (max-width:560px){
         .settings-tools{display:grid}
-        .settings-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+        .settings-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
         .settings-actions .btn{min-width:0;padding:7px 3px;font-size:11px}
       }
     `;
