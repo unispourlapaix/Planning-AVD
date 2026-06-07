@@ -1,7 +1,7 @@
 import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler-handover.js";
+import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import { defaultState, isAdminUser, loadState, publishPersonalPlannings, saveState, subscribePersonalPlanning } from "./modules/storage.js";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
@@ -216,9 +216,9 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       error ? h("div", { className: "panel muted" }, error) : null,
       planning
         ? h("div", { className: "panel personal-summary" },
-            h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel publié par votre administrateur.")),
+            h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
           )
-        : h("div", { className: "panel" }, h("h3", null, "Planning en attente"), h("div", { className: "muted" }, "Votre administrateur n'a pas encore publié de planning pour ce mois.")),
+        : h("div", { className: "panel" }, h("h3", null, "Planning en attente"), h("div", { className: "muted" }, "Votre administrateur n'a pas encore transmis de planning pour ce mois.")),
       planning && personalView === "week"
         ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
             h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
@@ -557,9 +557,9 @@ export default function App() {
   const publishPlanning = async () => {
     try {
       const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours });
-      alert(`Planning publié pour ${count} auxiliaire(s).`);
+      alert(`Planning sauvegardé pour ${count} auxiliaire(s).`);
     } catch (error) {
-      alert(`Publication impossible : ${error.message}`);
+      alert(`Sauvegarde impossible : ${error.message}`);
     }
   };
 
