@@ -6,8 +6,8 @@ export function initPersonalMobileView() {
     .personal-app .personal-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
     .personal-app .personal-tabs .tab{min-width:0}
     .personal-app .team-admin-view .slot{min-width:0}
-    .personal-app .team-admin-view .slot-name{font-size:10px;font-weight:900;line-height:1.08}
-    .personal-app .team-admin-view .slot-label{color:#687a83}
+    .personal-app .team-admin-view .slot-name{font-size:11px;font-weight:900;line-height:1.08}
+    .personal-app .team-admin-view .slot-label{letter-spacing:0}
     @media (max-width:560px) and (orientation:portrait){
       .personal-app{padding:5px}
       .personal-app .topbar{position:sticky;top:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 6px;padding:5px 6px;border-radius:0 0 8px 8px;background:rgba(255,255,255,.96)}
@@ -32,11 +32,11 @@ export function initPersonalMobileView() {
       .personal-app .team-admin-view .calendar{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow-x:visible;padding-bottom:0}
       .personal-app .team-admin-view .calendar>.dow{display:none}
       .personal-app .team-admin-view .week-days{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow-x:visible}
-      .personal-app .team-admin-view .day-card{min-height:122px;padding:6px;gap:4px}
+      .personal-app .team-admin-view .day-card{min-height:126px;padding:6px;gap:4px}
       .personal-app .team-admin-view .day-head{font-size:12px}
       .personal-app .team-admin-view .slot{padding:4px;border-radius:6px}
       .personal-app .team-admin-view .slot-label{font-size:7px}
-      .personal-app .team-admin-view .slot-name{font-size:10px;overflow-wrap:anywhere}
+      .personal-app .team-admin-view .slot-name{font-size:10.5px;overflow-wrap:anywhere}
     }
     @media (max-width:900px) and (orientation:landscape){
       .personal-app{width:100%;padding:5px}
@@ -55,13 +55,13 @@ export function initPersonalMobileView() {
       .personal-app .layout{gap:6px;margin-top:6px}
       .personal-app .personal-summary{display:none}
       .personal-app .team-admin-view{gap:6px}
-      .personal-app .team-admin-view .calendar{grid-template-columns:repeat(7,minmax(94px,1fr));gap:5px;overflow-x:auto;padding-bottom:4px}
-      .personal-app .team-admin-view .week-days{grid-template-columns:repeat(7,minmax(94px,1fr));gap:5px;overflow-x:auto}
-      .personal-app .team-admin-view .day-card{min-height:112px;padding:5px;gap:3px}
+      .personal-app .team-admin-view .calendar{grid-template-columns:repeat(7,minmax(104px,1fr));gap:5px;overflow-x:auto;padding-bottom:4px}
+      .personal-app .team-admin-view .week-days{grid-template-columns:repeat(7,minmax(104px,1fr));gap:5px;overflow-x:auto}
+      .personal-app .team-admin-view .day-card{min-height:116px;padding:5px;gap:3px}
       .personal-app .team-admin-view .day-head{font-size:11px}
-      .personal-app .team-admin-view .slot{padding:3px;border-radius:6px}
+      .personal-app .team-admin-view .slot{padding:4px;border-radius:6px}
       .personal-app .team-admin-view .slot-label{font-size:6.5px}
-      .personal-app .team-admin-view .slot-name{font-size:9px}
+      .personal-app .team-admin-view .slot-name{font-size:9.5px}
     }
   `;
   document.head.appendChild(style);
