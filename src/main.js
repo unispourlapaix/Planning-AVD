@@ -12,6 +12,11 @@ import { initPrivateDisplay } from "./modules/private-display.js?v=20260606-priv
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
 
+const nativeAlert = window.alert.bind(window);
+window.alert = message => nativeAlert(String(message)
+  .replace("Planning publié", "Planning sauvegardé")
+  .replace("Publication impossible", "Sauvegarde impossible"));
+
 const [{ default: App }, { h }] = await Promise.all([
   import("./App.js?v=20260607-weekend-one"),
   import("./ui.js"),
