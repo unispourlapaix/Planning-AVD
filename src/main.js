@@ -6,7 +6,7 @@ import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260607-topbar-settings";
 import { initPersonalMobileView } from "./modules/personal-mobile-view.js?v=20260607-personal-clean";
 import { initSettingsTools } from "./modules/settings-tools.js?v=20260607-a4-topbar";
-import { initTopbarSettingsNav } from "./modules/topbar-settings-nav.js?v=20260607-a4-topbar";
+import { initTopbarSettingsNav } from "./modules/topbar-settings-nav.js?v=20260608-print-label";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260606-direct-sw";
 import { initPrivateDisplay } from "./modules/private-display.js?v=20260606-private-display";
 

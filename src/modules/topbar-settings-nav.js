@@ -24,7 +24,8 @@ const refreshLabels = topbar => {
     muted.textContent = muted.textContent.replace("connexion Google disponible", "connexion disponible");
   }
   topbar.querySelectorAll(".action-row .btn").forEach(button => {
-    relabelButton(button, "Vue propre", "A4 paysage", printSvg);
+    relabelButton(button, "Vue propre", "Imprimer", printSvg);
+    relabelButton(button, "A4 paysage", "Imprimer", printSvg);
     relabelButton(button, "Connexion Google", "Connexion");
   });
 };
