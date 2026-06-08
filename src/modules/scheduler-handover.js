@@ -14,6 +14,7 @@ const dayPrimary = aux => aux.shift !== "night";
 const weekendOnly = aux => aux.days === "weekend" || aux.days === "saturday" || aux.days === "sunday";
 const canHoldDay = (aux, year, month, day) =>
   canWorkShift(aux, "morning", year, month, day) || canWorkShift(aux, "afternoon", year, month, day);
+const primaryShifts = ["morning", "afternoon", "night"];
 
 const pickCycleWorker = ({ cycle, available, offset = 0, avoid = [], predicate }) => {
   const avoidSet = new Set(avoid.filter(Boolean));
@@ -104,6 +105,54 @@ const protectMondayAfterWeekend = ({ schedule, days, available, weekdayCycle, ye
   });
 };
 
+const pickWeekdayRelief = ({ available, weekdayCycle, year, month, day, shift, avoid = [], offset = 0 }) =>
+  pickCycleWorker({
+    cycle: weekdayCycle,
+    available,
+    offset,
+    avoid,
+    predicate: aux => !avoid.includes(aux.id) && canWorkShift(aux, shift, year, month, day),
+  });
+
+const balanceThursdayBeforeWeekend = ({ schedule, saturday, weekendWorker, available, weekdayCycle, year, month, offset }) => {
+  if (!weekendWorker) return;
+  const fridayDay = saturday - 1;
+  const thursdayDay = saturday - 2;
+  const friday = schedule[fridayDay];
+  const thursday = schedule[thursdayDay];
+  if (!friday || !primaryShifts.some(shift => friday[shift]?.worker === weekendWorker)) return;
+
+  const avoid = [weekendWorker];
+  const thursdayRelief = thursday
+    ? pickCycleWorker({
+        cycle: weekdayCycle,
+        available,
+        offset,
+        avoid,
+        predicate: aux => aux.id !== weekendWorker
+          && canWorkShift(aux, "afternoon", year, month, thursdayDay)
+          && canWorkShift(aux, "morning", year, month, fridayDay),
+      })
+    : null;
+
+  if (thursdayRelief && friday.morning?.worker === weekendWorker) {
+    thursday.afternoon = withPrimary(thursday.afternoon, thursdayRelief);
+    const reliefAux = available.find(aux => aux.id === thursdayRelief);
+    if (canWorkShift(reliefAux, "night", year, month, thursdayDay)) {
+      thursday.night = withPrimary(thursday.night, thursdayRelief);
+    }
+    friday.morning = withPrimary(friday.morning, thursdayRelief);
+  }
+
+  primaryShifts.forEach(shift => {
+    if (friday[shift]?.worker !== weekendWorker) return;
+    const relief = (thursdayRelief && canWorkShift(available.find(aux => aux.id === thursdayRelief), shift, year, month, fridayDay))
+      ? thursdayRelief
+      : pickWeekdayRelief({ available, weekdayCycle, year, month, day: fridayDay, shift, avoid, offset });
+    if (relief) friday[shift] = withPrimary(friday[shift], relief);
+  });
+};
+
 export function buildSchedule(options) {
   const result = buildBaseSchedule(options);
   const schedule = result.schedule;
@@ -131,23 +180,24 @@ export function buildSchedule(options) {
   days.filter(day => new Date(options.year, options.month, day).getDay() === 6).forEach((day, index) => {
     const saturday = schedule[day];
     const sunday = schedule[day + 1];
+    const weekendAvoid = [previousWeekendWorker];
     const weekendWorker = pickCycleWorker({
       cycle: weekendCycle,
       available,
       offset: index,
-      avoid: [previousWeekendWorker],
+      avoid: weekendAvoid,
       predicate: weekendFullPredicate({ year: options.year, month: options.month, saturday: day }),
     }) || pickCycleWorker({
       cycle: weekendCycle,
       available,
       offset: index,
-      avoid: [previousWeekendWorker],
+      avoid: weekendAvoid,
       predicate: weekendBasicPredicate({ year: options.year, month: options.month, saturday: day }),
     }) || pickCycleWorker({
       cycle: weekendCycle,
       available,
       offset: index,
-      avoid: [previousWeekendWorker],
+      avoid: weekendAvoid,
       predicate: aux => canWorkShift(aux, "afternoon", options.year, options.month, day)
         && canWorkShift(aux, "morning", options.year, options.month, day + 1),
     });
@@ -158,6 +208,16 @@ export function buildSchedule(options) {
     }
     setAfternoonAndNight({ plan: saturday, worker: weekendWorker, available, year: options.year, month: options.month, day });
     sunday.morning = withPrimary(sunday.morning, weekendWorker);
+    balanceThursdayBeforeWeekend({
+      schedule,
+      saturday: day,
+      weekendWorker,
+      available,
+      weekdayCycle,
+      year: options.year,
+      month: options.month,
+      offset: index + 1,
+    });
   });
 
   days.forEach(day => {
