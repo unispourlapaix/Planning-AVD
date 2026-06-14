@@ -7,7 +7,7 @@ import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.j
 import { initPersonalMobileView } from "./modules/personal-mobile-view.js?v=20260607-personal-clean";
 import { initSettingsTools } from "./modules/settings-tools.js?v=20260607-a4-topbar";
 import { initTopbarSettingsNav } from "./modules/topbar-settings-nav.js?v=20260608-print-label";
-import { initPwaInstall } from "./modules/pwa-install.js?v=20260606-direct-sw";
+import { initPwaInstall } from "./modules/pwa-install.js?v=20260615-github-update";
 import { initPrivateDisplay } from "./modules/private-display.js?v=20260614-meals-quota";
 
 globalThis.React = React;

@@ -7,6 +7,7 @@ const needsManualInstall = () => isiOS() || isFirefox();
 const installLabel = () => needsManualInstall() ? "Ajouter" : "Installer l'app";
 const INSTALL_RELOAD_KEY = "planning-avd-edge-app-install-reload";
 const CONTROL_RELOAD_KEY = "planning-avd-edge-app-controlled";
+let updateReloadStarted = false;
 
 const getAppScope = () => {
   const currentUrl = new URL(window.location.href);
@@ -60,8 +61,11 @@ const reloadOnceAfterControl = async () => {
 
 const notifyUpdateReady = registration => {
   const updateServiceWorker = () => {
-    if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
-    window.location.reload();
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      return;
+    }
+    registration.update().finally(() => window.location.reload());
   };
   window.dispatchEvent(new CustomEvent("planning-avd-update-ready", { detail: { updateServiceWorker } }));
 };
@@ -91,6 +95,11 @@ const setButtonWaiting = button => {
 
 export function initPwaInstall() {
   if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (updateReloadStarted) return;
+      updateReloadStarted = true;
+      window.location.reload();
+    });
     const appScope = getAppScope();
     const serviceWorkerUrl = new URL("sw.js", appScope);
     // [ID-PWA-04] This uses a real browser URL so GitHub Pages can load source files safely.

@@ -1,4 +1,4 @@
-const CACHE_NAME = "planning-avd-app-v20260606-icon-safe";
+const CACHE_NAME = "planning-avd-app-v20260615-github-update";
 const APP_SCOPE_PATH = new URL("./", self.location.href).pathname;
 const APP_SHELL_URL = new URL("./", self.location.href).href;
 const PRECACHE_URLS = [
@@ -18,9 +18,12 @@ self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(PRECACHE_URLS))
-      .catch(() => {})
-      .then(() => self.skipWaiting()),
+      .catch(() => {}),
   );
+});
+
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
