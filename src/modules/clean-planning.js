@@ -1,5 +1,6 @@
 import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js";
 import { dayIndex, monthGrid } from "./dates.js";
+import { mealForDate } from "./meal-planning.js";
 
 const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
@@ -31,7 +32,8 @@ export function buildCleanPlanningHtml({ year, month, auxiliaries = [], schedule
       const ids = shiftWorkerIds(plan[shift.id]);
       return `<div class="slot"><b>${shiftNames[shift.id] || shift.label}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}</div></div>`;
     }).join("");
-    return `<div class="day${tone}"><div class="head"><span>${day}</span><em>${DAYS_SHORT[dayIndex(year, month, day)]}</em></div>${slots}</div>`;
+    const meal = mealForDate(year, month, day);
+    return `<div class="day${tone}"><div class="head"><span>${day}</span><em>${DAYS_SHORT[dayIndex(year, month, day)]}</em></div>${slots}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></div>`;
   };
 
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Planning-AVD A4 paysage - ${MONTHS[month]} ${year}</title><style>
@@ -48,6 +50,7 @@ export function buildCleanPlanningHtml({ year, month, auxiliaries = [], schedule
     .head{display:flex;justify-content:space-between;align-items:center;font-weight:900;color:#344753}.head span{font-size:17px}.head em{font-size:10px;font-style:normal;text-transform:uppercase;color:#7a858b}
     .slot{display:grid;grid-template-columns:54px minmax(0,1fr);gap:5px;align-items:center;padding:4px;border-radius:8px;background:rgba(255,255,255,.68);border:1px solid rgba(218,227,230,.82)}
     .slot b{font-size:8px;line-height:1.1;color:#687a83;text-transform:uppercase}.name{display:inline;font-size:11px;font-weight:900;color:var(--fg);line-height:1.12}.extra{display:inline-flex;margin-left:4px;padding:1px 4px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font-size:8px;font-weight:900;vertical-align:middle}.rest{color:#9a948b;font-size:10px;font-weight:800}
+    .meal{display:grid;grid-template-columns:36px minmax(0,1fr);gap:4px;padding:4px;border-radius:7px;background:#eef9f3;color:#39735b}.meal b{font-size:8px;text-transform:uppercase}.meal span{font-size:9px;font-weight:900}
     footer{margin-top:10px;color:#6e7c84;font-size:10px;font-weight:700;text-align:right}
     @media print{html,body{width:297mm;min-height:210mm;background:#fff}body{padding:0}.sheet{width:auto;min-height:194mm;box-shadow:none;border-radius:0;border:0}footer{display:none}}
   </style></head><body><section class="sheet">

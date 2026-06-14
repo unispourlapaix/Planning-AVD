@@ -1,4 +1,5 @@
 import { MONTHS } from "./constants.js";
+import { mealForDate } from "./meal-planning.js";
 
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -94,6 +95,23 @@ const ensureStyle = () => {
       text-transform:uppercase;
     }
     .team-admin-view .slot-rest{color:#9a948b;font-weight:800}
+    .team-admin-view .meal-tag{
+      width:100%;
+      display:grid;
+      grid-template-columns:18px minmax(0,1fr);
+      gap:5px;
+      align-items:center;
+      padding:5px 6px;
+      border:1px solid rgba(104,196,154,.34);
+      border-radius:7px;
+      background:rgba(235,249,241,.86);
+      color:#39735b;
+      text-align:left;
+      font-size:9px;
+      font-weight:900;
+      line-height:1.1;
+    }
+    .team-admin-view .meal-tag svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   `;
   document.head.appendChild(style);
 };
@@ -115,9 +133,14 @@ const dayHtml = (item, year, month) => {
   if (!item) return `<div class="day-card empty"></div>`;
   const date = new Date(year, month, item.day);
   const tone = date.getDay() === 6 ? " saturday" : date.getDay() === 0 ? " sunday" : "";
+  const meal = mealForDate(year, month, item.day);
   return `<div class="day-card${tone}">
-    <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</span></div>
+    <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</div>
     ${shiftOrder.map(shift => slotHtml(item, shift)).join("")}
+    <button class="meal-tag" data-meal-year="${year}" data-meal-month="${month}" data-meal-day="${item.day}" title="Repas : ${escapeHtml(meal.title)}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M15 3v18M15 3c4 2 5 8 0 11"></path></svg>
+      <span>${escapeHtml(meal.short)}</span>
+    </button>
   </div>`;
 };
 
@@ -150,6 +173,17 @@ const render = ({ calendar = [], year, month }) => {
 
 export async function initPersonalTeamCalendar() {
   ensureStyle();
+  document.addEventListener("click", event => {
+    const button = event.target.closest?.("#personal-team-calendar .meal-tag");
+    if (!button) return;
+    window.dispatchEvent(new CustomEvent("planning-avd-open-meal", {
+      detail: {
+        year: Number(button.dataset.mealYear),
+        month: Number(button.dataset.mealMonth),
+        day: Number(button.dataset.mealDay),
+      },
+    }));
+  });
   await waitForFirebase();
   const auth = firebase.auth();
   const db = firebase.firestore();

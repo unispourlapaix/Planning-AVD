@@ -1,5 +1,6 @@
 import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js";
 import { dayIndex, daysInMonth, isWeekendDay } from "./dates.js";
+import { createHourAccount, creditScheduledHours } from "./hour-accounting.js";
 
 const dayAllowed = (rule, index) => {
   if (rule === "weekdays") return index >= 0 && index <= 4;
@@ -214,7 +215,7 @@ function pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, 
   });
   if (!teammate) return [];
   const idx = candidates.findIndex(aux => aux.id === teammate);
-  pointers[key] = (idx >= 0 ? idx + 1 : (pointers[key] || 0) + 1) % Math.max(1, candidates.length);
+  pointers[key] = (idx >= 0 ? idx + 1 : (pointers[key] || 0) + 1) % math.max(1, candidates.length);
   return [teammate];
 }
 
@@ -543,20 +544,19 @@ export function buildSchedule({ year, month, auxiliaries, rotationDays = 1 }) {
 }
 
 export function calculateHours(schedule, auxiliaries) {
-  const hours = Object.fromEntries(auxiliaries.map(aux => [aux.id, {
-    morning: 0,
-    afternoon: 0,
-    night: 0,
-    total: 0,
-    quota: Number(aux.quota) || DEFAULT_QUOTA,
-  }]));
+  const hours = Object.fromEntries(auxiliaries.map(aux => [aux.id, createHourAccount(aux)]));
+  const orderedDays = Object.values(schedule).sort((a, b) => Number(a.day) - Number(b.day));
 
-  Object.values(schedule).forEach(day => {
+  orderedDays.forEach(day => {
     SHIFT_DEFS.forEach(shift => {
-      shiftWorkers(day[shift.id]).forEach(worker => {
+      [...new Set(shiftWorkers(day[shift.id]))].forEach(worker => {
         if (!worker || !hours[worker]) return;
-        hours[worker][shift.id] += shift.hours;
-        hours[worker].total += shift.hours;
+        creditScheduledHours({
+          account: hours[worker],
+          shift: shift.id,
+          scheduledHours: shift.hours,
+          day: day.day,
+        });
       });
     });
   });

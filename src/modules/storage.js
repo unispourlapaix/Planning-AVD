@@ -1,24 +1,12 @@
+import { summarizeHours } from "./hour-accounting.js";
+
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
-const displayHours = (raw = {}, fallbackQuota = 0) => {
-  const quota = Number(raw.quota ?? fallbackQuota) || 0;
-  const rawTotal = Number(raw.total) || 0;
-  const factor = rawTotal > quota && rawTotal > 0 ? quota / rawTotal : 1;
-  const capShift = value => Math.round((Number(value) || 0) * factor * 100) / 100;
-  const total = Math.min(rawTotal, quota);
-  return {
-    morning: capShift(raw.morning),
-    afternoon: capShift(raw.afternoon),
-    night: capShift(raw.night),
-    total,
-    quota,
-    pause: Math.max(0, Math.round((quota - total) * 100) / 100),
-  };
-};
+const displayHours = summarizeHours;
 const migrateState = state => {
   if (!state || state.rotationRevision === ROTATION_REVISION) return state;
   return { ...state, overrides: {}, rotationRevision: ROTATION_REVISION };

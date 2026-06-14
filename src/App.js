@@ -8,6 +8,8 @@ import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
+import { summarizeHours } from "./modules/hour-accounting.js";
+import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useState } = React;
@@ -33,6 +35,8 @@ const ICON_PATHS = {
   login: ["M10 17l5-5-5-5M15 12H3M21 5v14"],
   logout: ["M14 17l5-5-5-5M19 12H7M3 5v14"],
   print: ["M7 8V3h10v5M7 17H5a3 3 0 0 1 0-6h14a3 3 0 0 1 0 6h-2M7 14h10v7H7v-7Z"],
+  meal: ["M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M15 3v18M15 3c4 2 5 8 0 11"],
+  copy: ["M9 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2M5 7h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"],
   chevronLeft: ["M15 6l-6 6 6 6"],
   chevronRight: ["M9 6l6 6-6 6"],
   close: ["M6 6l12 12M18 6L6 18"],
@@ -50,6 +54,71 @@ function Icon({ name }) {
 }
 function IconLabel({ icon, label }) {
   return h(React.Fragment, null, h(Icon, { name: icon }), h("span", null, label));
+}
+
+function MealTag({ year, month, day, onOpen }) {
+  const meal = mealForDate(year, month, day);
+  return h("button", {
+    className: "meal-tag",
+    type: "button",
+    title: `Repas : ${meal.title}`,
+    onClick: () => onOpen?.({ year, month, day }),
+  }, h(Icon, { name: "meal" }), h("span", null, meal.short));
+}
+
+function MealPlannerModal({ selectedDate, onClose }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const week = selectedDate ? mealWeekForDate(selectedDate.year, selectedDate.month, selectedDate.day) : [];
+  useEffect(() => {
+    if (!selectedDate || !week.length) return;
+    const selectedKey = `${selectedDate.year}-${selectedDate.month}-${selectedDate.day}`;
+    setSelectedIndex(Math.max(0, week.findIndex(item => item.dateKey === selectedKey)));
+  }, [selectedDate?.year, selectedDate?.month, selectedDate?.day]);
+  if (!selectedDate) return null;
+  const meal = week[selectedIndex] || week[0];
+  const copyShopping = async () => {
+    await navigator.clipboard?.writeText(shoppingListText(week));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return h("div", { className: "modal-backdrop", onClick: onClose },
+    h("section", { className: "meal-planner", onClick: event => event.stopPropagation() },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h3", null, "Repas et courses de la semaine"),
+          h("div", { className: "muted" }, "Rotation sur 7 jours · quantites pour environ 4 personnes"),
+        ),
+        h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
+      ),
+      h("div", { className: "meal-week-tabs" }, week.map((item, index) => h("button", {
+        className: `meal-day-tab${index === selectedIndex ? " active" : ""}`,
+        key: item.dateKey,
+        onClick: () => setSelectedIndex(index),
+      }, h("b", null, item.dayName.slice(0, 3)), h("span", null, item.short)))),
+      h("div", { className: "meal-planner-grid" },
+        h("article", { className: "recipe-card" },
+          h("div", { className: "recipe-date" }, `${meal.dayName} ${meal.day}/${meal.month + 1}`),
+          h("h3", null, meal.title),
+          h("h4", null, "Ingredients"),
+          h("ul", null, meal.ingredients.map(item => h("li", { key: item }, item))),
+          h("h4", null, "Recette"),
+          h("ol", null, meal.steps.map(item => h("li", { key: item }, item))),
+        ),
+        h("aside", { className: "shopping-card" },
+          h("div", { className: "title-row" },
+            h("h3", null, "Courses de la semaine"),
+            h(Button, { onClick: copyShopping }, h(IconLabel, { icon: "copy", label: copied ? "Copiee" : "Copier" })),
+          ),
+          h("div", { className: "shopping-groups" }, WEEKLY_SHOPPING.map(group => h("section", { key: group.category },
+            h("h4", null, group.category),
+            h("ul", null, group.items.map(item => h("li", { key: item }, item))),
+          ))),
+        ),
+      ),
+    ),
+  );
 }
 
 const cloneDefaultAux = () => DEFAULT_AUXILIARIES.map(aux => ({ ...aux, customDays: [...aux.customDays] }));
@@ -93,22 +162,7 @@ const planningNames = (auxiliaries, ids) => ids
   })
   .join(" + ");
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
-const displayHours = (raw = {}, fallbackQuota = 0) => {
-  const quota = Number(raw.quota ?? fallbackQuota) || 0;
-  const rawTotal = Number(raw.total) || 0;
-  const factor = rawTotal > quota && rawTotal > 0 ? quota / rawTotal : 1;
-  const capShift = value => Math.round((Number(value) || 0) * factor * 100) / 100;
-  const total = Math.min(rawTotal, quota);
-  return {
-    ...raw,
-    morning: capShift(raw.morning),
-    afternoon: capShift(raw.afternoon),
-    night: capShift(raw.night),
-    total,
-    quota,
-    pause: Math.max(0, Math.round((quota - total) * 100) / 100),
-  };
-};
+const displayHours = summarizeHours;
 const overrideKey = manualOverrideKey;
 const applyOverrides = ({ schedule, overrides, year, month }) => Object.fromEntries(Object.entries(schedule).map(([day, plan]) => [
   day,
@@ -168,7 +222,7 @@ function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMo
   );
 }
 
-function PersonalDayCard({ day, entries, year, month }) {
+function PersonalDayCard({ day, entries, year, month, onOpenMeal }) {
   return h("div", { className: `day-card personal-day${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day)),
     SHIFT_DEFS.map(shift => {
@@ -178,11 +232,18 @@ function PersonalDayCard({ day, entries, year, month }) {
         h("span", null, entry ? SHIFT_LABEL[shift.id] : "Repos"),
       );
     }),
+    h(MealTag, { year, month, day, onOpen: onOpenMeal }),
   );
 }
 
 function PersonalView({ authState, year, month, setYear, setMonth, planning, error, onLogout }) {
   const [personalView, setPersonalView] = useState("week");
+  const [mealDate, setMealDate] = useState(null);
+  useEffect(() => {
+    const openMeal = event => setMealDate(event.detail);
+    window.addEventListener("planning-avd-open-meal", openMeal);
+    return () => window.removeEventListener("planning-avd-open-meal", openMeal);
+  }, []);
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -222,13 +283,14 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       planning && personalView === "week"
         ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
             h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
-            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month }))),
+            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, onOpenMeal: setMealDate }))),
           )))
         : null,
       planning && personalView === "month"
-        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month })))
+        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, onOpenMeal: setMealDate })))
         : null,
     ),
+    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null) }),
   );
 }
 
@@ -282,7 +344,7 @@ function ManualOverridesPanel({ items, onReset }) {
   );
 }
 
-function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot }) {
+function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   if (!day) return h("div", { className: "day-card empty" });
   return h("div", { className: `day-card${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
@@ -305,24 +367,25 @@ function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot })
         ),
       );
     }),
+    h(MealTag, { year, month, day, onOpen: onOpenMeal }),
   );
 }
 
-function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot }) {
+function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   return h("section", { className: "layout" },
     h("div", { className: "calendar" },
       DAYS_SHORT.map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
-      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot })),
+      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal })),
     ),
   );
 }
 
-function WeekView({ year, month, schedule, auxiliaries, overrides, onEditSlot }) {
+function WeekView({ year, month, schedule, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   return h("section", { className: "week-grid" }, weekStarts(year, month).map(start => {
     const days = Array.from({ length: 7 }, (_, i) => start + i).filter(day => schedule[day]);
     return h("div", { className: "panel", key: start },
       h("h3", null, `Semaine du ${start} ${MONTHS[month]}`),
-      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries, overrides, onEditSlot }))),
+      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries, overrides, onEditSlot, onOpenMeal }))),
     );
   }));
 }
@@ -331,7 +394,7 @@ function HoursView({ auxiliaries, hours }) {
   return h("section", { className: "hours-grid" },
     h("div", { className: "panel" },
       h("h3", null, "Planning technique comptable"),
-      h("p", { className: "muted" }, "Les heures sont reparties automatiquement sur les jours travailles : 6h matin, 6h apres-midi, 12h nuit. Le moteur respecte les options activees sur chaque auxiliaire et garde le tour a tour."),
+      h("p", { className: "muted" }, "Les heures sont comptabilisees dans l'ordre du mois : 6h matin, 6h apres-midi, 12h nuit. Le compteur s'arrete exactement au quota de chaque auxiliaire, sans heure en plus."),
     ),
     auxiliaries.map((aux, index) => {
       const hData = displayHours(hours[aux.id], aux.quota);
@@ -472,6 +535,7 @@ export default function App() {
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
   const [overrides, setOverrides] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
+  const [mealDate, setMealDate] = useState(null);
   const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false });
   const [personalPlanning, setPersonalPlanning] = useState(null);
   const [personalError, setPersonalError] = useState("");
@@ -646,8 +710,8 @@ export default function App() {
       h(Summary, { auxiliaries: activeAux, hours }),
       h(RotationAudit, { checks: rotationChecks }),
       h(ManualOverridesPanel, { items: manualOverrides, onReset: key => setOverrides(current => { const next = { ...current }; delete next[key]; return next; }) }),
-      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit }) : null,
-      view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit }) : null,
+      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
+      view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
@@ -662,5 +726,6 @@ export default function App() {
       onReset: key => { setOverrides(current => { const next = { ...current }; delete next[key]; return next; }); setSlotEdit(null); },
       onClose: () => setSlotEdit(null),
     }),
+    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null) }),
   );
 }

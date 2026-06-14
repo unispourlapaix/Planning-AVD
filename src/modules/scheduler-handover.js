@@ -1,6 +1,6 @@
-import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260607-weekend-one";
+import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260614-hour-quota";
 
-export * from "./scheduler.js?base=20260607-weekend-one";
+export * from "./scheduler.js?base=20260614-hour-quota";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const withPrimary = (entry, worker) => ({
@@ -14,7 +14,9 @@ const dayPrimary = aux => aux.shift !== "night";
 const weekendOnly = aux => aux.days === "weekend" || aux.days === "saturday" || aux.days === "sunday";
 const canHoldDay = (aux, year, month, day) =>
   canWorkShift(aux, "morning", year, month, day) || canWorkShift(aux, "afternoon", year, month, day);
-const primaryShifts = ["morning", "afternoon", "night"];
+const weekdayShifts = ["morning", "afternoon"];
+const canOpenWeekendNight = (aux, year, month, saturday) =>
+  canWorkShift(aux, "night", year, month, saturday);
 
 const pickCycleWorker = ({ cycle, available, offset = 0, avoid = [], predicate }) => {
   const avoidSet = new Set(avoid.filter(Boolean));
@@ -47,7 +49,8 @@ const weekendBasicPredicate = ({ year, month, saturday }) => aux =>
   canWorkShift(aux, "morning", year, month, saturday)
   && canWorkShift(aux, "afternoon", year, month, saturday)
   && canWorkShift(aux, "morning", year, month, saturday + 1)
-  && canWorkShift(aux, "afternoon", year, month, saturday + 1);
+  && canWorkShift(aux, "afternoon", year, month, saturday + 1)
+  && canOpenWeekendNight(aux, year, month, saturday);
 
 const applyNightToNextMorning = ({ schedule, days, available, year, month }) => {
   days.forEach(day => {
@@ -120,10 +123,12 @@ const balanceThursdayBeforeWeekend = ({ schedule, saturday, weekendWorker, avail
   const thursdayDay = saturday - 2;
   const friday = schedule[fridayDay];
   const thursday = schedule[thursdayDay];
-  if (!friday || !primaryShifts.some(shift => friday[shift]?.worker === weekendWorker)) return;
+  if (!friday) return;
 
   const avoid = [weekendWorker];
-  const thursdayRelief = thursday
+  const weekendAux = available.find(aux => aux.id === weekendWorker);
+  const hasWeekendWorkerInWeekdayShift = weekdayShifts.some(shift => friday[shift]?.worker === weekendWorker);
+  const thursdayRelief = thursday && hasWeekendWorkerInWeekdayShift
     ? pickCycleWorker({
         cycle: weekdayCycle,
         available,
@@ -144,13 +149,18 @@ const balanceThursdayBeforeWeekend = ({ schedule, saturday, weekendWorker, avail
     friday.morning = withPrimary(friday.morning, thursdayRelief);
   }
 
-  primaryShifts.forEach(shift => {
+  weekdayShifts.forEach(shift => {
     if (friday[shift]?.worker !== weekendWorker) return;
     const relief = (thursdayRelief && canWorkShift(available.find(aux => aux.id === thursdayRelief), shift, year, month, fridayDay))
       ? thursdayRelief
       : pickWeekdayRelief({ available, weekdayCycle, year, month, day: fridayDay, shift, avoid, offset });
     if (relief) friday[shift] = withPrimary(friday[shift], relief);
   });
+
+  // The weekend starts on Friday evening: its owner takes SR before Saturday morning.
+  if (canOpenWeekendNight(weekendAux, year, month, saturday)) {
+    friday.night = withPrimary(friday.night, weekendWorker);
+  }
 };
 
 export function buildSchedule(options) {
@@ -198,8 +208,10 @@ export function buildSchedule(options) {
       available,
       offset: index,
       avoid: weekendAvoid,
-      predicate: aux => canWorkShift(aux, "afternoon", options.year, options.month, day)
-        && canWorkShift(aux, "morning", options.year, options.month, day + 1),
+      predicate: aux => canWorkShift(aux, "morning", options.year, options.month, day)
+        && canWorkShift(aux, "afternoon", options.year, options.month, day)
+        && canWorkShift(aux, "morning", options.year, options.month, day + 1)
+        && canOpenWeekendNight(aux, options.year, options.month, day),
     });
     if (!weekendWorker || !sunday) return;
     previousWeekendWorker = weekendWorker;

@@ -1,5 +1,5 @@
 import { SHIFT_DEFS } from "./constants.js";
-import { buildSchedule, calculateHours } from "./scheduler-handover.js?v=20260608-thursday-balance";
+import { buildSchedule, calculateHours } from "./scheduler-handover.js?v=20260614-meals-quota";
 import { loadState } from "./storage.js";
 import { sharePlanningByEmail } from "./planning-share.js?v=20260607-a4-topbar";
 

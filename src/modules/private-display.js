@@ -28,20 +28,6 @@ const cleanPersonalView = root => {
 
 const cleanAdminHours = root => {
   root.querySelectorAll(".summary .muted, .hours-grid .title-row b:last-child, .hours-grid .summary span").forEach(cleanNode);
-  root.querySelectorAll(".hours-grid > .panel").forEach(panel => {
-    const totalNode = panel.querySelector(".title-row b:last-child");
-    const totalMatch = totalNode?.textContent?.match(/(\d+(?:[.,]\d+)?)h\s*\/\s*(\d+(?:[.,]\d+)?)h/);
-    if (!totalMatch) return;
-    const quota = parseHour(totalMatch[2]);
-    const spans = [...panel.querySelectorAll(".summary span")].filter(node => /^(Matin|Apres-midi|Après-midi|Nuit)\s*:/.test(node.textContent || ""));
-    const raw = spans.map(node => parseHour((node.textContent || "").match(/:\s*(\d+(?:[.,]\d+)?)h/)?.[1]));
-    const rawTotal = raw.reduce((sum, value) => sum + value, 0);
-    if (!quota || !rawTotal || rawTotal <= quota) return;
-    const factor = quota / rawTotal;
-    spans.forEach((node, index) => {
-      node.textContent = (node.textContent || "").replace(/:\s*\d+(?:[.,]\d+)?h/, ` : ${formatHour(raw[index] * factor)}h`);
-    });
-  });
 };
 
 export function initPrivateDisplay() {

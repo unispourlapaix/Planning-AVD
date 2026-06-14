@@ -1,11 +1,16 @@
 import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js";
 import { dayIndex, daysInMonth } from "./dates.js";
-import { canWorkShift } from "./scheduler-handover.js?v=20260608-thursday-balance";
+import { canWorkShift } from "./scheduler-handover.js?v=20260614-meals-quota";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primary = entry => workers(entry)[0] || "";
 const isNightHandoverMorning = (schedule, day, shift, id) =>
   shift === "morning" && day > 1 && primary(schedule[day - 1]?.night) === id;
+const isWeekendOpeningNight = ({ schedule, year, month, day, shift, id, aux }) =>
+  shift === "night"
+  && dayIndex(year, month, day) === 4
+  && (primary(schedule[day + 1]?.morning) || primary(schedule[day + 1]?.afternoon)) === id
+  && canWorkShift(aux, "night", year, month, day + 1);
 
 const auxName = (auxiliaries, id) => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
 const compactDays = days => days.slice(0, 4).join(", ") + (days.length > 4 ? ` +${days.length - 4}` : "");
@@ -25,6 +30,7 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
 
   const undefinedSlots = [];
   const invalidSlots = [];
+  const brokenWeekendHandovers = [];
   const nightCount = Object.fromEntries(active.map(aux => [aux.id, 0]));
   const mainCount = Object.fromEntries(active.map(aux => [aux.id, 0]));
   const weekendOwnerCount = Object.fromEntries(active.map(aux => [aux.id, 0]));
@@ -37,7 +43,9 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
       if (!ids.length) undefinedSlots.push(`${day} ${SHIFT_LABEL[shift.id]}`);
       ids.forEach(id => {
         const aux = byId[id];
-        if (!aux || (!canWorkShift(aux, shift.id, year, month, day) && !isNightHandoverMorning(schedule, day, shift.id, id))) {
+        const allowedHandover = isNightHandoverMorning(schedule, day, shift.id, id)
+          || isWeekendOpeningNight({ schedule, year, month, day, shift: shift.id, id, aux });
+        if (!aux || (!canWorkShift(aux, shift.id, year, month, day) && !allowedHandover)) {
           invalidSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
         }
       });
@@ -55,6 +63,13 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
         if (weekendOwnerCount[weekendOwner] !== undefined) weekendOwnerCount[weekendOwner] += 1;
       }
     }
+
+    if (dayIndex(year, month, day) === 4 && schedule[day + 1]) {
+      const saturdayOwner = primary(schedule[day + 1].morning) || primary(schedule[day + 1].afternoon);
+      if (saturdayOwner && primary(plan.night) !== saturdayOwner) {
+        brokenWeekendHandovers.push(`${day}-${day + 1} ${MONTHS[month]}`);
+      }
+    }
   }
 
   if (undefinedSlots.length) {
@@ -63,6 +78,10 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
 
   if (invalidSlots.length) {
     add("danger", "Options auxiliaires non respectees", `${compactDays(invalidSlots)}.`);
+  }
+
+  if (brokenWeekendHandovers.length) {
+    add("danger", "Passation du vendredi soir", `Le titulaire du samedi doit commencer le vendredi soir : ${compactDays(brokenWeekendHandovers)}.`);
   }
 
   active
