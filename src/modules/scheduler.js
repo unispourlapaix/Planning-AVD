@@ -215,7 +215,7 @@ function pickNightOnlyDouble({ primary, team, pointers, load, year, month, day, 
   });
   if (!teammate) return [];
   const idx = candidates.findIndex(aux => aux.id === teammate);
-  pointers[key] = (idx >= 0 ? idx + 1 : (pointers[key] || 0) + 1) % math.max(1, candidates.length);
+  pointers[key] = (idx >= 0 ? idx + 1 : (pointers[key] || 0) + 1) % Math.max(1, candidates.length);
   return [teammate];
 }
 

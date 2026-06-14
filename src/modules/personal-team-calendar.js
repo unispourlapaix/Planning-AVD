@@ -135,7 +135,7 @@ const dayHtml = (item, year, month) => {
   const tone = date.getDay() === 6 ? " saturday" : date.getDay() === 0 ? " sunday" : "";
   const meal = mealForDate(year, month, item.day);
   return `<div class="day-card${tone}">
-    <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</div>
+    <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</span></div>
     ${shiftOrder.map(shift => slotHtml(item, shift)).join("")}
     <button class="meal-tag" data-meal-year="${year}" data-meal-month="${month}" data-meal-day="${item.day}" title="Repas : ${escapeHtml(meal.title)}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M15 3v18M15 3c4 2 5 8 0 11"></path></svg>
