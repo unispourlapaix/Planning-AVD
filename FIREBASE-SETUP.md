@@ -27,3 +27,5 @@ Depuis Firebase Console :
 2. L'admin prépare le mois puis clique sur Publier.
 3. L'auxiliaire se connecte avec son propre compte Google.
 4. Il voit uniquement son planning personnel publié.
+5. S'il veut échanger un créneau, il clique sur le créneau et envoie une demande.
+6. L'admin valide ou refuse la demande dans l'application. Une validation applique le changement et republie le planning.

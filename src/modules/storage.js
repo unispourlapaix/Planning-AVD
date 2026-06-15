@@ -68,12 +68,83 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
     .onSnapshot(snap => onChange?.(snap.exists ? snap.data() : null), error => onError?.(error));
 }
 
+const changeRequestCollection = ({ db, email, year, month }) =>
+  db.collection("planning-avd-change-requests").doc(emailKey(email)).collection("months").doc(monthKey(year, month)).collection("items");
+
+const requestSnapshotList = snapshot => snapshot.docs
+  .map(doc => ({ id: doc.id, ...doc.data() }))
+  .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || a.day - b.day || String(a.shift).localeCompare(String(b.shift)));
+
+export function subscribePersonalChangeRequests({ db, user, year, month, onChange, onError }) {
+  if (!db || !user?.email) return () => {};
+  return changeRequestCollection({ db, email: user.email, year, month })
+    .onSnapshot(snapshot => onChange?.(requestSnapshotList(snapshot)), error => onError?.(error));
+}
+
+export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, onChange, onError }) {
+  if (!db) return () => {};
+  const emails = [...new Set(auxiliaries.map(aux => String(aux.email || "").trim().toLowerCase()).filter(Boolean))];
+  if (!emails.length) {
+    onChange?.([]);
+    return () => {};
+  }
+  const buckets = new Map();
+  const emit = () => onChange?.([...buckets.values()].flat().sort((a, b) =>
+    (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1)
+    || a.day - b.day
+    || String(a.shift).localeCompare(String(b.shift))));
+  const unsubscribers = emails.map(email => changeRequestCollection({ db, email, year, month })
+    .onSnapshot(snapshot => {
+      buckets.set(email, requestSnapshotList(snapshot));
+      emit();
+    }, error => onError?.(error)));
+  return () => unsubscribers.forEach(unsubscribe => unsubscribe());
+}
+
+export async function createPlanningChangeRequest({ db, user, planning, year, month, day, shift, targetEmail, targetName, message }) {
+  if (!db || !user?.email) throw new Error("Connexion necessaire.");
+  const email = String(user.email).trim().toLowerCase();
+  const ref = changeRequestCollection({ db, email, year, month }).doc();
+  await ref.set({
+    requesterEmail: email,
+    requesterName: planning?.name || user.displayName || email,
+    year,
+    month,
+    period: monthKey(year, month),
+    day,
+    shift,
+    targetEmail: String(targetEmail || "").trim().toLowerCase(),
+    targetName: String(targetName || "").trim(),
+    message: String(message || "").trim(),
+    status: "pending",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+export async function resolvePlanningChangeRequest({ db, user, request, status, workerId, workerName }) {
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  if (!request?.requesterEmail || !request?.id) throw new Error("Demande introuvable.");
+  await changeRequestCollection({ db, email: request.requesterEmail, year: request.year, month: request.month }).doc(request.id).set({
+    status,
+    resolvedWorkerId: workerId || "",
+    resolvedWorkerName: workerName || "",
+    resolvedBy: user.email || "",
+    resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
 export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   const active = auxiliaries.filter(aux => aux.active && String(aux.email || "").trim());
   if (!active.length) throw new Error("Ajoutez au moins un email auxiliaire dans Reglages.");
   const batch = db.batch();
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
+  const team = active.map(aux => ({
+    name: aux.name || "A definir",
+    email: String(aux.email || "").trim().toLowerCase(),
+  }));
   const calendar = Object.values(schedule).map(plan => ({
     day: plan.day,
     shifts: Object.fromEntries(["morning", "afternoon", "night"].map(shift => {
@@ -97,6 +168,7 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       month,
       entries,
       calendar,
+      team,
       hours: displayHours(hours[aux.id], aux.quota),
       publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       publishedBy: user.email || "",

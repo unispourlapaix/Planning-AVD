@@ -3,7 +3,18 @@ import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIF
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
-import { defaultState, isAdminUser, loadState, publishPersonalPlannings, saveState, subscribePersonalPlanning } from "./modules/storage.js";
+import {
+  createPlanningChangeRequest,
+  defaultState,
+  isAdminUser,
+  loadState,
+  publishPersonalPlannings,
+  resolvePlanningChangeRequest,
+  saveState,
+  subscribeAdminChangeRequests,
+  subscribePersonalChangeRequests,
+  subscribePersonalPlanning,
+} from "./modules/storage.js";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -164,6 +175,12 @@ const planningNames = (auxiliaries, ids) => ids
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const displayHours = summarizeHours;
 const overrideKey = manualOverrideKey;
+const requestSlotKey = (day, shift) => `${day}-${shift}`;
+const requestStatusLabel = status => ({
+  pending: "En attente",
+  approved: "Validée",
+  rejected: "Refusée",
+}[status] || "Demande");
 const applyOverrides = ({ schedule, overrides, year, month }) => Object.fromEntries(Object.entries(schedule).map(([day, plan]) => [
   day,
   {
@@ -222,14 +239,84 @@ function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMo
   );
 }
 
-function PersonalDayCard({ day, entries, year, month, onOpenMeal }) {
+function ChangeRequestModal({ edit, planning, authState, onClose, onSubmit, saving }) {
+  const [targetEmail, setTargetEmail] = useState("");
+  const [message, setMessage] = useState("");
+  if (!edit) return null;
+  const userEmail = String(authState.user?.email || "").toLowerCase();
+  const team = (planning?.team || []).filter(member => String(member.email || "").toLowerCase() !== userEmail);
+  const target = team.find(member => member.email === targetEmail);
+  return h("div", { className: "modal-backdrop", onClick: onClose },
+    h("section", { className: "slot-editor change-request-modal", onClick: event => event.stopPropagation() },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h3", null, "Demande d'échange"),
+          h("div", { className: "muted" }, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[edit.month]}`),
+        ),
+        h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
+      ),
+      h(Field, { label: "Proposer un échange avec" }, h(Select, { value: targetEmail, onChange: setTargetEmail },
+        h("option", { value: "" }, "À définir par l'admin"),
+        team.map(member => h("option", { key: member.email || member.name, value: member.email }, member.name || member.email)),
+      )),
+      h(Field, { label: "Message pour l'admin" }, h("textarea", {
+        value: message,
+        onChange: event => setMessage(event.target.value),
+        placeholder: "Exemple : je peux échanger avec Sarah, ou je ne peux pas faire ce soir.",
+        rows: 4,
+      })),
+      h("div", { className: "request-actions" },
+        h(Button, { onClick: onClose }, "Annuler"),
+        h(Button, {
+          active: true,
+          disabled: saving,
+          onClick: () => onSubmit({ targetEmail, targetName: target?.name || "", message }),
+        }, saving ? "Envoi..." : "Envoyer la demande"),
+      ),
+    ),
+  );
+}
+
+function PersonalChangeRequestsPanel({ requests, error }) {
+  if (!requests.length && !error) return null;
+  const visible = requests.slice(0, 5);
+  return h("section", { className: "panel request-panel" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Mes demandes"),
+        h("div", { className: "muted" }, error || `${requests.length} demande(s) pour ce mois.`),
+      ),
+    ),
+    h("div", { className: "request-list" }, visible.map(request => h("div", { key: request.id, className: `request-item ${request.status || "pending"}` },
+      h("span", { className: "manual-chip" }, `${request.day} ${MONTHS[request.month]}`),
+      h("span", null,
+        h("b", null, SHIFT_LABEL[request.shift] || request.shift),
+        h("small", null, `${requestStatusLabel(request.status)}${request.targetName ? ` · ${request.targetName}` : ""}`),
+      ),
+    ))),
+  );
+}
+
+function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal, onRequestChange }) {
   return h("div", { className: `day-card personal-day${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day)),
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
-      return h("div", { className: `personal-slot ${entry ? "scheduled" : ""}`, key: shift.id },
+      const request = requestBySlot?.[requestSlotKey(day, shift.id)];
+      const content = [
+        h("span", { className: "slot-label", key: "label" }, SHIFT_COMPACT_LABEL[shift.id]),
+        h("span", { key: "text" }, entry ? SHIFT_LABEL[shift.id] : "Repos"),
+        request ? h("span", { key: "request", className: `request-badge ${request.status || "pending"}` }, requestStatusLabel(request.status)) : null,
+      ];
+      return entry ? h("button", {
+        className: `personal-slot scheduled requestable-slot ${request ? "has-request" : ""}`,
+        key: shift.id,
+        title: request ? "Demande déjà envoyée" : "Demander un échange",
+        disabled: request?.status === "pending",
+        onClick: () => onRequestChange({ year, month, day, shift: shift.id }),
+      }, content) : h("div", { className: "personal-slot", key: shift.id },
         h("span", { className: "slot-label" }, SHIFT_COMPACT_LABEL[shift.id]),
-        h("span", null, entry ? SHIFT_LABEL[shift.id] : "Repos"),
+        h("span", null, "Repos"),
       );
     }),
     h(MealTag, { year, month, day, onOpen: onOpenMeal }),
@@ -239,11 +326,27 @@ function PersonalDayCard({ day, entries, year, month, onOpenMeal }) {
 function PersonalView({ authState, year, month, setYear, setMonth, planning, error, onLogout }) {
   const [personalView, setPersonalView] = useState("week");
   const [mealDate, setMealDate] = useState(null);
+  const [requestEdit, setRequestEdit] = useState(null);
+  const [requestSaving, setRequestSaving] = useState(false);
+  const [changeRequests, setChangeRequests] = useState([]);
+  const [changeRequestError, setChangeRequestError] = useState("");
   useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
     window.addEventListener("planning-avd-open-meal", openMeal);
     return () => window.removeEventListener("planning-avd-open-meal", openMeal);
   }, []);
+  useEffect(() => {
+    if (!authState.db || !authState.user) return;
+    setChangeRequestError("");
+    return subscribePersonalChangeRequests({
+      db: authState.db,
+      user: authState.user,
+      year,
+      month,
+      onChange: setChangeRequests,
+      onError: error => setChangeRequestError(`Demandes indisponibles : ${error.message}`),
+    });
+  }, [authState.db, authState.user, year, month]);
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -254,6 +357,30 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
   const weekGroups = [];
   for (let day = 1; day <= Object.keys(byDay).length; day += 7) weekGroups.push(Array.from({ length: 7 }, (_, index) => day + index).filter(item => byDay[item]));
+  const requestBySlot = Object.fromEntries(changeRequests.map(request => [requestSlotKey(request.day, request.shift), request]));
+  const sendChangeRequest = async ({ targetEmail, targetName, message }) => {
+    if (!requestEdit) return;
+    setRequestSaving(true);
+    try {
+      await createPlanningChangeRequest({
+        db: authState.db,
+        user: authState.user,
+        planning,
+        year: requestEdit.year,
+        month: requestEdit.month,
+        day: requestEdit.day,
+        shift: requestEdit.shift,
+        targetEmail,
+        targetName,
+        message,
+      });
+      setRequestEdit(null);
+    } catch (error) {
+      alert(`Demande impossible : ${error.message}`);
+    } finally {
+      setRequestSaving(false);
+    }
+  };
   return h("main", { className: "app personal-app" },
     h("header", { className: "topbar" },
       h("div", { className: "title-row" },
@@ -280,16 +407,18 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
           )
         : h("div", { className: "panel" }, h("h3", null, "Planning en attente"), h("div", { className: "muted" }, "Votre administrateur n'a pas encore transmis de planning pour ce mois.")),
+      h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }),
       planning && personalView === "week"
         ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
             h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
-            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, onOpenMeal: setMealDate }))),
+            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit }))),
           )))
         : null,
       planning && personalView === "month"
-        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, onOpenMeal: setMealDate })))
+        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit })))
         : null,
     ),
+    h(ChangeRequestModal, { edit: requestEdit, planning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
     h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null) }),
   );
 }
@@ -341,6 +470,45 @@ function ManualOverridesPanel({ items, onReset }) {
       h(Button, { onClick: () => onReset(item.key) }, "Auto"),
     ))),
     items.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${items.length - visible.length} autre(s) modification(s).`) : null,
+  );
+}
+
+function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onReject }) {
+  const [choices, setChoices] = useState({});
+  if (!requests.length && !error) return null;
+  const active = auxiliaries.filter(aux => aux.active);
+  const defaultWorker = request => active.find(aux => String(aux.email || "").toLowerCase() === String(request.targetEmail || "").toLowerCase())
+    || active.find(aux => String(aux.name || "").trim().toLowerCase() === String(request.targetName || "").trim().toLowerCase())
+    || null;
+  return h("section", { className: "panel request-panel admin-request-panel" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Demandes d'échange"),
+        h("div", { className: "muted" }, error || `${requests.filter(request => request.status === "pending").length} demande(s) en attente.`),
+      ),
+    ),
+    h("div", { className: "request-list" }, requests.slice(0, 8).map(request => {
+      const suggested = defaultWorker(request);
+      const selected = choices[request.id] ?? suggested?.id ?? "";
+      const pending = request.status === "pending";
+      return h("div", { key: request.id, className: `request-item ${request.status || "pending"}` },
+        h("span", { className: "manual-chip" }, `${request.day} ${MONTHS[request.month]}`),
+        h("span", null,
+          h("b", null, `${request.requesterName || request.requesterEmail} · ${SHIFT_LABEL[request.shift] || request.shift}`),
+          h("small", null, `${requestStatusLabel(request.status)}${request.targetName ? ` · propose ${request.targetName}` : ""}`),
+          request.message ? h("em", null, request.message) : null,
+        ),
+        pending ? h("div", { className: "request-admin-actions" },
+          h(Select, { value: selected, onChange: value => setChoices(current => ({ ...current, [request.id]: value })) },
+            h("option", { value: "" }, "Choisir"),
+            active.map(aux => h("option", { key: aux.id, value: aux.id }, aux.name || aux.email || aux.id)),
+          ),
+          h(Button, { active: true, onClick: () => onApprove(request, selected) }, "Valider"),
+          h(Button, { onClick: () => onReject(request) }, "Refuser"),
+        ) : h("span", { className: "request-resolved" }, request.resolvedWorkerName || requestStatusLabel(request.status)),
+      );
+    })),
+    requests.length > 8 ? h("div", { className: "muted", style: { marginTop: 8 } }, `${requests.length - 8} autre(s) demande(s).`) : null,
   );
 }
 
@@ -539,6 +707,8 @@ export default function App() {
   const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false });
   const [personalPlanning, setPersonalPlanning] = useState(null);
   const [personalError, setPersonalError] = useState("");
+  const [adminChangeRequests, setAdminChangeRequests] = useState([]);
+  const [adminChangeError, setAdminChangeError] = useState("");
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
@@ -558,6 +728,8 @@ export default function App() {
 
   const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin;
 
+  const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active), [auxiliaries]);
+
   useEffect(() => {
     if (!personalMode) return;
     setPersonalError("");
@@ -570,6 +742,22 @@ export default function App() {
       onError: error => setPersonalError(`Lecture du planning impossible : ${error.message}`),
     });
   }, [personalMode, authState.db, authState.user, year, month]);
+
+  useEffect(() => {
+    if (!authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin) {
+      setAdminChangeRequests([]);
+      return;
+    }
+    setAdminChangeError("");
+    return subscribeAdminChangeRequests({
+      db: authState.db,
+      auxiliaries: activeAux,
+      year,
+      month,
+      onChange: setAdminChangeRequests,
+      onError: error => setAdminChangeError(`Demandes indisponibles : ${error.message}`),
+    });
+  }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, activeAux, year, month]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;
@@ -595,7 +783,6 @@ export default function App() {
     return () => clearTimeout(id);
   }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides]);
 
-  const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active), [auxiliaries]);
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
   const hours = useMemo(() => calculateHours(schedule, auxiliaries), [schedule, auxiliaries]);
@@ -624,6 +811,42 @@ export default function App() {
       alert(`Planning sauvegardé pour ${count} auxiliaire(s).`);
     } catch (error) {
       alert(`Sauvegarde impossible : ${error.message}`);
+    }
+  };
+
+  const approveChangeRequest = async (request, workerId) => {
+    const worker = activeAux.find(aux => aux.id === workerId);
+    if (!worker) return alert("Choisissez l'auxiliaire qui reprend le créneau.");
+    try {
+      const key = overrideKey(request.year, request.month, request.day, request.shift);
+      const nextOverrides = { ...overrides, [key]: worker.id };
+      const nextSchedule = applyOverrides({ schedule: planning.schedule, overrides: nextOverrides, year, month });
+      const nextHours = calculateHours(nextSchedule, auxiliaries);
+      setOverrides(nextOverrides);
+      await saveState({
+        db: authState.db,
+        user: authState.user,
+        state: { year, month, view, rotationDays, auxiliaries, overrides: nextOverrides },
+      });
+      await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours });
+      await resolvePlanningChangeRequest({
+        db: authState.db,
+        user: authState.user,
+        request,
+        status: "approved",
+        workerId: worker.id,
+        workerName: worker.name,
+      });
+    } catch (error) {
+      alert(`Validation impossible : ${error.message}`);
+    }
+  };
+
+  const rejectChangeRequest = async request => {
+    try {
+      await resolvePlanningChangeRequest({ db: authState.db, user: authState.user, request, status: "rejected" });
+    } catch (error) {
+      alert(`Refus impossible : ${error.message}`);
     }
   };
 
@@ -709,6 +932,7 @@ export default function App() {
     h("div", { className: "layout" },
       h(Summary, { auxiliaries: activeAux, hours }),
       h(RotationAudit, { checks: rotationChecks }),
+      h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }),
       h(ManualOverridesPanel, { items: manualOverrides, onReset: key => setOverrides(current => { const next = { ...current }; delete next[key]; return next; }) }),
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
