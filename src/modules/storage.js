@@ -141,6 +141,19 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
   if (!active.length) throw new Error("Ajoutez au moins un email auxiliaire dans Reglages.");
   const batch = db.batch();
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
+  auxiliaries
+    .filter(aux => String(aux.email || "").trim())
+    .forEach(aux => {
+      const email = String(aux.email).trim().toLowerCase();
+      const memberRef = db.collection("planning-avd-team-members").doc(email);
+      batch.set(memberRef, {
+        email,
+        name: aux.name,
+        active: aux.active !== false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: user.email || "",
+      }, { merge: true });
+    });
   const team = active.map(aux => ({
     name: aux.name || "A definir",
     email: String(aux.email || "").trim().toLowerCase(),

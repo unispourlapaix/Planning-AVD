@@ -1,5 +1,6 @@
 import { MONTHS } from "./constants.js";
-import { mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./meal-planning.js";
+import { mealWeekForDate } from "./meal-planning.js";
+import { addShoppingItem, setShoppingChecked, shoppingItems, shoppingListText, subscribeShopping } from "./meal-shopping.js";
 
 const STYLE_ID = "planning-avd-meal-banner-style";
 const BAR_ID = "planning-avd-meal-banner";
@@ -11,30 +12,36 @@ const addStyle = () => {
   style.id = STYLE_ID;
   style.textContent = `
     .meal-tag{display:none!important}
-    #${BAR_ID}{display:flex;align-items:center;justify-content:center;gap:10px;min-height:38px;margin-top:7px;padding:5px 9px;border:1px solid rgba(176,218,196,.78);border-radius:8px;background:rgba(246,253,249,.92);box-shadow:inset 0 1px 0 #fff,0 5px 14px rgba(79,144,112,.09)}
-    #${BAR_ID} .meal-banner-title{display:inline-flex;align-items:center;gap:6px;color:#39735b;font-size:12px;font-weight:900;white-space:nowrap}
+    #${BAR_ID}{display:flex;align-items:center;justify-content:center;gap:10px;min-height:38px;margin-top:7px;padding:5px 9px;border:1px solid rgba(176,218,196,.78);border-radius:8px;background:rgba(246,253,249,.92)}
+    #${BAR_ID} .meal-banner-title{color:#39735b;font-size:12px;font-weight:900;white-space:nowrap}
     #${BAR_ID} .meal-banner-days{display:flex;align-items:center;gap:5px}
-    #${BAR_ID} button{width:27px;height:27px;padding:0;border:1px solid rgba(104,196,154,.42);border-radius:50%;background:rgba(255,255,255,.96);color:#39735b;font-size:11px;font-weight:900;box-shadow:inset 0 1px 0 #fff}
-    #${BAR_ID} button:hover,#${BAR_ID} button:focus-visible{outline:none;border-color:#4fae82;background:#eaf8f0;transform:translateY(-1px)}
+    #${BAR_ID} button{width:27px;height:27px;padding:0;border:1px solid rgba(104,196,154,.42);border-radius:50%;background:#fff;color:#39735b;font-size:11px;font-weight:900}
     #${BAR_ID} button.active{background:#68a887;border-color:#68a887;color:#fff}
     #${MODAL_ID}{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:14px;background:rgba(34,51,60,.34);backdrop-filter:blur(4px)}
-    #${MODAL_ID} .meal-modal-card{width:min(760px,100%);max-height:92vh;overflow:auto;padding:16px;border:1px solid rgba(180,211,201,.94);border-radius:8px;background:rgba(255,255,255,.98);box-shadow:0 20px 60px rgba(30,62,52,.22)}
+    #${MODAL_ID} .meal-modal-card{width:min(900px,100%);max-height:92vh;overflow:auto;padding:16px;border:1px solid rgba(180,211,201,.94);border-radius:8px;background:rgba(255,255,255,.98);box-shadow:0 20px 60px rgba(30,62,52,.22)}
     #${MODAL_ID} .meal-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
     #${MODAL_ID} h3,#${MODAL_ID} h4{margin:0 0 8px}
-    #${MODAL_ID} .meal-modal-close{width:32px;height:32px;border:1px solid #d8e5df;border-radius:50%;background:#fff;font-size:20px;line-height:1}
+    #${MODAL_ID} .meal-modal-close{width:32px;height:32px;border:1px solid #d8e5df;border-radius:50%;background:#fff;font-size:20px}
     #${MODAL_ID} .meal-modal-tabs{display:flex;gap:5px;margin:12px 0;overflow-x:auto}
     #${MODAL_ID} .meal-modal-tabs button{min-width:54px;padding:7px;border:1px solid #cfe2d8;border-radius:7px;background:#f8fcfa;color:#39735b;font-weight:800}
     #${MODAL_ID} .meal-modal-tabs button.active{background:#68a887;color:#fff}
-    #${MODAL_ID} .meal-modal-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+    #${MODAL_ID} .meal-modal-grid{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(340px,1.15fr);gap:16px}
     #${MODAL_ID} ul,#${MODAL_ID} ol{margin:6px 0 14px;padding-left:20px}
     #${MODAL_ID} li{margin:4px 0}
-    #${MODAL_ID} .meal-copy{padding:8px 11px;border:1px solid #b8d8c8;border-radius:7px;background:#eef8f2;color:#39735b;font-weight:800}
+    #${MODAL_ID} .shopping-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    #${MODAL_ID} .meal-copy{padding:7px 9px;border:1px solid #b8d8c8;border-radius:7px;background:#eef8f2;color:#39735b;font-weight:800}
+    #${MODAL_ID} .shopping-progress{margin:0 0 10px;color:#697981;font-size:11px;font-weight:800}
+    #${MODAL_ID} .shopping-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    #${MODAL_ID} .shopping-group{padding:8px;border-radius:7px;background:#f3faf6}
+    #${MODAL_ID} .shopping-check{display:grid;grid-template-columns:18px minmax(0,1fr);gap:7px;align-items:start;margin:5px 0;color:#465b51;font-size:12px;font-weight:700;cursor:pointer}
+    #${MODAL_ID} .shopping-check input{width:17px;height:17px;margin:0;accent-color:#68a887}
+    #${MODAL_ID} .shopping-check.checked span{text-decoration:line-through;color:#8b9791}
+    #${MODAL_ID} .shopping-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-top:10px}
+    #${MODAL_ID} .shopping-add input{min-width:0;padding:8px;border:1px solid #cfe2d8;border-radius:7px}
+    #${MODAL_ID} .shopping-add button{padding:8px 10px;border:1px solid #68a887;border-radius:7px;background:#68a887;color:#fff;font-weight:900}
     @media(max-width:620px){
-      #${BAR_ID}{justify-content:flex-start;gap:7px;min-height:34px;margin-top:5px;padding:4px 6px;overflow-x:auto}
-      #${BAR_ID} .meal-banner-title{font-size:10px}
-      #${BAR_ID} .meal-banner-days{gap:4px}
-      #${BAR_ID} button{width:25px;height:25px;flex:0 0 25px;font-size:10px}
-      #${MODAL_ID} .meal-modal-grid{grid-template-columns:1fr}
+      #${BAR_ID}{justify-content:flex-start;overflow-x:auto}
+      #${MODAL_ID} .meal-modal-grid,#${MODAL_ID} .shopping-groups{grid-template-columns:1fr}
     }
     @media print{#${BAR_ID},#${MODAL_ID}{display:none!important}}
   `;
@@ -42,9 +49,7 @@ const addStyle = () => {
 };
 
 const visibleMonth = () => {
-  const title = document.querySelector(".month-title-btn")?.textContent
-    || document.querySelector(".personal-app .month-row h2")?.textContent
-    || "";
+  const title = document.querySelector(".month-title-btn")?.textContent || "";
   const match = title.trim().match(/(.+?)\s+(\d{4})$/);
   const month = MONTHS.findIndex(item => item.toLocaleLowerCase("fr") === match?.[1]?.trim().toLocaleLowerCase("fr"));
   return month >= 0 ? { month, year: Number(match[2]) } : null;
@@ -60,22 +65,34 @@ const appendList = (parent, tag, items) => {
   parent.appendChild(list);
 };
 
+const firebaseContext = () => {
+  if (!globalThis.firebase?.apps?.length) return { db: null, user: null };
+  return { db: firebase.firestore(), user: firebase.auth().currentUser };
+};
+
 const openMealModal = (week, initialIndex) => {
   document.getElementById(MODAL_ID)?.remove();
   let selectedIndex = initialIndex;
+  let shoppingState = { checked: {}, customItems: [] };
+  let unsubscribe = () => {};
   const overlay = document.createElement("div");
   overlay.id = MODAL_ID;
   const card = document.createElement("section");
   card.className = "meal-modal-card";
   overlay.appendChild(card);
 
-  const close = () => overlay.remove();
+  const close = () => {
+    unsubscribe();
+    overlay.remove();
+  };
   overlay.addEventListener("click", event => {
     if (event.target === overlay) close();
   });
 
   const render = () => {
     const meal = week[selectedIndex];
+    const items = shoppingItems(week, shoppingState);
+    const checkedCount = items.filter(item => item.checked).length;
     card.replaceChildren();
 
     const head = document.createElement("div");
@@ -116,7 +133,7 @@ const openMealModal = (week, initialIndex) => {
     const recipeTitle = document.createElement("h3");
     recipeTitle.textContent = meal.title;
     const ingredientsTitle = document.createElement("h4");
-    ingredientsTitle.textContent = "Ingrédients";
+    ingredientsTitle.textContent = "Ingredients";
     recipe.append(recipeTitle, ingredientsTitle);
     appendList(recipe, "ul", meal.ingredients);
     const stepsTitle = document.createElement("h4");
@@ -125,36 +142,103 @@ const openMealModal = (week, initialIndex) => {
     appendList(recipe, "ol", meal.steps);
 
     const shopping = document.createElement("aside");
+    const shoppingHead = document.createElement("div");
+    shoppingHead.className = "shopping-head";
     const shoppingTitle = document.createElement("h3");
     shoppingTitle.textContent = "Courses";
     const copy = document.createElement("button");
     copy.className = "meal-copy";
     copy.type = "button";
-    copy.textContent = "Copier la liste";
+    copy.textContent = "Copier";
     copy.addEventListener("click", async () => {
-      await navigator.clipboard?.writeText(shoppingListText(week));
-      copy.textContent = "Liste copiée";
+      await navigator.clipboard?.writeText(shoppingListText(week, shoppingState));
+      copy.textContent = "Copiee";
     });
-    shopping.append(shoppingTitle, copy);
-    WEEKLY_SHOPPING.forEach(group => {
+    shoppingHead.append(shoppingTitle, copy);
+    const progress = document.createElement("div");
+    progress.className = "shopping-progress";
+    progress.textContent = `${checkedCount} article(s) deja pris sur ${items.length}`;
+    shopping.append(shoppingHead, progress);
+
+    const groups = document.createElement("div");
+    groups.className = "shopping-groups";
+    [...new Set(items.map(item => item.category))].forEach(category => {
+      const section = document.createElement("section");
+      section.className = "shopping-group";
       const groupTitle = document.createElement("h4");
-      groupTitle.textContent = group.category;
-      shopping.appendChild(groupTitle);
-      appendList(shopping, "ul", group.items);
+      groupTitle.textContent = category;
+      section.appendChild(groupTitle);
+      items.filter(item => item.category === category).forEach(item => {
+        const label = document.createElement("label");
+        label.className = `shopping-check${item.checked ? " checked" : ""}`;
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = item.checked;
+        checkbox.addEventListener("change", async () => {
+          shoppingState = {
+            ...shoppingState,
+            checked: { ...shoppingState.checked, [item.id]: checkbox.checked },
+          };
+          render();
+          const { db, user } = firebaseContext();
+          try {
+            await setShoppingChecked({ db, user, week, itemId: item.id, checked: checkbox.checked });
+          } catch (error) {
+            alert(`Mise a jour impossible : ${error.message}`);
+          }
+        });
+        const text = document.createElement("span");
+        text.textContent = item.text;
+        label.append(checkbox, text);
+        section.appendChild(label);
+      });
+      groups.appendChild(section);
     });
+    shopping.appendChild(groups);
+
+    const addForm = document.createElement("form");
+    addForm.className = "shopping-add";
+    const input = document.createElement("input");
+    input.maxLength = 120;
+    input.placeholder = "Ajouter un article...";
+    const addButton = document.createElement("button");
+    addButton.type = "submit";
+    addButton.textContent = "Ajouter";
+    addForm.append(input, addButton);
+    addForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const { db, user } = firebaseContext();
+      try {
+        shoppingState = await addShoppingItem({ db, user, week, text: input.value });
+        render();
+      } catch (error) {
+        alert(`Ajout impossible : ${error.message}`);
+      }
+    });
+    shopping.appendChild(addForm);
+
     grid.append(recipe, shopping);
     card.append(head, tabs, grid);
   };
 
-  render();
   document.body.appendChild(overlay);
+  const { db, user } = firebaseContext();
+  unsubscribe = subscribeShopping({
+    db,
+    user,
+    week,
+    onChange: state => {
+      shoppingState = state;
+      render();
+    },
+    onError: error => console.warn("Liste de courses cloud indisponible.", error),
+  });
 };
 
 const renderBanner = () => {
   const topbar = document.querySelector(".app > .topbar, .personal-app > .topbar");
   const period = visibleMonth();
   if (!topbar || !period) return;
-
   const today = new Date();
   const currentMonth = today.getFullYear() === period.year && today.getMonth() === period.month;
   const week = mealWeekForDate(period.year, period.month, currentMonth ? today.getDate() : 1);
@@ -168,15 +252,13 @@ const renderBanner = () => {
   if (!bar) {
     bar = document.createElement("section");
     bar.id = BAR_ID;
-    bar.setAttribute("aria-label", "Idées repas de la semaine");
   }
   bar.dataset.signature = signature;
-  if (bar.previousElementSibling !== topbar) topbar.insertAdjacentElement("afterend", bar);
+  topbar.insertAdjacentElement("afterend", bar);
   bar.replaceChildren();
-
   const title = document.createElement("div");
   title.className = "meal-banner-title";
-  title.textContent = "Idées repas";
+  title.textContent = "Idees repas";
   const days = document.createElement("div");
   days.className = "meal-banner-days";
   week.forEach((meal, index) => {
@@ -185,7 +267,6 @@ const renderBanner = () => {
     button.className = meal.dateKey === todayKey ? "active" : "";
     button.textContent = String(index + 1);
     button.title = `${meal.dayName} : ${meal.title}`;
-    button.setAttribute("aria-label", `Idée repas ${index + 1}, ${meal.dayName} : ${meal.title}`);
     button.addEventListener("click", () => openMealModal(week, index));
     days.appendChild(button);
   });

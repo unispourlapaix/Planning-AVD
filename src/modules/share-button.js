@@ -1,5 +1,6 @@
 import { SHIFT_DEFS } from "./constants.js";
-import { buildSchedule, calculateHours } from "./scheduler-handover.js?v=20260614-meals-quota";
+import { buildSchedule } from "./scheduler-handover.js?v=20260614-meals-quota";
+import { calculatePerformedHours } from "./hour-accounting.js";
 import { loadState } from "./storage.js";
 import { sharePlanningByEmail } from "./planning-share.js?v=20260607-a4-topbar";
 
@@ -71,7 +72,7 @@ export async function initPlanningShareButton() {
         const month = saved.month;
         const planning = buildSchedule({ year, month, auxiliaries, rotationDays: saved.rotationDays });
         const schedule = applyOverrides({ schedule: planning.schedule, overrides: saved.overrides, year, month });
-        const hours = calculateHours(schedule, auxiliaries);
+        const hours = calculatePerformedHours(schedule, auxiliaries, { year, month });
         await sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours });
       } catch (error) {
         alert(`Partage impossible : ${error.message}`);

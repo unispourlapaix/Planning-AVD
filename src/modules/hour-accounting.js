@@ -1,4 +1,5 @@
 import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js";
+import { daysInMonth } from "./dates.js";
 
 const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -53,3 +54,44 @@ export const summarizeHours = (raw = {}, fallbackQuota = 0) => {
     pause: Math.max(0, roundHours(quota - total)),
   };
 };
+
+const shiftWorkerIds = entry =>
+  Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
+
+export function accountingPeriodState({ year, month, now = new Date() }) {
+  const monthStart = new Date(year, month, 1);
+  const nextMonthStart = new Date(year, month + 1, 1);
+  const totalDays = daysInMonth(year, month);
+
+  if (now < monthStart) return { completedThrough: 0, monthClosed: false };
+  if (now >= nextMonthStart) return { completedThrough: totalDays, monthClosed: true };
+  return {
+    completedThrough: Math.max(0, Math.min(totalDays, now.getDate() - 1)),
+    monthClosed: false,
+  };
+}
+
+export function calculatePerformedHours(schedule, auxiliaries, { year, month, now = new Date() }) {
+  const period = accountingPeriodState({ year, month, now });
+  const hours = Object.fromEntries(auxiliaries.map(aux => [aux.id, {
+    ...createHourAccount(aux),
+    completedThrough: period.completedThrough,
+    monthClosed: period.monthClosed,
+  }]));
+
+  Object.entries(schedule).forEach(([dayValue, plan]) => {
+    const day = Number(dayValue);
+    if (!day || day > period.completedThrough) return;
+
+    SHIFT_DEFS.forEach(shift => {
+      shiftWorkerIds(plan?.[shift.id]).forEach((worker, workerIndex) => {
+        // Secondary workers are completion hours confirmed when the month is closed.
+        if (workerIndex > 0 && !period.monthClosed) return;
+        if (!worker || !hours[worker]) return;
+        creditScheduledHours({ account: hours[worker], shift: shift.id, scheduledHours: shift.hours, day });
+      });
+    });
+  });
+
+  return hours;
+}

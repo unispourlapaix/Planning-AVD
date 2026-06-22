@@ -30,6 +30,14 @@ export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
     return `<tr><td>${esc(aux.name)}</td><td>${h.morning}</td><td>${h.afternoon}</td><td>${h.night}</td><td>${h.total}</td><td>${h.quota}</td><td>${h.pause}</td></tr>`;
   }).join("");
 
+  const completedThrough = Math.max(0, ...auxiliaries.map(aux => Number(hours[aux.id]?.completedThrough) || 0));
+  const monthClosed = auxiliaries.some(aux => hours[aux.id]?.monthClosed);
+  const accountingNote = monthClosed
+    ? "Mois cloture : les doublons de comblage sont inclus."
+    : completedThrough > 0
+      ? `Heures effectuees jusqu'au ${completedThrough} ${MONTHS[month]}. Les doublons de comblage seront inclus a la cloture du mois.`
+      : "Aucune journee terminee : le compteur des heures effectuees commence a 0. Les doublons de comblage seront inclus a la cloture du mois.";
+
   return `<!doctype html><html><head><title>Rapport Planning-AVD</title><style>
     body{font-family:Arial,sans-serif;color:#25302c;padding:18px;background:#fff}
     h1{margin:0 0 14px;color:#3f4a3a} table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -39,5 +47,6 @@ export function buildReportHtml({ year, month, auxiliaries, schedule, hours }) {
     .meal{display:grid;grid-template-columns:38px 1fr;gap:4px;margin-top:5px;padding-top:4px;border-top:1px solid #dfe9e3;color:#39735b}.meal b{font-size:9px}.meal span{font-size:10px;font-weight:700}
     .hours{margin-top:18px}.hours td,.hours th{font-size:12px}
   </style></head><body><h1>Planning-AVD - ${MONTHS[month]} ${year}</h1><table>${rows.join("")}</table>
-  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Nuit</th><th>Total</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
+  <p>${accountingNote}</p>
+  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Nuit</th><th>Effectue</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
 }

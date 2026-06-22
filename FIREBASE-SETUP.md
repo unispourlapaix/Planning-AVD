@@ -29,3 +29,15 @@ Depuis Firebase Console :
 4. Il voit uniquement son planning personnel publié.
 5. S'il veut échanger un créneau, il clique sur le créneau et envoie une demande.
 6. L'admin valide ou refuse la demande dans l'application. Une validation applique le changement et republie le planning.
+
+## Liste de taches partagee
+
+1. Publier `firestore.rules` apres la mise a jour de l'application.
+2. L'admin clique une fois sur Sauvegarder pour enregistrer les emails actifs comme membres de l'equipe.
+3. Chaque membre connecte peut ajouter une tache, choisir sa priorite et la marquer terminee.
+4. Seul l'admin peut supprimer une tache.
+
+## Liste de courses partagee
+
+1. Les cases cochees et les articles ajoutes sont synchronises entre les membres connectes.
+2. Sans connexion, la liste reste utilisable et conservee localement sur l'appareil.

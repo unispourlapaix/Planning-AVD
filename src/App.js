@@ -1,7 +1,7 @@
 import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, calculateHours, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
+import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import {
   createPlanningChangeRequest,
@@ -19,8 +19,9 @@ import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
-import { summarizeHours } from "./modules/hour-accounting.js";
+import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
+import { TaskPanel } from "./modules/task-panel.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useState } = React;
@@ -402,6 +403,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
     ),
     h("section", { className: "layout" },
       error ? h("div", { className: "panel muted" }, error) : null,
+      h(TaskPanel, { authState }),
       planning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
@@ -429,7 +431,7 @@ function Summary({ auxiliaries, hours }) {
     const c = colorFor(index);
     return h("div", { className: "panel", key: aux.id },
       h("div", { className: "pill", style: { background: c.light, color: c.text } }, aux.lead ? "Chef" : "Auxiliaire", " · ", aux.name),
-      h("div", { className: "muted", style: { marginTop: 8 } }, `${hData.total}h / ${hData.quota}h`),
+      h("div", { className: "muted", style: { marginTop: 8 } }, `${hData.total}h effectuees / ${hData.quota}h`),
       h("div", { className: "progress" }, h("span", { style: { width: `${Math.min(100, Math.round((hData.total / Math.max(1, hData.quota)) * 100))}%`, background: c.solid } })),
     );
   }));
@@ -561,8 +563,8 @@ function WeekView({ year, month, schedule, auxiliaries, overrides, onEditSlot, o
 function HoursView({ auxiliaries, hours }) {
   return h("section", { className: "hours-grid" },
     h("div", { className: "panel" },
-      h("h3", null, "Planning technique comptable"),
-      h("p", { className: "muted" }, "Les heures sont comptabilisees dans l'ordre du mois : 6h matin, 6h apres-midi, 12h nuit. Le compteur s'arrete exactement au quota de chaque auxiliaire, sans heure en plus."),
+      h("h3", null, "Heures reellement effectuees"),
+      h("p", { className: "muted" }, "Le compteur commence a 0. Une journee est ajoutee seulement lorsqu'elle est terminee. Les doublons de comblage sont confirmes a la cloture du mois."),
     ),
     auxiliaries.map((aux, index) => {
       const hData = displayHours(hours[aux.id], aux.quota);
@@ -709,10 +711,18 @@ export default function App() {
   const [personalError, setPersonalError] = useState("");
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
   const [adminChangeError, setAdminChangeError] = useState("");
+  const [accountingNow, setAccountingNow] = useState(() => new Date());
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
   }, []);
+
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
+    const id = setTimeout(() => setAccountingNow(new Date()), Math.max(1000, nextMidnight.getTime() - now.getTime()));
+    return () => clearTimeout(id);
+  }, [accountingNow]);
 
   useEffect(() => {
     if (!authState.ready) return;
@@ -785,7 +795,10 @@ export default function App() {
 
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
-  const hours = useMemo(() => calculateHours(schedule, auxiliaries), [schedule, auxiliaries]);
+  const hours = useMemo(
+    () => calculatePerformedHours(schedule, auxiliaries, { year, month, now: accountingNow }),
+    [schedule, auxiliaries, year, month, accountingNow],
+  );
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
   const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
 
@@ -821,7 +834,7 @@ export default function App() {
       const key = overrideKey(request.year, request.month, request.day, request.shift);
       const nextOverrides = { ...overrides, [key]: worker.id };
       const nextSchedule = applyOverrides({ schedule: planning.schedule, overrides: nextOverrides, year, month });
-      const nextHours = calculateHours(nextSchedule, auxiliaries);
+      const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
       setOverrides(nextOverrides);
       await saveState({
         db: authState.db,
@@ -930,6 +943,7 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
+      h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin }),
       h(Summary, { auxiliaries: activeAux, hours }),
       h(RotationAudit, { checks: rotationChecks }),
       h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }),
