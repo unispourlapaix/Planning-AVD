@@ -5,12 +5,15 @@ on:
     branches: [main]
     paths:
       - .github/codex-update.patch.gz.b64
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
 
 jobs:
   apply-update:
+    if: github.event_name == 'push' || github.event.issue.title == '[Codex] Apply validated Planning-AVD update'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
