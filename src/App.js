@@ -197,13 +197,16 @@ const extractBackupJson = text => {
   const match = raw.match(/----- DEBUT SAUVEGARDE PLANNING-AVD -----(.*?)----- FIN SAUVEGARDE PLANNING-AVD -----/s);
   return (match ? match[1] : raw).trim();
 };
+const formatCloudTime = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
+function TopBar({ authState, isAdmin, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
     setMonth(date.getMonth());
   };
+  const statusKind = cloudStatus?.kind || (authState.user ? "idle" : "local");
+  const statusText = cloudStatus?.text || (authState.user ? "Cloud pret" : "Local uniquement");
 
   const tabs = [
     ["week", "week", "Semaine"],
@@ -213,7 +216,13 @@ function TopBar({ authState, isAdmin, view, setView, year, month, setYear, setMo
 
   return h("header", { className: "topbar" },
     h("div", { className: "title-row" },
-      h("div", null, h("h1", null, "Planning-AVD"), h("div", { className: "muted" }, authState.user ? `Cloud actif : ${authState.user.email}` : "Sauvegarde locale, connexion Google disponible")),
+      h("div", null,
+        h("h1", null, "Planning-AVD"),
+        h("div", { className: "cloud-line" },
+          h("span", { className: `cloud-status ${statusKind}` }, statusText),
+          h("span", { className: "muted" }, authState.user ? authState.user.email : "Connexion Google disponible"),
+        ),
+      ),
       h("div", { className: "action-row" },
         h(Button, { onClick: onCleanView }, h(IconLabel, { icon: "sparkles", label: "Vue propre" })),
         h(Button, { onClick: onReport }, h(IconLabel, { icon: "file", label: "Rapport" })),
@@ -711,7 +720,19 @@ export default function App() {
   const [personalError, setPersonalError] = useState("");
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
   const [adminChangeError, setAdminChangeError] = useState("");
+  const [cloudStatus, setCloudStatus] = useState({ kind: "local", text: "Local uniquement" });
   const [accountingNow, setAccountingNow] = useState(() => new Date());
+  const setCloudResult = result => {
+    if (result?.cloud) {
+      setCloudStatus({ kind: "saved", text: `Cloud sauvegardé ${formatCloudTime()}` });
+      return;
+    }
+    if (result?.reason === "not-connected") {
+      setCloudStatus({ kind: "local", text: "Local enregistré" });
+      return;
+    }
+    setCloudStatus({ kind: "error", text: "Cloud non sauvegardé" });
+  };
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
@@ -784,12 +805,20 @@ export default function App() {
 
   useEffect(() => {
     if (!stateLoaded) return;
-    if (authState.user && (!sessionRole.ready || !sessionRole.isAdmin)) return;
+    if (authState.user && !sessionRole.ready) {
+      setCloudStatus({ kind: "saving", text: "Vérification admin" });
+      return;
+    }
+    if (authState.user && !sessionRole.isAdmin) {
+      setCloudStatus({ kind: "error", text: "Admin non reconnu" });
+      return;
+    }
+    setCloudStatus({ kind: authState.user ? "saving" : "local", text: authState.user ? "Sauvegarde cloud..." : "Local enregistré" });
     const id = setTimeout(() => saveState({
       db: authState.db,
       user: authState.user,
       state: { year, month, view, rotationDays, auxiliaries, overrides },
-    }), 450);
+    }).then(setCloudResult), 450);
     return () => clearTimeout(id);
   }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides]);
 
@@ -820,8 +849,15 @@ export default function App() {
 
   const publishPlanning = async () => {
     try {
+      setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
+      const cloudResult = await saveState({
+        db: authState.db,
+        user: authState.user,
+        state: { year, month, view, rotationDays, auxiliaries, overrides },
+      });
+      setCloudResult(cloudResult);
       const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours });
-      alert(`Planning sauvegardé pour ${count} auxiliaire(s).`);
+      alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.cloud ? "Sauvegarde cloud à jour." : "Configuration conservée en local seulement."}`);
     } catch (error) {
       alert(`Sauvegarde impossible : ${error.message}`);
     }
@@ -928,6 +964,7 @@ export default function App() {
     h(TopBar, {
       authState,
       isAdmin: sessionRole.isAdmin,
+      cloudStatus,
       view,
       setView,
       year,

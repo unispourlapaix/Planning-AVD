@@ -57,15 +57,17 @@ export async function loadState({ db, user }) {
 export async function saveState({ db, user, state }) {
   const value = { ...state, rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
-  if (!db || !user?.uid) return;
+  if (!db || !user?.uid) return { local: true, cloud: false, reason: "not-connected" };
   try {
     await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({
       value,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
+    return { local: true, cloud: true };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
+    return { local: true, cloud: false, reason: "error", error: error.message || "Sauvegarde cloud impossible" };
   }
 }
 
