@@ -59,9 +59,12 @@ export async function initGoogleAuth(onChange) {
   const db = firebase.firestore();
   auth.useDeviceLanguage();
   await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
-  try {
-    db.settings({ experimentalAutoDetectLongPolling: true });
-  } catch {}
+  if (!window.__planningAvdFirestoreSettingsApplied) {
+    window.__planningAvdFirestoreSettingsApplied = true;
+    try {
+      db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
+    } catch {}
+  }
   if (!window.__planningAvdFirestorePersistenceTried) {
     window.__planningAvdFirestorePersistenceTried = true;
     await db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
