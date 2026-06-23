@@ -6,6 +6,7 @@ import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
 import {
   createPlanningChangeRequest,
   defaultState,
+  grantAdminByEmail,
   isAdminUser,
   loadState,
   publishPersonalPlannings,
@@ -199,7 +200,7 @@ const extractBackupJson = text => {
 };
 const formatCloudTime = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-function TopBar({ authState, isAdmin, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
+function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -207,6 +208,8 @@ function TopBar({ authState, isAdmin, cloudStatus, view, setView, year, month, s
   };
   const statusKind = cloudStatus?.kind || (authState.user ? "idle" : "local");
   const statusText = cloudStatus?.text || (authState.user ? "Cloud pret" : "Local uniquement");
+  const roleKind = !authState.user ? "local" : !roleReady ? "saving" : isAdmin ? "saved" : "local";
+  const roleText = !authState.user ? "Non connecté" : !roleReady ? "Rôle..." : isAdmin ? "Administrateur" : "Auxiliaire";
 
   const tabs = [
     ["week", "week", "Semaine"],
@@ -219,6 +222,7 @@ function TopBar({ authState, isAdmin, cloudStatus, view, setView, year, month, s
       h("div", null,
         h("h1", null, "Planning-AVD"),
         h("div", { className: "cloud-line" },
+          h("span", { className: `role-pill ${roleKind}` }, roleText),
           h("span", { className: `cloud-status ${statusKind}` }, statusText),
           h("span", { className: "muted" }, authState.user ? authState.user.email : "Connexion Google disponible"),
         ),
@@ -618,6 +622,47 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
   );
 }
 
+function AdminAccessPanel({ authState, isAdmin, onGrantAdmin }) {
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const connectedEmail = authState.user?.email || "";
+  const submit = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const cleanEmail = await onGrantAdmin(email);
+      setEmail("");
+      alert(`${cleanEmail} est maintenant administrateur. La personne devra se reconnecter ou recharger l'app.`);
+    } catch (error) {
+      alert(`Ajout administrateur impossible : ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return h("section", { className: "panel admin-access-panel" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Accès et rôles"),
+        h("div", { className: "muted" }, connectedEmail ? `Connecté : ${connectedEmail}` : "Connexion Google nécessaire."),
+      ),
+      h("span", { className: `role-pill ${isAdmin ? "saved" : "local"}` }, isAdmin ? "Administrateur" : "Auxiliaire"),
+    ),
+    isAdmin
+      ? h("div", { className: "admin-form" },
+          h(Field, { label: "Ajouter un administrateur par email" }, h(TextInput, {
+            type: "email",
+            value: email,
+            onChange: setEmail,
+            placeholder: "adresse@email.com",
+          })),
+          h(Button, { active: true, disabled: saving || !email.trim(), onClick: submit }, saving ? "Ajout..." : "Ajouter admin"),
+          h("div", { className: "muted" }, "L'email ajouté pourra gérer la configuration, sauvegarder le cloud et transmettre les plannings."),
+        )
+      : h("div", { className: "muted" }, "Mode auxiliaire : accès au planning personnel, demandes d'échange, tâches et courses. Demandez à un administrateur d'ajouter votre email pour gérer l'app."),
+  );
+}
+
 function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
   const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => ({
     ...aux,
@@ -863,6 +908,11 @@ export default function App() {
     }
   };
 
+  const addAdminEmail = async email => {
+    const cleanEmail = await grantAdminByEmail({ db: authState.db, user: authState.user, email });
+    return cleanEmail;
+  };
+
   const approveChangeRequest = async (request, workerId) => {
     const worker = activeAux.find(aux => aux.id === workerId);
     if (!worker) return alert("Choisissez l'auxiliaire qui reprend le créneau.");
@@ -964,6 +1014,7 @@ export default function App() {
     h(TopBar, {
       authState,
       isAdmin: sessionRole.isAdmin,
+      roleReady: sessionRole.ready,
       cloudStatus,
       view,
       setView,
@@ -988,6 +1039,7 @@ export default function App() {
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onGrantAdmin: addAdminEmail }) : null,
       view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {

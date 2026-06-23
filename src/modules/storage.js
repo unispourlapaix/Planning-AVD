@@ -4,6 +4,7 @@ const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
+const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const displayHours = summarizeHours;
@@ -74,12 +75,30 @@ export async function saveState({ db, user, state }) {
 export async function isAdminUser({ db, user }) {
   if (!db || !user?.uid) return false;
   try {
-    const snap = await db.collection("planning-avd-admins").doc(user.uid).get();
-    return snap.exists;
+    const uidSnap = await db.collection("planning-avd-admins").doc(user.uid).get();
+    if (uidSnap.exists) return true;
+    const email = normalizeEmail(user.email);
+    if (!email) return false;
+    const emailSnap = await db.collection("planning-avd-admin-emails").doc(email).get();
+    return emailSnap.exists && emailSnap.data()?.active !== false;
   } catch (error) {
     console.warn("Verification admin impossible.", error);
     return false;
   }
+}
+
+export async function grantAdminByEmail({ db, user, email }) {
+  const cleanEmail = normalizeEmail(email);
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("Email administrateur invalide.");
+  await db.collection("planning-avd-admin-emails").doc(cleanEmail).set({
+    email: cleanEmail,
+    active: true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: normalizeEmail(user.email),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return cleanEmail;
 }
 
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {

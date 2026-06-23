@@ -30,7 +30,7 @@ h1 { margin: 0; font-size: 19px; color: #344753; }
 h2 { font-size: 16px; }
 .muted { color: #697981; font-size: 13px; }
 .cloud-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
-.cloud-status {
+.cloud-status, .role-pill {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
@@ -45,6 +45,13 @@ h2 { font-size: 16px; }
 .cloud-status.saving { background: rgba(255,244,230,.95); color: #8a5515; }
 .cloud-status.error { background: rgba(255,240,240,.95); color: #a02828; }
 .cloud-status.local { background: rgba(240,236,255,.92); color: #3e2a9e; }
+.role-pill { background: rgba(235,245,255,.92); color: #1e5a8a; }
+.role-pill.saved { background: rgba(228,248,240,.92); color: #1a6a44; }
+.role-pill.saving { background: rgba(255,244,230,.95); color: #8a5515; }
+.role-pill.local { background: rgba(240,236,255,.92); color: #3e2a9e; }
+.admin-access-panel { display: grid; gap: 10px; }
+.admin-form { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 8px; align-items: end; }
+.admin-form .muted { grid-column: 1 / -1; }
 .btn {
   border: 1px solid rgba(255,255,255,.95);
   border-radius: 8px;
@@ -377,4 +384,5 @@ h2 { font-size: 16px; }
   .task-form .btn { grid-column: 1 / -1; }
   .task-item { grid-template-columns: minmax(0, 1fr) auto; }
   .task-delete { grid-column: 1 / -1; justify-self: end; }
+  .admin-form { grid-template-columns: 1fr; }
 }
