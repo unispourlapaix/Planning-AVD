@@ -9,8 +9,7 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn()
         && (exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.uid))
-          || (request.auth.token.email is string
-            && exists(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email))
+          || (exists(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email))
             && get(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email)).data.active == true));
     }
 
@@ -32,9 +31,7 @@ service cloud.firestore {
 
     match /planning-avd-admin-emails/{email} {
       allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
-      allow create, update: if isAdmin()
-        && request.resource.data.email == email
-        && request.resource.data.active == true;
+      allow create, update: if isAdmin();
       allow delete: if isAdmin() && request.auth.token.email != email;
     }
 
