@@ -65,10 +65,6 @@ export async function initGoogleAuth(onChange) {
       db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
     } catch {}
   }
-  if (!window.__planningAvdFirestorePersistenceTried) {
-    window.__planningAvdFirestorePersistenceTried = true;
-    await db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-  }
 
   let redirectError = "";
   try {
