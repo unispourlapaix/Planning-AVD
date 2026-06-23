@@ -11,6 +11,24 @@ const migrateState = state => {
   if (!state || state.rotationRevision === ROTATION_REVISION) return state;
   return { ...state, overrides: {}, rotationRevision: ROTATION_REVISION };
 };
+const readLocalState = () => {
+  try {
+    return migrateState(JSON.parse(localStorage.getItem(LOCAL_KEY) || "null"));
+  } catch {
+    return null;
+  }
+};
+const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
+const mergeSavedState = (local, cloud) => {
+  if (!cloud) return local;
+  if (!local) return cloud;
+  return {
+    ...local,
+    ...cloud,
+    auxiliaries: hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
+    overrides: cloud.overrides && typeof cloud.overrides === "object" ? cloud.overrides : local.overrides,
+  };
+};
 
 export const defaultState = () => {
   const now = new Date();
@@ -25,11 +43,11 @@ export const defaultState = () => {
 };
 
 export async function loadState({ db, user }) {
-  const local = migrateState(JSON.parse(localStorage.getItem(LOCAL_KEY) || "null"));
+  const local = readLocalState();
   if (!db || !user?.uid) return local;
   try {
     const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
-    return snap.exists ? migrateState(snap.data().value) : local;
+    return snap.exists ? mergeSavedState(local, migrateState(snap.data().value)) : local;
   } catch (error) {
     console.warn("Lecture cloud impossible, repli local.", error);
     return local;
