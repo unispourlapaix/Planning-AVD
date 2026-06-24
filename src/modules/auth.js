@@ -104,6 +104,13 @@ export async function signInWithGoogle(auth) {
 }
 
 export async function signOut(auth) {
-  if (auth) await auth.signOut();
+  if (!auth) {
+    window.location.reload();
+    return;
+  }
+  await auth.signOut();
+  setTimeout(() => {
+    if (auth.currentUser) window.location.reload();
+  }, 350);
 }
 

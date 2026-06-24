@@ -6,6 +6,7 @@ const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const encodedEmailKey = email => encodeURIComponent(normalizeEmail(email));
 const shareEmailKey = email => normalizeEmail(email).replaceAll("/", "%2F");
+const uniqueShareKeys = email => [...new Set([shareEmailKey(email), encodedEmailKey(email)].filter(Boolean))];
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const displayHours = summarizeHours;
@@ -110,37 +111,52 @@ export async function grantAdminByEmail({ db, user, email }) {
 
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
   if (!db || !user?.email) return () => {};
-  let legacyUnsubscribe = null;
-  let active = true;
+  const email = normalizeEmail(user.email);
   const monthId = monthKey(year, month);
-  const readLegacy = () => {
-    if (legacyUnsubscribe) return;
-    legacyUnsubscribe = db.collection("planning-avd-shares").doc(encodedEmailKey(user.email)).collection("months").doc(monthId)
-      .onSnapshot(snap => {
-        if (active) onChange?.(snap.exists ? snap.data() : null);
+  const refs = uniqueShareKeys(email).map(key => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId));
+  let directPending = refs.length;
+  let queryUnsubscribe = null;
+  let active = true;
+  let hasDirectPlanning = false;
+  const stopQuery = () => {
+    queryUnsubscribe?.();
+    queryUnsubscribe = null;
+  };
+  const startQueryFallback = () => {
+    if (queryUnsubscribe || !active || hasDirectPlanning) return;
+    queryUnsubscribe = db.collectionGroup("months")
+      .where("email", "==", email)
+      .where("year", "==", year)
+      .where("month", "==", month)
+      .limit(1)
+      .onSnapshot(snapshot => {
+        if (!active) return;
+        onChange?.(snapshot.empty ? null : snapshot.docs[0].data());
       }, error => {
-        console.warn("Lecture planning auxiliaire legacy impossible.", error);
+        console.warn("Recherche planning auxiliaire impossible.", error);
         if (active) onChange?.(null);
+        onError?.(error);
       });
   };
-  const primaryUnsubscribe = db.collection("planning-avd-shares").doc(shareEmailKey(user.email)).collection("months").doc(monthId)
-    .onSnapshot(snap => {
+  const directUnsubscribers = refs.map(ref => ref.onSnapshot(snap => {
       if (!active) return;
+      directPending = Math.max(0, directPending - 1);
       if (snap.exists) {
-        legacyUnsubscribe?.();
-        legacyUnsubscribe = null;
+        hasDirectPlanning = true;
+        stopQuery();
         onChange?.(snap.data());
         return;
       }
-      readLegacy();
+      if (directPending === 0 && !hasDirectPlanning) startQueryFallback();
     }, error => {
-      console.warn("Lecture planning auxiliaire impossible, essai compatibilite.", error);
-      readLegacy();
-    });
+      console.warn("Lecture planning auxiliaire directe impossible.", error);
+      directPending = Math.max(0, directPending - 1);
+      if (directPending === 0 && !hasDirectPlanning) startQueryFallback();
+    }));
   return () => {
     active = false;
-    primaryUnsubscribe();
-    legacyUnsubscribe?.();
+    directUnsubscribers.forEach(unsubscribe => unsubscribe());
+    stopQuery();
   };
 }
 
@@ -265,10 +281,10 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       publishedBy: user.email || "",
     };
-    const ref = db.collection("planning-avd-shares").doc(shareEmailKey(email)).collection("months").doc(monthKey(year, month));
-    batch.set(ref, sharePayload);
-    const legacyRef = db.collection("planning-avd-shares").doc(encodedEmailKey(email)).collection("months").doc(monthKey(year, month));
-    if (legacyRef.path !== ref.path) batch.set(legacyRef, sharePayload);
+    uniqueShareKeys(email).forEach(key => {
+      const ref = db.collection("planning-avd-shares").doc(key).collection("months").doc(monthKey(year, month));
+      batch.set(ref, sharePayload);
+    });
   });
   await batch.commit();
   return active.length;

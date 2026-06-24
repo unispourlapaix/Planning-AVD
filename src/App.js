@@ -2,7 +2,7 @@ import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
-import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js";
+import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-personal-exit";
 import {
   createPlanningChangeRequest,
   defaultState,
@@ -15,7 +15,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-personal-planning";
+} from "./modules/storage.js?v=20260624-personal-exit";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -394,6 +394,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   const [mealDate, setMealDate] = useState(null);
   const [requestEdit, setRequestEdit] = useState(null);
   const [requestSaving, setRequestSaving] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [changeRequests, setChangeRequests] = useState([]);
   const [changeRequestError, setChangeRequestError] = useState("");
   useEffect(() => {
@@ -424,6 +425,16 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   const weekGroups = [];
   for (let day = 1; day <= Object.keys(byDay).length; day += 7) weekGroups.push(Array.from({ length: 7 }, (_, index) => day + index).filter(item => byDay[item]));
   const requestBySlot = Object.fromEntries(changeRequests.map(request => [requestSlotKey(request.day, request.shift), request]));
+  const logout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await onLogout?.();
+    } catch (error) {
+      alert(`Déconnexion impossible : ${error.message}`);
+      setLoggingOut(false);
+    }
+  };
   const sendChangeRequest = async ({ targetEmail, targetName, message }) => {
     if (!requestEdit) return;
     setRequestSaving(true);
@@ -460,7 +471,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
         ),
         h("div", { className: "action-row" },
           h(Button, { onClick: () => window.print() }, h(IconLabel, { icon: "print", label: "Imprimer" })),
-          h(Button, { onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Sortir" })),
+          h(Button, { onClick: logout, disabled: loggingOut }, h(IconLabel, { icon: "logout", label: loggingOut ? "Sortie..." : "Sortir" })),
         ),
       ),
       h("div", { className: "month-row" },
@@ -480,7 +491,13 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
           )
-        : h("div", { className: "panel" }, h("h3", null, "Planning en attente"), h("div", { className: "muted" }, "Votre administrateur n'a pas encore transmis de planning pour ce mois.")),
+        : h("div", { className: "panel personal-empty-panel" },
+            h("h3", null, "Planning en attente"),
+            h("div", { className: "muted" }, error || "Votre administrateur n'a pas encore transmis de planning pour ce mois."),
+            h("div", { className: "personal-empty-actions" },
+              h(Button, { active: true, onClick: logout, disabled: loggingOut }, h(IconLabel, { icon: "logout", label: loggingOut ? "Sortie..." : "Se déconnecter" })),
+            ),
+          ),
       h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }),
       planning && personalView === "week"
         ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },

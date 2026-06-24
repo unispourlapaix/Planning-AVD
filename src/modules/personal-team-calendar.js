@@ -4,6 +4,7 @@ import { mealForDate } from "./meal-planning.js";
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const encodedEmailKey = email => encodeURIComponent(normalizeEmail(email));
 const shareEmailKey = email => normalizeEmail(email).replaceAll("/", "%2F");
+const uniqueShareKeys = email => [...new Set([shareEmailKey(email), encodedEmailKey(email)].filter(Boolean))];
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const shiftLabels = { morning: "Matin 11h", afternoon: "Après-midi 17h", night: "Soir" };
@@ -211,37 +212,59 @@ export async function initPersonalTeamCalendar() {
     activeKey = key;
     lastPayload = null;
     lastRenderedView = "";
+    const email = normalizeEmail(user.email);
+    const monthId = monthKey(visible.year, visible.month);
+    const refs = uniqueShareKeys(email).map(emailId => db.collection("planning-avd-shares").doc(emailId).collection("months").doc(monthId));
     let active = true;
-    let legacyUnsubscribe = null;
+    let directPending = refs.length;
+    let queryUnsubscribe = null;
+    let hasDirectPlanning = false;
     const renderSnapshot = snap => {
       if (!active) return;
       lastPayload = { calendar: snap.data()?.calendar || [], ...visible };
       lastRenderedView = activePersonalView();
       render(lastPayload);
     };
-    const readLegacy = () => {
-      if (legacyUnsubscribe) return;
-      legacyUnsubscribe = db.collection("planning-avd-shares").doc(encodedEmailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
-        .onSnapshot(renderSnapshot, () => {
-          if (!active) return;
-          lastPayload = { calendar: [], ...visible };
-          render(lastPayload);
-        });
+    const renderEmpty = () => {
+      if (!active) return;
+      lastPayload = { calendar: [], ...visible };
+      render(lastPayload);
     };
-    const primaryUnsubscribe = db.collection("planning-avd-shares").doc(shareEmailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
-      .onSnapshot(snap => {
+    const stopQuery = () => {
+      queryUnsubscribe?.();
+      queryUnsubscribe = null;
+    };
+    const startQueryFallback = () => {
+      if (queryUnsubscribe || !active || hasDirectPlanning) return;
+      queryUnsubscribe = db.collectionGroup("months")
+        .where("email", "==", email)
+        .where("year", "==", visible.year)
+        .where("month", "==", visible.month)
+        .limit(1)
+        .onSnapshot(snapshot => {
+          if (!active) return;
+          if (snapshot.empty) renderEmpty();
+          else renderSnapshot(snapshot.docs[0]);
+        }, renderEmpty);
+    };
+    const directUnsubscribers = refs.map(ref => ref.onSnapshot(snap => {
+        if (!active) return;
+        directPending = Math.max(0, directPending - 1);
         if (snap.exists) {
-          legacyUnsubscribe?.();
-          legacyUnsubscribe = null;
+          hasDirectPlanning = true;
+          stopQuery();
           renderSnapshot(snap);
           return;
         }
-        readLegacy();
-      }, readLegacy);
+        if (directPending === 0 && !hasDirectPlanning) startQueryFallback();
+      }, () => {
+        directPending = Math.max(0, directPending - 1);
+        if (directPending === 0 && !hasDirectPlanning) startQueryFallback();
+      }));
     unsubscribe = () => {
       active = false;
-      primaryUnsubscribe();
-      legacyUnsubscribe?.();
+      directUnsubscribers.forEach(unsubscribeDirect => unsubscribeDirect());
+      stopQuery();
     };
   };
 

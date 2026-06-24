@@ -366,6 +366,7 @@ h2 { font-size: 16px; }
 .personal-tabs { grid-template-columns: minmax(0, 1fr); }
 .personal-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .personal-summary h3 { margin: 0 0 4px; }
+.personal-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .personal-month { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
 .personal-day { min-height: 146px; }
 .personal-slot { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 6px; align-items: center; padding: 5px; border-radius: 10px; color: #918a80; background: rgba(255,255,255,.46); border: 1px solid #eee7dc; font-size: 12px; font-weight: 800; }
