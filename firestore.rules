@@ -25,7 +25,10 @@ service cloud.firestore {
     }
 
     match /planning-avd-admins/{userId} {
-      allow read: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn()
+        && (request.auth.uid == userId
+          || resource.data.email == request.auth.token.email
+          || isAdmin());
       allow write: if false;
     }
 

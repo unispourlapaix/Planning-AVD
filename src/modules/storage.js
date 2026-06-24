@@ -79,6 +79,8 @@ export async function isAdminUser({ db, user }) {
     if (uidSnap.exists) return true;
     const email = normalizeEmail(user.email);
     if (!email) return false;
+    const legacySnap = await db.collection("planning-avd-admins").where("email", "==", email).limit(1).get();
+    if (!legacySnap.empty) return legacySnap.docs.some(doc => doc.data()?.active !== false);
     const emailSnap = await db.collection("planning-avd-admin-emails").doc(email).get();
     return emailSnap.exists && emailSnap.data()?.active !== false;
   } catch (error) {
