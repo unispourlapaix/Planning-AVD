@@ -3,7 +3,7 @@ export function initPersonalMobileView() {
   const style = document.createElement("style");
   style.id = "personal-mobile-view-style";
   style.textContent = `
-    .personal-app .personal-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .personal-app .personal-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
     .personal-app .personal-tabs .tab{min-width:0}
     .personal-app .team-admin-view .slot{min-width:0}
     .personal-app .team-admin-view .slot-name{font-size:11px;font-weight:900;line-height:1.08}
@@ -22,8 +22,8 @@ export function initPersonalMobileView() {
       .personal-app .month-row h2{min-width:0;text-align:center}
       .personal-app .month-title-btn{width:100%;min-width:0;height:28px;padding:4px 6px;font-size:12px}
       .personal-app .month-row .icon-only{width:28px;height:27px;padding:0;border-radius:6px}
-      .personal-app .personal-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:100%}
-      .personal-app .personal-tabs .tab{display:flex;min-height:28px;padding:4px 7px;border-radius:6px;font-size:11px;white-space:nowrap}
+      .personal-app .personal-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;width:100%}
+      .personal-app .personal-tabs .tab{display:flex;min-height:28px;padding:4px 5px;border-radius:6px;font-size:10px;white-space:nowrap}
       .personal-app .layout{gap:6px;margin-top:6px}
       .personal-app .panel{padding:7px}
       .personal-app .panel h3{font-size:12px;margin:0 0 6px}
@@ -47,8 +47,8 @@ export function initPersonalMobileView() {
       .personal-app .month-row{display:grid;grid-template-columns:24px minmax(94px,1fr) 24px;align-items:center;gap:2px;min-width:150px}
       .personal-app .month-title-btn{height:25px;min-width:0;padding:3px 5px;font-size:11px}
       .personal-app .month-row .icon-only{width:24px;height:24px;padding:0;border-radius:6px}
-      .personal-app .personal-tabs{display:grid;grid-template-columns:repeat(2,minmax(56px,1fr));gap:3px}
-      .personal-app .personal-tabs .tab{min-height:25px;padding:3px 6px;border-radius:6px;font-size:10px}
+      .personal-app .personal-tabs{display:grid;grid-template-columns:repeat(3,minmax(52px,1fr));gap:3px}
+      .personal-app .personal-tabs .tab{min-height:25px;padding:3px 5px;border-radius:6px;font-size:9.5px}
       .personal-app .action-row{display:flex;gap:3px;justify-content:flex-end;max-width:none}
       .personal-app .action-row .btn{min-height:25px;padding:4px 6px;border-radius:6px;font-size:10px}
       .personal-app .action-row .btn:first-child{display:none}

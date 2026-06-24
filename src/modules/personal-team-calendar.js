@@ -122,6 +122,7 @@ const ensureStyle = () => {
 const activePersonalView = () => {
   if (document.querySelector(".personal-app .month-title-btn.active")) return "month";
   const active = document.querySelector(".personal-app .personal-tabs .btn.active")?.textContent || "";
+  if (active.includes("Repas") || active.includes("Tâches") || active.includes("Taches")) return "";
   return active.includes("Mois") ? "month" : "week";
 };
 
@@ -156,6 +157,7 @@ const render = ({ calendar = [], year, month }) => {
   if (!calendar.length) return;
   const byDay = Object.fromEntries(calendar.map(item => [item.day, item]));
   const view = activePersonalView();
+  if (!view) return;
   const section = document.createElement("section");
   section.id = "personal-team-calendar";
   section.className = "team-admin-view";

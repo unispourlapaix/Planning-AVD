@@ -238,7 +238,11 @@ const openMealModal = (week, initialIndex) => {
 const renderBanner = () => {
   const topbar = document.querySelector(".app > .topbar, .personal-app > .topbar");
   const period = visibleMonth();
-  if (!topbar || !period) return;
+  const app = document.querySelector(".app, .personal-app");
+  if (!topbar || !period || !app?.classList.contains("life-view")) {
+    document.getElementById(BAR_ID)?.remove();
+    return;
+  }
   const today = new Date();
   const currentMonth = today.getFullYear() === period.year && today.getMonth() === period.month;
   const week = mealWeekForDate(period.year, period.month, currentMonth ? today.getDate() : 1);

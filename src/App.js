@@ -267,6 +267,7 @@ function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, yea
 
   const tabs = [
     ["week", "week", "Semaine"],
+    ["life", "meal", "Repas/Tâches"],
     ["hours", "clock", "Heures"],
     ["config", "settings", "Réglages"],
   ];
@@ -461,7 +462,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       setRequestSaving(false);
     }
   };
-  return h("main", { className: "app personal-app" },
+  return h("main", { className: `app personal-app${personalView === "life" ? " life-view" : ""}` },
     h("header", { className: "topbar" },
       h("div", { className: "title-row" },
         h("div", null,
@@ -485,23 +486,27 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       h("nav", { className: "tabs personal-tabs" },
         h(Button, { active: personalView === "week", className: "tab", onClick: () => setPersonalView("week") }, h(IconLabel, { icon: "week", label: "Semaines" })),
         h(Button, { active: personalView === "month", className: "tab", onClick: () => setPersonalView("month") }, h(IconLabel, { icon: "calendar", label: "Mois" })),
+        h(Button, { active: personalView === "life", className: "tab", onClick: () => setPersonalView("life") }, h(IconLabel, { icon: "meal", label: "Repas/Tâches" })),
       ),
     ),
     h("section", { className: "layout" },
       error ? h("div", { className: "panel muted" }, error) : null,
-      h(TaskPanel, { authState }),
-      planning
+      personalView === "life" ? h(TaskPanel, { authState }) : null,
+      personalView !== "life" && planning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
           )
-        : h("div", { className: "panel personal-empty-panel" },
+        : null,
+      personalView !== "life" && !planning
+        ? h("div", { className: "panel personal-empty-panel" },
             h("h3", null, "Planning en attente"),
             h("div", { className: "muted" }, error || "Votre administrateur n'a pas encore transmis de planning pour ce mois."),
             h("div", { className: "personal-empty-actions" },
               h(Button, { active: true, onClick: logout, disabled: loggingOut }, h(IconLabel, { icon: "logout", label: loggingOut ? "Sortie..." : "Se déconnecter" })),
             ),
-          ),
-      h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }),
+          )
+        : null,
+      personalView !== "life" ? h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }) : null,
       planning && personalView === "week"
         ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
             h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
@@ -995,6 +1000,7 @@ export default function App() {
   );
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
   const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
+  const planningView = ["month", "week", "hours"].includes(view);
   const requireSafeCloudWrite = () => {
     if (!authState.user || cloudWriteReadyRef.current) return true;
     alert("Sauvegarde bloquée par sécurité : cet appareil n'a pas réussi à lire le cloud. Rechargez l'app avant de sauvegarder.");
@@ -1202,7 +1208,7 @@ export default function App() {
 
   if (personalMode) return h(PersonalView, { authState, year, month, setYear, setMonth, planning: personalPlanning, error: personalError, onLogout: () => signOut(authState.auth) });
 
-  return h("main", { className: "app" },
+  return h("main", { className: `app${view === "life" ? " life-view" : ""}` },
     h(TopBar, {
       authState,
       isAdmin: sessionRole.isAdmin,
@@ -1224,11 +1230,11 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
-      h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin }),
-      h(Summary, { auxiliaries: activeAux, hours }),
-      h(RotationAudit, { checks: rotationChecks }),
-      h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }),
-      h(ManualOverridesPanel, { items: manualOverrides, onReset: key => setOverrides(current => { const next = { ...current }; delete next[key]; return next; }) }),
+      view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin }) : null,
+      planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
+      planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
+      planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
+      planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: key => setOverrides(current => { const next = { ...current }; delete next[key]; return next; }) }) : null,
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,

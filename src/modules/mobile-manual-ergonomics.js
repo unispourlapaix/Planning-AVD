@@ -96,8 +96,8 @@ export function initMobileManualErgonomics() {
         .personal-app .month-row{grid-column:1 / -1;display:grid;grid-template-columns:28px minmax(0,1fr) 28px;align-items:center;gap:4px}
         .personal-app .month-row h2{min-width:0;margin:0;font-size:13px;text-align:center}
         .personal-app .month-row .btn{display:block;width:28px;height:27px;border-radius:6px;font-size:18px}
-        .personal-app .personal-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
-        .personal-app .personal-tabs .btn{display:flex;align-items:center;justify-content:center;min-height:29px;padding:5px 7px;border-radius:6px;font-size:11px;white-space:nowrap}
+        .personal-app .personal-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}
+        .personal-app .personal-tabs .btn{display:flex;align-items:center;justify-content:center;min-height:29px;padding:5px 5px;border-radius:6px;font-size:10px;white-space:nowrap}
         .personal-app .personal-tabs .btn.active{box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
         .personal-app .layout{gap:7px;margin-top:7px}
         .personal-app .panel{padding:8px}
