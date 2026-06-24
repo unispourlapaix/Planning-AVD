@@ -16,7 +16,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-share-read-rules";
+} from "./modules/storage.js?v=20260624-personal-privacy";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -318,12 +318,16 @@ function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, yea
 }
 
 function ChangeRequestModal({ edit, planning, authState, onClose, onSubmit, saving }) {
-  const [targetEmail, setTargetEmail] = useState("");
+  const [targetKey, setTargetKey] = useState("");
   const [message, setMessage] = useState("");
   if (!edit) return null;
   const userEmail = String(authState.user?.email || "").toLowerCase();
-  const team = (planning?.team || []).filter(member => String(member.email || "").toLowerCase() !== userEmail);
-  const target = team.find(member => member.email === targetEmail);
+  const personalName = String(planning?.name || "").trim().toLowerCase();
+  const team = (planning?.team || []).filter(member =>
+    String(member.email || "").toLowerCase() !== userEmail
+    && String(member.name || "").trim().toLowerCase() !== personalName);
+  const targetKeyFor = (member, index) => String(member.email || member.name || `member-${index}`);
+  const target = team.find((member, index) => targetKeyFor(member, index) === targetKey);
   return h("div", { className: "modal-backdrop", onClick: onClose },
     h("section", { className: "slot-editor change-request-modal", onClick: event => event.stopPropagation() },
       h("div", { className: "title-row" },
@@ -333,9 +337,9 @@ function ChangeRequestModal({ edit, planning, authState, onClose, onSubmit, savi
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
-      h(Field, { label: "Proposer un échange avec" }, h(Select, { value: targetEmail, onChange: setTargetEmail },
+      h(Field, { label: "Proposer un échange avec" }, h(Select, { value: targetKey, onChange: setTargetKey },
         h("option", { value: "" }, "À définir par l'admin"),
-        team.map(member => h("option", { key: member.email || member.name, value: member.email }, member.name || member.email)),
+        team.map((member, index) => h("option", { key: targetKeyFor(member, index), value: targetKeyFor(member, index) }, member.name || member.email)),
       )),
       h(Field, { label: "Message pour l'admin" }, h("textarea", {
         value: message,
@@ -348,7 +352,7 @@ function ChangeRequestModal({ edit, planning, authState, onClose, onSubmit, savi
         h(Button, {
           active: true,
           disabled: saving,
-          onClick: () => onSubmit({ targetEmail, targetName: target?.name || "", message }),
+          onClick: () => onSubmit({ targetEmail: target?.email || "", targetName: target?.name || "", message }),
         }, saving ? "Envoi..." : "Envoyer la demande"),
       ),
     ),

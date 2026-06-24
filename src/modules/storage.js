@@ -1,5 +1,3 @@
-import { summarizeHours } from "./hour-accounting.js";
-
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -15,7 +13,6 @@ const uniqueEmailKeys = email => {
 const uniqueShareKeys = uniqueEmailKeys;
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
-const displayHours = summarizeHours;
 const nearbyMonths = (year, month) => {
   const offsets = [0, ...Array.from({ length: 12 }, (_, index) => index + 1).flatMap(offset => [-offset, offset])];
   return offsets.map(offset => {
@@ -327,35 +324,14 @@ export async function resolvePlanningChangeRequest({ db, user, request, status, 
   }, { merge: true });
 }
 
-export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours, dayOutings = {} }) {
-  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+export function buildPersonalSharePayloads({ year, month, auxiliaries, schedule, dayOutings = {}, publishedAt = null, publishedBy = "" }) {
   const active = auxiliaries.filter(aux => aux.active !== false && String(aux.email || "").trim());
-  if (!active.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
-  const batch = db.batch();
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
   const outingPrefix = `${year}-${month}-`;
   const sharedDayOutings = Object.fromEntries(Object.entries(dayOutings && typeof dayOutings === "object" ? dayOutings : {})
     .filter(([key, items]) => key.startsWith(outingPrefix) && Array.isArray(items) && items.length));
-  auxiliaries
-    .filter(aux => String(aux.email || "").trim())
-    .forEach(aux => {
-      const rawEmail = cleanEmail(aux.email);
-      const email = normalizeEmail(rawEmail);
-      uniqueEmailKeys(rawEmail).forEach(key => {
-        const memberRef = db.collection("planning-avd-team-members").doc(key);
-        batch.set(memberRef, {
-          email: rawEmail,
-          emailLower: email,
-          name: aux.name,
-          active: aux.active !== false,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          updatedBy: user.email || "",
-        }, { merge: true });
-      });
-    });
   const team = active.map(aux => ({
     name: aux.name || "A definir",
-    email: String(aux.email || "").trim().toLowerCase(),
   }));
   const calendar = Object.values(schedule).map(plan => ({
     day: plan.day,
@@ -364,7 +340,7 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       return [shift, worker ? [findName(worker)] : []];
     })),
   }));
-  active.forEach(aux => {
+  return active.map(aux => {
     const entries = [];
     Object.values(schedule).forEach(plan => {
       ["morning", "afternoon", "night"].forEach(shift => {
@@ -385,15 +361,49 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       calendar,
       team,
       dayOutings: sharedDayOutings,
-      hours: displayHours(hours[aux.id], aux.quota),
-      publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      publishedBy: user.email || "",
+      ...(publishedAt ? { publishedAt } : {}),
+      publishedBy,
     };
+    return { aux, rawEmail, email, sharePayload };
+  });
+}
+
+export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, dayOutings = {} }) {
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  const payloads = buildPersonalSharePayloads({
+    year,
+    month,
+    auxiliaries,
+    schedule,
+    dayOutings,
+    publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    publishedBy: user.email || "",
+  });
+  if (!payloads.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
+  const batch = db.batch();
+  auxiliaries
+    .filter(aux => String(aux.email || "").trim())
+    .forEach(aux => {
+      const rawEmail = cleanEmail(aux.email);
+      const email = normalizeEmail(rawEmail);
+      uniqueEmailKeys(rawEmail).forEach(key => {
+        const memberRef = db.collection("planning-avd-team-members").doc(key);
+        batch.set(memberRef, {
+          email: rawEmail,
+          emailLower: email,
+          name: aux.name,
+          active: aux.active !== false,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: user.email || "",
+        }, { merge: true });
+      });
+    });
+  payloads.forEach(({ rawEmail, sharePayload }) => {
     uniqueShareKeys(rawEmail).forEach(key => {
       const ref = db.collection("planning-avd-shares").doc(key).collection("months").doc(monthKey(year, month));
       batch.set(ref, sharePayload);
     });
   });
   await batch.commit();
-  return active.length;
+  return payloads.length;
 }
