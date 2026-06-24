@@ -21,6 +21,11 @@ const readLocalState = () => {
     return null;
   }
 };
+const stripStateMeta = state => Object.fromEntries(Object.entries(state || {}).filter(([key]) => !key.startsWith("__")));
+const withLoadMeta = (state, meta) => ({
+  ...(state || {}),
+  __cloud: meta,
+});
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
@@ -49,27 +54,54 @@ export const defaultState = () => {
 
 export async function loadState({ db, user }) {
   const local = readLocalState();
-  if (!db || !user?.uid) return local;
+  if (!db || !user?.uid) return withLoadMeta(local, { ready: false, exists: false, source: local ? "local" : "empty", reason: "not-connected" });
   try {
     const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
-    return snap.exists ? mergeSavedState(local, migrateState(snap.data().value)) : local;
+    const cloud = snap.exists ? migrateState(snap.data().value) : null;
+    return withLoadMeta(snap.exists ? mergeSavedState(local, cloud) : local, {
+      ready: true,
+      exists: snap.exists,
+      source: snap.exists ? "cloud" : local ? "local" : "empty",
+      updatedAt: cloud?.updatedAt || "",
+    });
   } catch (error) {
     console.warn("Lecture cloud impossible, repli local.", error);
-    return local;
+    return withLoadMeta(local, {
+      ready: false,
+      exists: false,
+      source: local ? "local" : "empty",
+      reason: "error",
+      error: error.message || "Lecture cloud impossible",
+    });
   }
 }
 
-export async function saveState({ db, user, state }) {
-  const value = { ...state, rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
+export async function saveState({ db, user, state, expectedUpdatedAt, force = false }) {
+  const value = { ...stripStateMeta(state), rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return { local: true, cloud: false, reason: "not-connected" };
   try {
-    await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({
+    const ref = db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state");
+    if (!force) {
+      const currentSnap = await ref.get();
+      const currentUpdatedAt = currentSnap.exists ? currentSnap.data()?.value?.updatedAt || "" : "";
+      const expectedProvided = expectedUpdatedAt !== undefined;
+      if (currentSnap.exists && (!expectedProvided || currentUpdatedAt !== expectedUpdatedAt)) {
+        return {
+          local: true,
+          cloud: false,
+          reason: "conflict",
+          error: "Une sauvegarde cloud plus récente existe. Rechargez avant de sauvegarder.",
+          currentUpdatedAt,
+        };
+      }
+    }
+    await ref.set({
       value,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
-    return { local: true, cloud: true };
+    return { local: true, cloud: true, updatedAt: value.updatedAt };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
     return { local: true, cloud: false, reason: "error", error: error.message || "Sauvegarde cloud impossible" };

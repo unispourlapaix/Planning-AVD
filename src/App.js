@@ -2,7 +2,7 @@ import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
-import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-personal-exit";
+import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-cloud-guard";
 import {
   createPlanningChangeRequest,
   defaultState,
@@ -15,7 +15,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-personal-exit";
+} from "./modules/storage.js?v=20260624-cloud-guard";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -25,7 +25,7 @@ import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from 
 import { TaskPanel } from "./modules/task-panel.js";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
-const { useEffect, useMemo, useState } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
 const ROTATION_OPTIONS = [
   { value: 1, label: "Jour par jour", detail: "Matin, apres-midi et nuit recalcules chaque jour." },
@@ -251,6 +251,7 @@ const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && 
     })
     .filter(item => item.title)])
   .filter(([, items]) => items.length));
+const stateSignature = state => JSON.stringify(state);
 
 function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
   const moveMonth = delta => {
@@ -844,9 +845,16 @@ export default function App() {
   const [adminChangeError, setAdminChangeError] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ kind: "local", text: "Local uniquement" });
   const [accountingNow, setAccountingNow] = useState(() => new Date());
+  const cloudBaseUpdatedAtRef = useRef(undefined);
+  const cloudWriteReadyRef = useRef(false);
+  const lastSavedSignatureRef = useRef("");
   const setCloudResult = result => {
     if (result?.cloud) {
       setCloudStatus({ kind: "saved", text: `Cloud sauvegardé ${formatCloudTime()}` });
+      return;
+    }
+    if (result?.reason === "conflict") {
+      setCloudStatus({ kind: "error", text: "Cloud plus récent" });
       return;
     }
     if (result?.reason === "not-connected") {
@@ -915,13 +923,33 @@ export default function App() {
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;
     loadState({ db: authState.db, user: authState.user }).then(saved => {
-      if (saved?.year) setYear(saved.year);
-      if (Number.isInteger(saved?.month)) setMonth(saved.month);
-      if (saved?.view) setView(saved.view);
-      if ([1, 2, 3, 4].includes(Number(saved?.rotationDays))) setRotationDays(Number(saved.rotationDays));
-      if (saved?.auxiliaries || saved?.names) setAuxiliaries(normalizeAuxiliaries(saved));
-      if (saved?.overrides && typeof saved.overrides === "object") setOverrides(saved.overrides);
-      if (saved?.dayOutings && typeof saved.dayOutings === "object") setDayOutings(normalizeDayOutings(saved.dayOutings));
+      const nextState = {
+        year: saved?.year || year,
+        month: Number.isInteger(saved?.month) ? saved.month : month,
+        view: saved?.view || view,
+        rotationDays: [1, 2, 3, 4].includes(Number(saved?.rotationDays)) ? Number(saved.rotationDays) : rotationDays,
+        auxiliaries: saved?.auxiliaries || saved?.names ? normalizeAuxiliaries(saved) : auxiliaries,
+        overrides: saved?.overrides && typeof saved.overrides === "object" ? saved.overrides : overrides,
+        dayOutings: saved?.dayOutings && typeof saved.dayOutings === "object" ? normalizeDayOutings(saved.dayOutings) : dayOutings,
+      };
+      const cloudMeta = saved?.__cloud || {};
+      cloudWriteReadyRef.current = !authState.user || cloudMeta.ready === true;
+      cloudBaseUpdatedAtRef.current = authState.user && cloudMeta.ready === true ? cloudMeta.updatedAt || "" : undefined;
+      lastSavedSignatureRef.current = stateSignature(nextState);
+      if (authState.user && cloudMeta.ready === false) {
+        setCloudStatus({ kind: "error", text: "Lecture cloud bloquée" });
+      } else if (authState.user && cloudMeta.ready === true && cloudMeta.exists) {
+        setCloudStatus({ kind: "saved", text: "Cloud chargé" });
+      } else if (authState.user && cloudMeta.ready === true && !cloudMeta.exists) {
+        setCloudStatus({ kind: "local", text: "Aucune sauvegarde cloud" });
+      }
+      setYear(nextState.year);
+      setMonth(nextState.month);
+      setView(nextState.view);
+      setRotationDays(nextState.rotationDays);
+      setAuxiliaries(nextState.auxiliaries);
+      setOverrides(nextState.overrides);
+      setDayOutings(nextState.dayOutings);
       setStateLoaded(true);
     });
   }, [authState.ready, authState.user, stateLoaded]);
@@ -936,12 +964,24 @@ export default function App() {
       setCloudStatus({ kind: "error", text: "Admin non reconnu" });
       return;
     }
+    const currentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
+    const signature = stateSignature(currentState);
+    if (signature === lastSavedSignatureRef.current) return;
+    if (authState.user && !cloudWriteReadyRef.current) {
+      setCloudStatus({ kind: "error", text: "Cloud protégé : rechargez" });
+      return;
+    }
     setCloudStatus({ kind: authState.user ? "saving" : "local", text: authState.user ? "Sauvegarde cloud..." : "Local enregistré" });
     const id = setTimeout(() => saveState({
       db: authState.db,
       user: authState.user,
-      state: { year, month, view, rotationDays, auxiliaries, overrides, dayOutings },
-    }).then(setCloudResult), 450);
+      state: currentState,
+      expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
+    }).then(result => {
+      setCloudResult(result);
+      if (result?.cloud) cloudBaseUpdatedAtRef.current = result.updatedAt || cloudBaseUpdatedAtRef.current;
+      if (result?.cloud || result?.reason === "not-connected") lastSavedSignatureRef.current = signature;
+    }), 450);
     return () => clearTimeout(id);
   }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides, dayOutings]);
 
@@ -953,6 +993,12 @@ export default function App() {
   );
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
   const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
+  const requireSafeCloudWrite = () => {
+    if (!authState.user || cloudWriteReadyRef.current) return true;
+    alert("Sauvegarde bloquée par sécurité : cet appareil n'a pas réussi à lire le cloud. Rechargez l'app avant de sauvegarder.");
+    setCloudStatus({ kind: "error", text: "Cloud protégé : rechargez" });
+    return false;
+  };
   const updateDayOutings = (key, items) => setDayOutings(current => {
     const cleaned = normalizeDayOutings({ [key]: items })[key] || [];
     const next = { ...current };
@@ -978,14 +1024,30 @@ export default function App() {
   };
 
   const publishPlanning = async () => {
+    if (!requireSafeCloudWrite()) return;
+    if (!activeAux.some(aux => String(aux.email || "").trim())) {
+      alert("Sauvegarde bloquée : ajoutez au moins un email auxiliaire avant de transmettre le planning.");
+      return;
+    }
     try {
       setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
+      const currentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
+      const signature = stateSignature(currentState);
       const cloudResult = await saveState({
         db: authState.db,
         user: authState.user,
-        state: { year, month, view, rotationDays, auxiliaries, overrides, dayOutings },
+        state: currentState,
+        expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
       });
       setCloudResult(cloudResult);
+      if (!cloudResult?.cloud) {
+        alert(cloudResult?.reason === "conflict"
+          ? "Sauvegarde bloquée : une version cloud plus récente existe. Rechargez l'app avant de republier."
+          : `Sauvegarde cloud impossible : ${cloudResult?.error || "réessayez plus tard."}`);
+        return;
+      }
+      cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
+      lastSavedSignatureRef.current = signature;
       const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours, dayOutings });
       alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.cloud ? "Sauvegarde cloud à jour." : "Configuration conservée en local seulement."}`);
     } catch (error) {
@@ -999,6 +1061,7 @@ export default function App() {
   };
 
   const approveChangeRequest = async (request, workerId) => {
+    if (!requireSafeCloudWrite()) return;
     const worker = activeAux.find(aux => aux.id === workerId);
     if (!worker) return alert("Choisissez l'auxiliaire qui reprend le créneau.");
     try {
@@ -1006,12 +1069,24 @@ export default function App() {
       const nextOverrides = { ...overrides, [key]: worker.id };
       const nextSchedule = applyOverrides({ schedule: planning.schedule, overrides: nextOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
-      setOverrides(nextOverrides);
-      await saveState({
+      const nextState = { year, month, view, rotationDays, auxiliaries, overrides: nextOverrides, dayOutings };
+      const signature = stateSignature(nextState);
+      const cloudResult = await saveState({
         db: authState.db,
         user: authState.user,
-        state: { year, month, view, rotationDays, auxiliaries, overrides: nextOverrides, dayOutings },
+        state: nextState,
+        expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
       });
+      setCloudResult(cloudResult);
+      if (!cloudResult?.cloud) {
+        alert(cloudResult?.reason === "conflict"
+          ? "Validation bloquée : une version cloud plus récente existe. Rechargez l'app avant de valider."
+          : `Validation bloquée : ${cloudResult?.error || "cloud non sauvegardé."}`);
+        return;
+      }
+      cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
+      lastSavedSignatureRef.current = signature;
+      setOverrides(nextOverrides);
       await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours, dayOutings });
       await resolvePlanningChangeRequest({
         db: authState.db,

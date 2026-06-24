@@ -1,8 +1,8 @@
 import { SHIFT_DEFS } from "./constants.js";
 import { buildSchedule } from "./scheduler-handover.js?v=20260614-meals-quota";
 import { calculatePerformedHours } from "./hour-accounting.js";
-import { isAdminUser, loadState } from "./storage.js?v=20260624-personal-exit";
-import { sharePlanningByEmail } from "./planning-share.js?v=20260624-personal-exit";
+import { isAdminUser, loadState } from "./storage.js?v=20260624-cloud-guard";
+import { sharePlanningByEmail } from "./planning-share.js?v=20260624-cloud-guard";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
@@ -64,16 +64,18 @@ export async function initPlanningShareButton() {
     button.innerHTML = `${lineIcon("M4 6h16v12H4V6ZM4 7l8 6 8-6")}<span>Partager planning</span>`;
     button.addEventListener("click", async () => {
       try {
+        const saved = await loadState({ db, user });
+        if (saved?.__cloud?.ready === false) throw new Error("Lecture cloud bloquée : rechargez l'app avant de partager.");
         const local = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
-        const saved = local?.auxiliaries?.length ? local : await loadState({ db, user });
-        const auxiliaries = (saved?.auxiliaries || []).filter(aux => aux.active !== false);
+        const source = saved?.auxiliaries?.length ? saved : local;
+        const auxiliaries = (source?.auxiliaries || []).filter(aux => aux.active !== false);
         if (!auxiliaries.length) throw new Error("Ajoutez les auxiliaires dans Reglages.");
-        const year = saved.year;
-        const month = saved.month;
-        const planning = buildSchedule({ year, month, auxiliaries, rotationDays: saved.rotationDays });
-        const schedule = applyOverrides({ schedule: planning.schedule, overrides: saved.overrides, year, month });
+        const year = source.year;
+        const month = source.month;
+        const planning = buildSchedule({ year, month, auxiliaries, rotationDays: source.rotationDays });
+        const schedule = applyOverrides({ schedule: planning.schedule, overrides: source.overrides, year, month });
         const hours = calculatePerformedHours(schedule, auxiliaries, { year, month });
-        await sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours, dayOutings: saved.dayOutings || {} });
+        await sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours, dayOutings: source.dayOutings || {} });
       } catch (error) {
         alert(`Partage impossible : ${error.message}`);
       }
