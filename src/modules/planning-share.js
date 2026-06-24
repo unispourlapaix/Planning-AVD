@@ -1,5 +1,5 @@
 import { MONTHS } from "./constants.js";
-import { publishPersonalPlannings } from "./storage.js";
+import { publishPersonalPlannings } from "./storage.js?v=20260624-day-outings";
 
 const uniqueEmails = auxiliaries => [...new Set(auxiliaries
   .filter(aux => aux.active)
@@ -17,7 +17,7 @@ const buildGmailUrl = ({ sender, recipients, subject, body }) => {
   return url.toString();
 };
 
-export async function sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours }) {
+export async function sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours, dayOutings = {} }) {
   if (!user?.uid) throw new Error("Connexion admin necessaire.");
   const recipients = uniqueEmails(auxiliaries);
   if (!recipients.length) throw new Error("Ajoutez les emails des auxiliaires dans Reglages.");
@@ -36,7 +36,7 @@ export async function sharePlanningByEmail({ db, user, year, month, auxiliaries,
   const gmailUrl = buildGmailUrl({ sender: user.email, recipients, subject, body });
   const gmailTab = window.open("about:blank", "_blank");
 
-  const count = await publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours });
+  const count = await publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours, dayOutings });
   if (gmailTab) gmailTab.location.href = gmailUrl;
   else window.location.href = gmailUrl;
   return count;

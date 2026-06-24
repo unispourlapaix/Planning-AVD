@@ -28,6 +28,7 @@ const mergeSavedState = (local, cloud) => {
     ...cloud,
     auxiliaries: hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
     overrides: cloud.overrides && typeof cloud.overrides === "object" ? cloud.overrides : local.overrides,
+    dayOutings: cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
   };
 };
 
@@ -39,6 +40,7 @@ export const defaultState = () => {
     view: "month",
     rotationDays: 1,
     auxiliaries: null,
+    dayOutings: {},
     updatedAt: "",
   };
 };
@@ -178,12 +180,15 @@ export async function resolvePlanningChangeRequest({ db, user, request, status, 
   }, { merge: true });
 }
 
-export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours }) {
+export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours, dayOutings = {} }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   const active = auxiliaries.filter(aux => aux.active && String(aux.email || "").trim());
   if (!active.length) throw new Error("Ajoutez au moins un email auxiliaire dans Reglages.");
   const batch = db.batch();
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
+  const outingPrefix = `${year}-${month}-`;
+  const sharedDayOutings = Object.fromEntries(Object.entries(dayOutings && typeof dayOutings === "object" ? dayOutings : {})
+    .filter(([key, items]) => key.startsWith(outingPrefix) && Array.isArray(items) && items.length));
   auxiliaries
     .filter(aux => String(aux.email || "").trim())
     .forEach(aux => {
@@ -225,6 +230,7 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       entries,
       calendar,
       team,
+      dayOutings: sharedDayOutings,
       hours: displayHours(hours[aux.id], aux.quota),
       publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       publishedBy: user.email || "",

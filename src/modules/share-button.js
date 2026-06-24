@@ -1,8 +1,8 @@
 import { SHIFT_DEFS } from "./constants.js";
 import { buildSchedule } from "./scheduler-handover.js?v=20260614-meals-quota";
 import { calculatePerformedHours } from "./hour-accounting.js";
-import { loadState } from "./storage.js";
-import { sharePlanningByEmail } from "./planning-share.js?v=20260607-a4-topbar";
+import { isAdminUser, loadState } from "./storage.js?v=20260624-day-outings";
+import { sharePlanningByEmail } from "./planning-share.js?v=20260624-day-outings";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
@@ -52,8 +52,8 @@ export async function initPlanningShareButton() {
   auth.onAuthStateChanged(async user => {
     document.getElementById("planning-share-button")?.remove();
     if (!user?.uid) return;
-    const admin = await db.collection("planning-avd-admins").doc(user.uid).get().catch(() => null);
-    if (!admin?.exists) return;
+    const isAdmin = await isAdminUser({ db, user });
+    if (!isAdmin) return;
 
     const actions = await waitForActions();
     if (document.getElementById("planning-share-button")) return;
@@ -73,7 +73,7 @@ export async function initPlanningShareButton() {
         const planning = buildSchedule({ year, month, auxiliaries, rotationDays: saved.rotationDays });
         const schedule = applyOverrides({ schedule: planning.schedule, overrides: saved.overrides, year, month });
         const hours = calculatePerformedHours(schedule, auxiliaries, { year, month });
-        await sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours });
+        await sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours, dayOutings: saved.dayOutings || {} });
       } catch (error) {
         alert(`Partage impossible : ${error.message}`);
       }

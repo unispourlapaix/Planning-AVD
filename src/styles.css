@@ -349,6 +349,16 @@ h2 { font-size: 16px; }
 .recipe-card h3 { color: #344753; font-size: 16px; }
 .recipe-card h4, .shopping-card h4 { color: #527061; font-size: 11px; text-transform: uppercase; }
 .recipe-card ul, .recipe-card ol, .shopping-card ul { margin: 0; padding-left: 19px; color: #52636a; font-size: 12px; font-weight: 700; line-height: 1.4; }
+.day-outings { display: grid; gap: 8px; margin-top: 4px; padding: 10px; border: 1px solid #deebe5; border-radius: 8px; background: rgba(246,253,249,.9); }
+.day-outings .muted { font-size: 11px; }
+.outing-form { display: grid; grid-template-columns: minmax(0, 1fr) 38px; gap: 6px; }
+.outing-form input { min-width: 0; padding: 8px; border: 1px solid #cfe2d8; border-radius: 7px; background: #fff; color: #344753; font-weight: 800; }
+.outing-form .btn { min-width: 0; padding: 6px; }
+.outing-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.outing-list li { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 6px; align-items: center; padding: 7px 8px; border-radius: 7px; background: #fff; border: 1px solid #deebe5; color: #52636a; font-size: 12px; font-weight: 800; }
+.outing-list.readonly li { grid-template-columns: minmax(0, 1fr); }
+.outing-list span { min-width: 0; overflow-wrap: anywhere; }
+.outing-remove.btn { width: 30px; height: 30px; padding: 0; border-radius: 50%; color: #8e2d62; }
 .shopping-card { display: grid; gap: 10px; align-content: start; }
 .shopping-card .btn { padding: 6px 8px; font-size: 11px; }
 .shopping-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }

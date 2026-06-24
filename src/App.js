@@ -15,7 +15,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-admin-doc-email";
+} from "./modules/storage.js?v=20260624-day-outings";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -79,22 +79,40 @@ function DayActivityButton({ year, month, day, onOpen }) {
   }, h("span", { className: "activity-plus" }, "+"), h("span", null, "Détail"));
 }
 
-function MealPlannerModal({ selectedDate, onClose }) {
+function MealPlannerModal({ selectedDate, onClose, dayOutings = {}, onDayOutingsChange }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [outingInput, setOutingInput] = useState("");
   const week = selectedDate ? mealWeekForDate(selectedDate.year, selectedDate.month, selectedDate.day) : [];
   useEffect(() => {
     if (!selectedDate || !week.length) return;
     const selectedKey = `${selectedDate.year}-${selectedDate.month}-${selectedDate.day}`;
     setSelectedIndex(Math.max(0, week.findIndex(item => item.dateKey === selectedKey)));
   }, [selectedDate?.year, selectedDate?.month, selectedDate?.day]);
-  if (!selectedDate) return null;
-  const meal = week[selectedIndex] || week[0];
+  const meal = week[selectedIndex] || week[0] || null;
+  const outingKey = meal?.dateKey || "";
+  useEffect(() => {
+    if (!outingKey) return;
+    setOutingInput("");
+  }, [outingKey]);
+  if (!selectedDate || !meal) return null;
+  const outings = Array.isArray(dayOutings?.[outingKey]) ? dayOutings[outingKey] : [];
+  const canEditOutings = typeof onDayOutingsChange === "function";
   const copyShopping = async () => {
     await navigator.clipboard?.writeText(shoppingListText(week));
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
+  const setSavedOutings = next => {
+    if (outingKey) onDayOutingsChange?.(outingKey, next);
+  };
+  const addOuting = () => {
+    const title = outingInput.trim();
+    if (!title || !canEditOutings) return;
+    setSavedOutings([...outings, { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, title }]);
+    setOutingInput("");
+  };
+  const removeOuting = id => setSavedOutings(outings.filter(item => item.id !== id));
 
   return h("div", { className: "modal-backdrop", onClick: onClose },
     h("section", { className: "meal-planner", onClick: event => event.stopPropagation() },
@@ -118,6 +136,29 @@ function MealPlannerModal({ selectedDate, onClose }) {
           h("ul", null, meal.ingredients.map(item => h("li", { key: item }, item))),
           h("h4", null, "Recette"),
           h("ol", null, meal.steps.map(item => h("li", { key: item }, item))),
+          h("section", { className: "day-outings" },
+            h("div", { className: "title-row" },
+              h("div", null,
+                h("h4", null, "Sorties du jour"),
+                h("div", { className: "muted" }, "Rendez-vous, promenade, courses rapides ou activité à prévoir."),
+              ),
+            ),
+            canEditOutings ? h("div", { className: "outing-form" },
+                h("input", {
+                  value: outingInput,
+                  onChange: event => setOutingInput(event.target.value),
+                  onKeyDown: event => { if (event.key === "Enter") addOuting(); },
+                  placeholder: "Ajouter une sortie",
+                }),
+                h(Button, { active: true, onClick: addOuting }, "+"),
+              ) : null,
+            outings.length
+              ? h("ul", { className: `outing-list${canEditOutings ? "" : " readonly"}` }, outings.map(item => h("li", { key: item.id },
+                  h("span", null, item.title),
+                  canEditOutings ? h(Button, { className: "outing-remove", title: "Retirer", onClick: () => removeOuting(item.id) }, "x") : null,
+                )))
+              : h("div", { className: "muted" }, "Aucune sortie notée pour ce jour."),
+          ),
         ),
         h("aside", { className: "shopping-card" },
           h("div", { className: "title-row" },
@@ -199,6 +240,17 @@ const extractBackupJson = text => {
   return (match ? match[1] : raw).trim();
 };
 const formatCloudTime = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
+  .map(([key, items]) => [key, (Array.isArray(items) ? items : [])
+    .map((item, index) => {
+      const title = typeof item === "string" ? item : item?.title;
+      return {
+        id: String(item?.id || `${key}-${index}`),
+        title: String(title || "").trim(),
+      };
+    })
+    .filter(item => item.title)])
+  .filter(([, items]) => items.length));
 
 function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
   const moveMonth = delta => {
@@ -441,7 +493,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
         : null,
     ),
     h(ChangeRequestModal, { edit: requestEdit, planning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
-    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null) }),
+    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null), dayOutings: planning?.dayOutings || {} }),
   );
 }
 
@@ -765,6 +817,7 @@ export default function App() {
   const [rotationDays, setRotationDays] = useState(defaultState().rotationDays);
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
   const [overrides, setOverrides] = useState({});
+  const [dayOutings, setDayOutings] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
   const [mealDate, setMealDate] = useState(null);
   const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false });
@@ -851,6 +904,7 @@ export default function App() {
       if ([1, 2, 3, 4].includes(Number(saved?.rotationDays))) setRotationDays(Number(saved.rotationDays));
       if (saved?.auxiliaries || saved?.names) setAuxiliaries(normalizeAuxiliaries(saved));
       if (saved?.overrides && typeof saved.overrides === "object") setOverrides(saved.overrides);
+      if (saved?.dayOutings && typeof saved.dayOutings === "object") setDayOutings(normalizeDayOutings(saved.dayOutings));
       setStateLoaded(true);
     });
   }, [authState.ready, authState.user, stateLoaded]);
@@ -869,10 +923,10 @@ export default function App() {
     const id = setTimeout(() => saveState({
       db: authState.db,
       user: authState.user,
-      state: { year, month, view, rotationDays, auxiliaries, overrides },
+      state: { year, month, view, rotationDays, auxiliaries, overrides, dayOutings },
     }).then(setCloudResult), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides]);
+  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides, dayOutings]);
 
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
@@ -882,6 +936,13 @@ export default function App() {
   );
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
   const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
+  const updateDayOutings = (key, items) => setDayOutings(current => {
+    const cleaned = normalizeDayOutings({ [key]: items })[key] || [];
+    const next = { ...current };
+    if (cleaned.length) next[key] = cleaned;
+    else delete next[key];
+    return next;
+  });
 
   const openReport = () => {
     const html = buildReportHtml({ year, month, auxiliaries: activeAux, schedule, hours });
@@ -905,10 +966,10 @@ export default function App() {
       const cloudResult = await saveState({
         db: authState.db,
         user: authState.user,
-        state: { year, month, view, rotationDays, auxiliaries, overrides },
+        state: { year, month, view, rotationDays, auxiliaries, overrides, dayOutings },
       });
       setCloudResult(cloudResult);
-      const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours });
+      const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours, dayOutings });
       alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.cloud ? "Sauvegarde cloud à jour." : "Configuration conservée en local seulement."}`);
     } catch (error) {
       alert(`Sauvegarde impossible : ${error.message}`);
@@ -932,9 +993,9 @@ export default function App() {
       await saveState({
         db: authState.db,
         user: authState.user,
-        state: { year, month, view, rotationDays, auxiliaries, overrides: nextOverrides },
+        state: { year, month, view, rotationDays, auxiliaries, overrides: nextOverrides, dayOutings },
       });
-      await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours });
+      await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours, dayOutings });
       await resolvePlanningChangeRequest({
         db: authState.db,
         user: authState.user,
@@ -961,7 +1022,7 @@ export default function App() {
       app: "Planning-AVD",
       version: 1,
       exportedAt: new Date().toISOString(),
-      state: { year, month, view, rotationDays, auxiliaries, overrides },
+      state: { year, month, view, rotationDays, auxiliaries, overrides, dayOutings },
     };
     const content = JSON.stringify(backup, null, 2);
     const fileName = `planning-avd-sauvegarde-${year}-${String(month + 1).padStart(2, "0")}.json`;
@@ -1009,6 +1070,7 @@ export default function App() {
       setRotationDays([1, 2, 3, 4].includes(nextRotation) ? nextRotation : 1);
       setAuxiliaries(normalizeAuxiliaries({ auxiliaries: next.auxiliaries }));
       setOverrides(next.overrides && typeof next.overrides === "object" ? next.overrides : {});
+      setDayOutings(normalizeDayOutings(next.dayOutings));
       alert("Sauvegarde restauree. Elle sera aussi sauvegardee dans le cloud si vous etes connecte.");
     } catch (error) {
       alert(`Sauvegarde impossible a restaurer : ${error.message}`);
@@ -1060,6 +1122,6 @@ export default function App() {
       onReset: key => { setOverrides(current => { const next = { ...current }; delete next[key]; return next; }); setSlotEdit(null); },
       onClose: () => setSlotEdit(null),
     }),
-    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null) }),
+    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null), dayOutings, onDayOutingsChange: updateDayOutings }),
   );
 }
