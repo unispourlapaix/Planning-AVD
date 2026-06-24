@@ -79,6 +79,8 @@ export async function isAdminUser({ db, user }) {
     if (uidSnap.exists) return true;
     const email = normalizeEmail(user.email);
     if (!email) return false;
+    const emailIdSnap = await db.collection("planning-avd-admins").doc(email).get();
+    if (emailIdSnap.exists && emailIdSnap.data()?.active !== false) return true;
     const legacySnap = await db.collection("planning-avd-admins").where("email", "==", email).limit(1).get();
     if (!legacySnap.empty) return legacySnap.docs.some(doc => doc.data()?.active !== false);
     const emailSnap = await db.collection("planning-avd-admin-emails").doc(email).get();
@@ -93,7 +95,7 @@ export async function grantAdminByEmail({ db, user, email }) {
   const cleanEmail = normalizeEmail(email);
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!cleanEmail || !cleanEmail.includes("@")) throw new Error("Email administrateur invalide.");
-  await db.collection("planning-avd-admin-emails").doc(cleanEmail).set({
+  await db.collection("planning-avd-admins").doc(cleanEmail).set({
     email: cleanEmail,
     active: true,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),

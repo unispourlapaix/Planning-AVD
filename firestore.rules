@@ -9,6 +9,8 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn()
         && (exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.uid))
+          || (exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.token.email))
+            && get(/databases/$(database)/documents/planning-avd-admins/$(request.auth.token.email)).data.active == true)
           || (exists(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email))
             && get(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email)).data.active == true));
     }
@@ -27,9 +29,11 @@ service cloud.firestore {
     match /planning-avd-admins/{userId} {
       allow read: if signedIn()
         && (request.auth.uid == userId
+          || request.auth.token.email == userId
           || resource.data.email == request.auth.token.email
           || isAdmin());
-      allow write: if false;
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() && request.auth.uid != userId && request.auth.token.email != userId;
     }
 
     match /planning-avd-admin-emails/{email} {
