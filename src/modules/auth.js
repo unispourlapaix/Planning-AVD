@@ -79,7 +79,7 @@ export async function initGoogleAuth(onChange) {
     if (storedRedirectError) clearRedirectError();
     const email = String(user?.email || "").toLowerCase();
     const allowed = Array.isArray(cfg.allowedEmails) ? cfg.allowedEmails.map(item => String(item).toLowerCase()) : [];
-    const blocked = !!email && allowed.length > 0 && !allowed.includes(email);
+    const blocked = cfg.restrictSignIn === true && !!email && allowed.length > 0 && !allowed.includes(email);
     onChange?.({ user: blocked ? null : user, auth, db, ready: true, error: blocked ? "Email non autorise" : storedRedirectError });
     if (blocked) auth.signOut();
   });
@@ -91,14 +91,10 @@ export async function signInWithGoogle(auth) {
   if (!auth || !window.firebase) throw new Error("Connexion non disponible");
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  if (isStandaloneApp()) {
-    await auth.signInWithRedirect(provider);
-    return;
-  }
   try {
     await auth.signInWithPopup(provider);
   } catch (error) {
-    if (!shouldFallbackToRedirect(error)) throw error;
+    if (!isStandaloneApp() && !shouldFallbackToRedirect(error)) throw error;
     await auth.signInWithRedirect(provider);
   }
 }

@@ -1,5 +1,5 @@
 import { MONTHS } from "./constants.js";
-import { publishPersonalPlannings } from "./storage.js?v=20260624-email-share";
+import { publishPersonalPlannings } from "./storage.js?v=20260624-aux-login";
 
 const uniqueEmails = auxiliaries => [...new Set(auxiliaries
   .filter(aux => aux.active !== false)

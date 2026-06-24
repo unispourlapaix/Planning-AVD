@@ -3,10 +3,16 @@ import { summarizeHours } from "./hour-accounting.js";
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
+const cleanEmail = email => String(email || "").trim();
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
-const encodedEmailKey = email => encodeURIComponent(normalizeEmail(email));
-const shareEmailKey = email => normalizeEmail(email).replaceAll("/", "%2F");
-const uniqueShareKeys = email => [...new Set([shareEmailKey(email), encodedEmailKey(email)].filter(Boolean))];
+const encodedEmailKey = email => encodeURIComponent(cleanEmail(email));
+const shareEmailKey = email => cleanEmail(email).replaceAll("/", "%2F");
+const uniqueEmailKeys = email => {
+  const raw = cleanEmail(email);
+  const lower = normalizeEmail(email);
+  return [...new Set([shareEmailKey(raw), shareEmailKey(lower), encodedEmailKey(raw), encodedEmailKey(lower)].filter(Boolean))];
+};
+const uniqueShareKeys = uniqueEmailKeys;
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const displayHours = summarizeHours;
@@ -180,8 +186,9 @@ export async function grantAdminByEmail({ db, user, email }) {
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
   if (!db || !user?.email) return () => {};
   const email = normalizeEmail(user.email);
+  const rawEmail = cleanEmail(user.email);
   const monthId = monthKey(year, month);
-  const refs = uniqueShareKeys(email).map(key => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId));
+  const refs = uniqueShareKeys(rawEmail).map(key => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId));
   let directPending = refs.length;
   let queryUnsubscribe = null;
   let active = true;
@@ -229,7 +236,7 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
 }
 
 const changeRequestCollection = ({ db, email, year, month }) =>
-  db.collection("planning-avd-change-requests").doc(encodedEmailKey(email)).collection("months").doc(monthKey(year, month)).collection("items");
+  db.collection("planning-avd-change-requests").doc(encodedEmailKey(normalizeEmail(email))).collection("months").doc(monthKey(year, month)).collection("items");
 
 const requestSnapshotList = snapshot => snapshot.docs
   .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -237,7 +244,9 @@ const requestSnapshotList = snapshot => snapshot.docs
 
 export function subscribePersonalChangeRequests({ db, user, year, month, onChange, onError }) {
   if (!db || !user?.email) return () => {};
+  const email = cleanEmail(user.email);
   return changeRequestCollection({ db, email: user.email, year, month })
+    .where("requesterEmail", "==", email)
     .onSnapshot(snapshot => onChange?.(requestSnapshotList(snapshot)), error => onError?.(error));
 }
 
@@ -263,7 +272,7 @@ export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, onC
 
 export async function createPlanningChangeRequest({ db, user, planning, year, month, day, shift, targetEmail, targetName, message }) {
   if (!db || !user?.email) throw new Error("Connexion necessaire.");
-  const email = String(user.email).trim().toLowerCase();
+  const email = cleanEmail(user.email);
   const ref = changeRequestCollection({ db, email, year, month }).doc();
   await ref.set({
     requesterEmail: email,
@@ -307,15 +316,19 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
   auxiliaries
     .filter(aux => String(aux.email || "").trim())
     .forEach(aux => {
-      const email = String(aux.email).trim().toLowerCase();
-      const memberRef = db.collection("planning-avd-team-members").doc(email);
-      batch.set(memberRef, {
-        email,
-        name: aux.name,
-        active: aux.active !== false,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedBy: user.email || "",
-      }, { merge: true });
+      const rawEmail = cleanEmail(aux.email);
+      const email = normalizeEmail(rawEmail);
+      uniqueEmailKeys(rawEmail).forEach(key => {
+        const memberRef = db.collection("planning-avd-team-members").doc(key);
+        batch.set(memberRef, {
+          email: rawEmail,
+          emailLower: email,
+          name: aux.name,
+          active: aux.active !== false,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: user.email || "",
+        }, { merge: true });
+      });
     });
   const team = active.map(aux => ({
     name: aux.name || "A definir",
@@ -335,9 +348,11 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
         if (primaryWorkerId(plan?.[shift]) === aux.id) entries.push({ day: plan.day, shift });
       });
     });
-    const email = String(aux.email).trim().toLowerCase();
+    const rawEmail = cleanEmail(aux.email);
+    const email = normalizeEmail(rawEmail);
     const sharePayload = {
       email,
+      emailOriginal: rawEmail,
       name: aux.name,
       year,
       month,
@@ -349,7 +364,7 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       publishedBy: user.email || "",
     };
-    uniqueShareKeys(email).forEach(key => {
+    uniqueShareKeys(rawEmail).forEach(key => {
       const ref = db.collection("planning-avd-shares").doc(key).collection("months").doc(monthKey(year, month));
       batch.set(ref, sharePayload);
     });

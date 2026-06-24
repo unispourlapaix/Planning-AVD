@@ -2,9 +2,14 @@ import { MONTHS } from "./constants.js";
 import { mealForDate } from "./meal-planning.js";
 
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
-const encodedEmailKey = email => encodeURIComponent(normalizeEmail(email));
-const shareEmailKey = email => normalizeEmail(email).replaceAll("/", "%2F");
-const uniqueShareKeys = email => [...new Set([shareEmailKey(email), encodedEmailKey(email)].filter(Boolean))];
+const cleanEmail = email => String(email || "").trim();
+const encodedEmailKey = email => encodeURIComponent(cleanEmail(email));
+const shareEmailKey = email => cleanEmail(email).replaceAll("/", "%2F");
+const uniqueShareKeys = email => {
+  const raw = cleanEmail(email);
+  const lower = normalizeEmail(email);
+  return [...new Set([shareEmailKey(raw), shareEmailKey(lower), encodedEmailKey(raw), encodedEmailKey(lower)].filter(Boolean))];
+};
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const shiftLabels = { morning: "Matin 11h", afternoon: "Après-midi 17h", night: "Soir" };
@@ -215,8 +220,9 @@ export async function initPersonalTeamCalendar() {
     lastPayload = null;
     lastRenderedView = "";
     const email = normalizeEmail(user.email);
+    const rawEmail = cleanEmail(user.email);
     const monthId = monthKey(visible.year, visible.month);
-    const refs = uniqueShareKeys(email).map(emailId => db.collection("planning-avd-shares").doc(emailId).collection("months").doc(monthId));
+    const refs = uniqueShareKeys(rawEmail).map(emailId => db.collection("planning-avd-shares").doc(emailId).collection("months").doc(monthId));
     let active = true;
     let directPending = refs.length;
     let queryUnsubscribe = null;
