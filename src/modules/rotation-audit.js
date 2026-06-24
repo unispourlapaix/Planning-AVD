@@ -31,6 +31,8 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
   const undefinedSlots = [];
   const invalidSlots = [];
   const brokenWeekendHandovers = [];
+  const brokenWeekendBlocks = [];
+  const mondayRestBreaks = [];
   const nightCount = Object.fromEntries(active.map(aux => [aux.id, 0]));
   const mainCount = Object.fromEntries(active.map(aux => [aux.id, 0]));
   const weekendOwnerCount = Object.fromEntries(active.map(aux => [aux.id, 0]));
@@ -62,12 +64,28 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
         weekendOwners.push({ day, owner: weekendOwner });
         if (weekendOwnerCount[weekendOwner] !== undefined) weekendOwnerCount[weekendOwner] += 1;
       }
+      if (schedule[day + 1]) {
+        SHIFT_DEFS.forEach(shift => {
+          const saturdayWorker = primary(plan[shift.id]);
+          const sundayWorker = primary(sunday[shift.id]);
+          if (saturdayWorker && sundayWorker && saturdayWorker !== sundayWorker) {
+            brokenWeekendBlocks.push(`${day}-${day + 1} ${MONTHS[month]} ${SHIFT_LABEL[shift.id]}`);
+          }
+        });
+      }
     }
 
     if (dayIndex(year, month, day) === 4 && schedule[day + 1]) {
       const saturdayOwner = primary(schedule[day + 1].morning) || primary(schedule[day + 1].afternoon);
       if (saturdayOwner && primary(plan.night) !== saturdayOwner) {
         brokenWeekendHandovers.push(`${day}-${day + 1} ${MONTHS[month]}`);
+      }
+    }
+
+    if (dayIndex(year, month, day) === 6 && schedule[day + 1]) {
+      const weekendWorker = primary(plan.night) || primary(plan.afternoon) || primary(plan.morning);
+      if (weekendWorker && (primary(schedule[day + 1].afternoon) === weekendWorker || primary(schedule[day + 1].night) === weekendWorker)) {
+        mondayRestBreaks.push(`${day + 1} ${MONTHS[month]} : ${auxName(auxiliaries, weekendWorker)}`);
       }
     }
   }
@@ -82,6 +100,14 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
 
   if (brokenWeekendHandovers.length) {
     add("danger", "Passation du vendredi soir", `Le titulaire du samedi doit commencer le vendredi soir : ${compactDays(brokenWeekendHandovers)}.`);
+  }
+
+  if (brokenWeekendBlocks.length) {
+    add("danger", "Week-end coupe", `Samedi et dimanche doivent rester avec le meme titulaire : ${compactDays(brokenWeekendBlocks)}.`);
+  }
+
+  if (mondayRestBreaks.length) {
+    add("danger", "Repos du lundi", `Celui du week-end ne doit pas reprendre lundi apres-midi/soir : ${compactDays(mondayRestBreaks)}.`);
   }
 
   active
