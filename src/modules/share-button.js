@@ -1,8 +1,8 @@
 import { SHIFT_DEFS } from "./constants.js";
 import { buildSchedule } from "./scheduler-handover.js?v=20260614-meals-quota";
 import { calculatePerformedHours } from "./hour-accounting.js";
-import { isAdminUser, loadState } from "./storage.js?v=20260624-monthly-restore";
-import { sharePlanningByEmail } from "./planning-share.js?v=20260624-monthly-restore";
+import { isAdminUser, loadState } from "./storage.js?v=20260624-email-share";
+import { sharePlanningByEmail } from "./planning-share.js?v=20260624-email-share";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
@@ -40,6 +40,21 @@ const waitForFirebase = () => new Promise(resolve => {
   find();
 });
 
+const emailCount = state => (state?.auxiliaries || [])
+  .filter(aux => aux?.active !== false)
+  .map(aux => String(aux.email || "").trim())
+  .filter(Boolean)
+  .length;
+
+const scoreState = state => {
+  if (!state || !Array.isArray(state.auxiliaries)) return -1;
+  return emailCount(state) * 1000 + state.auxiliaries.length;
+};
+
+const bestPlanningSource = (...states) => states
+  .filter(Boolean)
+  .sort((a, b) => scoreState(b) - scoreState(a))[0] || null;
+
 export async function initPlanningShareButton() {
   const initialActions = await waitForActions();
   renameSaveButton(initialActions);
@@ -64,12 +79,14 @@ export async function initPlanningShareButton() {
     button.innerHTML = `${lineIcon("M4 6h16v12H4V6ZM4 7l8 6 8-6")}<span>Partager planning</span>`;
     button.addEventListener("click", async () => {
       try {
+        const current = globalThis.__planningAvdCurrentState || null;
         const saved = await loadState({ db, user });
-        if (saved?.__cloud?.ready === false) throw new Error("Lecture cloud bloquée : rechargez l'app avant de partager.");
+        if (!current && saved?.__cloud?.ready === false) throw new Error("Lecture cloud bloquée : rechargez l'app avant de partager.");
         const local = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
-        const source = saved?.auxiliaries?.length ? saved : local;
+        const source = bestPlanningSource(current, saved, local);
         const auxiliaries = (source?.auxiliaries || []).filter(aux => aux.active !== false);
         if (!auxiliaries.length) throw new Error("Ajoutez les auxiliaires dans Reglages.");
+        if (!emailCount({ auxiliaries })) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
         const year = source.year;
         const month = source.month;
         const planning = buildSchedule({ year, month, auxiliaries, rotationDays: source.rotationDays });

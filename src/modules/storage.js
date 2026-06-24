@@ -299,8 +299,8 @@ export async function resolvePlanningChangeRequest({ db, user, request, status, 
 
 export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, hours, dayOutings = {} }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
-  const active = auxiliaries.filter(aux => aux.active && String(aux.email || "").trim());
-  if (!active.length) throw new Error("Ajoutez au moins un email auxiliaire dans Reglages.");
+  const active = auxiliaries.filter(aux => aux.active !== false && String(aux.email || "").trim());
+  if (!active.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
   const batch = db.batch();
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
   const outingPrefix = `${year}-${month}-`;

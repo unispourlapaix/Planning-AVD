@@ -16,7 +16,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-monthly-restore";
+} from "./modules/storage.js?v=20260624-email-share";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -575,7 +575,7 @@ function ManualOverridesPanel({ items, onReset }) {
 function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onReject }) {
   const [choices, setChoices] = useState({});
   if (!requests.length && !error) return null;
-  const active = auxiliaries.filter(aux => aux.active);
+  const active = auxiliaries.filter(aux => aux.active !== false);
   const defaultWorker = request => active.find(aux => String(aux.email || "").toLowerCase() === String(request.targetEmail || "").toLowerCase())
     || active.find(aux => String(aux.name || "").trim().toLowerCase() === String(request.targetName || "").trim().toLowerCase())
     || null;
@@ -686,7 +686,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
   if (!edit) return null;
   const key = overrideKey(year, month, edit.day, edit.shift);
   const current = schedule[edit.day]?.[edit.shift]?.worker;
-  const available = auxiliaries.filter(aux => aux.active && canWorkShift(aux, edit.shift, year, month, edit.day));
+  const available = auxiliaries.filter(aux => aux.active !== false && canWorkShift(aux, edit.shift, year, month, edit.day));
   return h("div", { className: "modal-backdrop", onClick: onClose },
     h("section", { className: "slot-editor", onClick: event => event.stopPropagation() },
       h("div", { className: "title-row" },
@@ -896,7 +896,7 @@ export default function App() {
 
   const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin;
 
-  const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active), [auxiliaries]);
+  const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active !== false), [auxiliaries]);
 
   useEffect(() => {
     if (!personalMode) return;
@@ -926,6 +926,10 @@ export default function App() {
       onError: error => setAdminChangeError(`Demandes indisponibles : ${error.message}`),
     });
   }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, activeAux, year, month]);
+
+  useEffect(() => {
+    window.__planningAvdCurrentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
+  }, [year, month, view, rotationDays, auxiliaries, overrides, dayOutings]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;

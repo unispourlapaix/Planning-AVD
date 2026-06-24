@@ -1,8 +1,8 @@
 import { MONTHS } from "./constants.js";
-import { publishPersonalPlannings } from "./storage.js?v=20260624-monthly-restore";
+import { publishPersonalPlannings } from "./storage.js?v=20260624-email-share";
 
 const uniqueEmails = auxiliaries => [...new Set(auxiliaries
-  .filter(aux => aux.active)
+  .filter(aux => aux.active !== false)
   .map(aux => String(aux.email || "").trim().toLowerCase())
   .filter(Boolean))];
 
@@ -20,7 +20,7 @@ const buildGmailUrl = ({ sender, recipients, subject, body }) => {
 export async function sharePlanningByEmail({ db, user, year, month, auxiliaries, schedule, hours, dayOutings = {} }) {
   if (!user?.uid) throw new Error("Connexion admin necessaire.");
   const recipients = uniqueEmails(auxiliaries);
-  if (!recipients.length) throw new Error("Ajoutez les emails des auxiliaires dans Reglages.");
+  if (!recipients.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
 
   const appUrl = `${window.location.origin}${window.location.pathname}`;
   const subject = `Votre planning Planning-AVD - ${MONTHS[month]} ${year}`;
