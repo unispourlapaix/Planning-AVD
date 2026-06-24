@@ -22,7 +22,9 @@ const cleanNode = node => {
 const cleanPersonalView = root => {
   root.querySelectorAll(".personal-summary > b").forEach(node => node.remove());
   root.querySelectorAll(".personal-slot span:last-child").forEach(node => {
-    node.textContent = String(node.textContent || "").replace(/\s*[·-]\s*\d+(?:[.,]\d+)?h/g, "");
+    const text = String(node.textContent || "");
+    const cleaned = text.replace(/\s*[·-]\s*\d+(?:[.,]\d+)?h/g, "");
+    if (cleaned !== text) node.textContent = cleaned;
   });
 };
 
@@ -31,10 +33,25 @@ const cleanAdminHours = root => {
 };
 
 export function initPrivateDisplay() {
+  const options = { childList: true, subtree: true, characterData: true };
+  let scheduled = false;
+  let observer = null;
   const refresh = () => {
     cleanPersonalView(document);
     cleanAdminHours(document);
   };
+  const scheduleRefresh = () => {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(() => {
+      observer?.disconnect();
+      refresh();
+      observer?.observe(document.body, options);
+      scheduled = false;
+    }, 40);
+  };
+
   refresh();
-  new MutationObserver(refresh).observe(document.body, { childList: true, subtree: true, characterData: true });
+  observer = new MutationObserver(scheduleRefresh);
+  observer.observe(document.body, options);
 }

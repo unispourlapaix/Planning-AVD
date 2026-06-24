@@ -8,7 +8,7 @@ import { initPersonalMobileView } from "./modules/personal-mobile-view.js?v=2026
 import { initSettingsTools } from "./modules/settings-tools.js?v=20260624-monthly-restore";
 import { initTopbarSettingsNav } from "./modules/topbar-settings-nav.js?v=20260608-print-label";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260615-github-update";
-import { initPrivateDisplay } from "./modules/private-display.js?v=20260614-meals-quota";
+import { initPrivateDisplay } from "./modules/private-display.js?v=20260624-timeout-fix";
 import { initMealBanner } from "./modules/meal-banner.js?v=20260624-life-separate";
 
 globalThis.React = React;
