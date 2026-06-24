@@ -204,6 +204,18 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
   let active = true;
   let hasDirectPlanning = false;
   let nearbySearchStarted = false;
+  const queryByEmail = async (field, value) => {
+    if (!value) return null;
+    try {
+      const snapshot = await db.collectionGroup("months").where(field, "==", value).limit(12).get();
+      return snapshot.docs
+        .map(doc => doc.data())
+        .find(item => Number.isInteger(item?.year) && Number.isInteger(item?.month)) || null;
+    } catch (error) {
+      console.warn("Recherche planning auxiliaire impossible.", error);
+      return null;
+    }
+  };
   const startNearbyFallback = async () => {
     if (nearbySearchStarted || !active || hasDirectPlanning) return;
     nearbySearchStarted = true;
@@ -218,6 +230,11 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
           }
         } catch {}
       }
+    }
+    const queried = await queryByEmail("email", normalizeEmail(rawEmail)) || await queryByEmail("emailOriginal", rawEmail);
+    if (active && queried) {
+      onChange?.(queried);
+      return;
     }
     if (active && !hasDirectPlanning) onChange?.(null);
   };
@@ -356,9 +373,11 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
     });
     const rawEmail = cleanEmail(aux.email);
     const email = normalizeEmail(rawEmail);
+    const readEmails = [...new Set([rawEmail, email].filter(Boolean))];
     const sharePayload = {
       email,
       emailOriginal: rawEmail,
+      readEmails,
       name: aux.name,
       year,
       month,

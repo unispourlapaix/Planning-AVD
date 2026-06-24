@@ -45,7 +45,10 @@ service cloud.firestore {
     match /planning-avd-shares/{email}/months/{month} {
       allow read: if signedIn()
         && (request.auth.token.email == email
-          || request.auth.token.email == resource.data.email);
+          || request.auth.token.email == resource.data.email
+          || request.auth.token.email == resource.data.emailOriginal
+          || (resource.data.readEmails is list
+            && request.auth.token.email in resource.data.readEmails));
       allow write: if isAdmin();
     }
 
@@ -60,7 +63,11 @@ service cloud.firestore {
     }
 
     match /planning-avd-team-members/{email} {
-      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow read: if signedIn()
+        && (request.auth.token.email == email
+          || request.auth.token.email == resource.data.email
+          || request.auth.token.email == resource.data.emailLower
+          || isAdmin());
       allow write: if isAdmin();
     }
 
