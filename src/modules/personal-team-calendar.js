@@ -14,6 +14,7 @@ const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const shiftLabels = { morning: "Matin 11h", afternoon: "Après-midi 17h", night: "Soir" };
 const shiftOrder = ["morning", "afternoon", "night"];
+const slotKey = (day, shift) => `${day}-${shift}`;
 const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
   ">": "&gt;",
@@ -64,10 +65,12 @@ const ensureStyle = () => {
     .team-admin-view .calendar,.team-admin-view .week-days{align-items:stretch}
     .team-admin-view .day-card{position:relative;overflow:hidden}
     .team-admin-view .day-card.empty{min-height:0;opacity:.28}
+    .team-admin-view .day-card:not(.has-own){background:rgba(245,246,246,.72);border-color:rgba(224,228,229,.74)}
+    .team-admin-view .day-card.has-own{box-shadow:0 12px 28px rgba(86,137,201,.13), inset 0 0 0 1px rgba(123,175,212,.18)}
     .team-admin-view .slot{
       --slot-accent:#9bb6c6;
       display:grid;
-      grid-template-columns:minmax(0,1fr);
+      grid-template-columns:minmax(0,1fr) auto;
       gap:2px;
       align-items:start;
       min-width:0;
@@ -77,10 +80,24 @@ const ensureStyle = () => {
       border:1px solid rgba(218,228,232,.9);
       box-shadow:inset 3px 0 0 var(--slot-accent);
     }
+    .team-admin-view .slot.other{
+      --slot-accent:#d8dee2;
+      opacity:.48;
+      background:rgba(247,248,248,.72);
+      border-color:rgba(226,229,231,.72);
+      box-shadow:inset 2px 0 0 rgba(207,215,219,.8);
+    }
+    .team-admin-view .slot.mine{
+      opacity:1;
+      background:linear-gradient(135deg,rgba(236,247,255,.98),rgba(255,241,248,.96));
+      border-color:rgba(123,175,212,.72);
+      box-shadow:inset 4px 0 0 var(--slot-accent),0 7px 18px rgba(86,137,201,.16);
+    }
     .team-admin-view .slot.morning{--slot-accent:#7eb6d4}
     .team-admin-view .slot.afternoon{--slot-accent:#e5a0c6}
     .team-admin-view .slot.night{--slot-accent:#a99ade}
     .team-admin-view .slot-name{
+      grid-column:1;
       min-width:0;
       color:#3f5967;
       font-size:11px;
@@ -90,7 +107,10 @@ const ensureStyle = () => {
       overflow-wrap:anywhere;
       text-overflow:clip;
     }
+    .team-admin-view .slot.other .slot-name{color:#9aa3a7}
+    .team-admin-view .slot.mine .slot-name{color:#264d71;font-size:11.5px}
     .team-admin-view .slot-label{
+      grid-column:1;
       display:block;
       padding:0;
       border:0;
@@ -102,7 +122,25 @@ const ensureStyle = () => {
       text-align:left;
       text-transform:uppercase;
     }
+    .team-admin-view .slot.other .slot-label{color:#aeb7bc}
     .team-admin-view .slot-rest{color:#9a948b;font-weight:800}
+    .team-admin-view .exchange-tag{
+      grid-column:2;
+      grid-row:1 / span 2;
+      align-self:center;
+      width:24px;
+      height:24px;
+      padding:0;
+      border:1px solid rgba(212,106,168,.42);
+      border-radius:50%;
+      background:rgba(255,255,255,.96);
+      color:#d46aa8;
+      font-size:18px;
+      font-weight:900;
+      line-height:1;
+      box-shadow:0 4px 12px rgba(212,106,168,.18);
+    }
+    .team-admin-view .exchange-tag:active{transform:translateY(1px)}
     .team-admin-view .meal-tag{
       width:100%;
       display:grid;
@@ -131,21 +169,28 @@ const activePersonalView = () => {
   return active.includes("Mois") ? "month" : "week";
 };
 
-const slotHtml = (item, shift) => {
+const personalSlotSet = entries => new Set((entries || []).map(entry => slotKey(entry.day, entry.shift)));
+
+const slotHtml = (item, shift, personalSlots) => {
   // Vue auxiliaire : uniquement le titulaire principal, les doublons restent cotes admin.
   const primaryName = (item?.shifts?.[shift] || []).filter(Boolean)[0];
+  const mine = personalSlots.has(slotKey(item.day, shift));
   const name = primaryName ? escapeHtml(primaryName) : `<span class="slot-rest">Repos</span>`;
-  return `<div class="slot ${shift}"><span class="slot-label">${shiftLabels[shift]}</span><span class="slot-name">${name}</span></div>`;
+  const exchange = mine
+    ? `<button class="exchange-tag" type="button" data-request-day="${item.day}" data-request-shift="${shift}" title="Demander un échange" aria-label="Demander un échange">+</button>`
+    : "";
+  return `<div class="slot ${shift} ${mine ? "mine" : "other"}"><span class="slot-label">${shiftLabels[shift]}</span><span class="slot-name">${name}</span>${exchange}</div>`;
 };
 
-const dayHtml = (item, year, month) => {
+const dayHtml = (item, year, month, personalSlots) => {
   if (!item) return `<div class="day-card empty"></div>`;
   const date = new Date(year, month, item.day);
   const tone = date.getDay() === 6 ? " saturday" : date.getDay() === 0 ? " sunday" : "";
   const meal = mealForDate(year, month, item.day);
-  return `<div class="day-card${tone}">
+  const hasOwn = shiftOrder.some(shift => personalSlots.has(slotKey(item.day, shift)));
+  return `<div class="day-card${tone}${hasOwn ? " has-own" : ""}">
     <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</span></div>
-    ${shiftOrder.map(shift => slotHtml(item, shift)).join("")}
+    ${shiftOrder.map(shift => slotHtml(item, shift, personalSlots)).join("")}
     <button class="meal-tag" data-meal-year="${year}" data-meal-month="${month}" data-meal-day="${item.day}" title="Repas : ${escapeHtml(meal.title)}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M15 3v18M15 3c4 2 5 8 0 11"></path></svg>
       <span>${escapeHtml(meal.short)}</span>
@@ -153,7 +198,7 @@ const dayHtml = (item, year, month) => {
   </div>`;
 };
 
-const render = ({ calendar = [], year, month }) => {
+const render = ({ calendar = [], entries = [], year, month }) => {
   const layout = document.querySelector(".personal-app .layout");
   const app = document.querySelector(".personal-app");
   if (!layout) return;
@@ -161,6 +206,7 @@ const render = ({ calendar = [], year, month }) => {
   app?.classList.remove("team-calendar-ready");
   if (!calendar.length) return;
   const byDay = Object.fromEntries(calendar.map(item => [item.day, item]));
+  const ownSlots = personalSlotSet(entries);
   const view = activePersonalView();
   if (!view) return;
   const section = document.createElement("section");
@@ -169,12 +215,12 @@ const render = ({ calendar = [], year, month }) => {
   if (view === "month") {
     section.innerHTML = `<div class="calendar">
       ${DAYS_SHORT.map((day, index) => `<div class="dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}">${day}</div>`).join("")}
-      ${monthGrid(year, month).map(day => day ? dayHtml(byDay[day], year, month) : dayHtml(null, year, month)).join("")}
+      ${monthGrid(year, month).map(day => day ? dayHtml(byDay[day], year, month, ownSlots) : dayHtml(null, year, month, ownSlots)).join("")}
     </div>`;
   } else {
     section.innerHTML = weekStarts(year, month).map(start => {
       const days = Array.from({ length: 7 }, (_, index) => start + index).filter(day => byDay[day]);
-      return `<section class="panel"><h3>Semaine du ${start} ${MONTHS[month]}</h3><div class="week-days">${days.map(day => dayHtml(byDay[day], year, month)).join("")}</div></section>`;
+      return `<section class="panel"><h3>Semaine du ${start} ${MONTHS[month]}</h3><div class="week-days">${days.map(day => dayHtml(byDay[day], year, month, ownSlots)).join("")}</div></section>`;
     }).join("");
   }
   layout.appendChild(section);
@@ -184,6 +230,16 @@ const render = ({ calendar = [], year, month }) => {
 export async function initPersonalTeamCalendar() {
   ensureStyle();
   document.addEventListener("click", event => {
+    const exchangeButton = event.target.closest?.("#personal-team-calendar .exchange-tag");
+    if (exchangeButton) {
+      window.dispatchEvent(new CustomEvent("planning-avd-request-change", {
+        detail: {
+          day: Number(exchangeButton.dataset.requestDay),
+          shift: exchangeButton.dataset.requestShift,
+        },
+      }));
+      return;
+    }
     const button = event.target.closest?.("#personal-team-calendar .meal-tag");
     if (!button) return;
     window.dispatchEvent(new CustomEvent("planning-avd-open-meal", {
@@ -229,7 +285,13 @@ export async function initPersonalTeamCalendar() {
     let hasDirectPlanning = false;
     const renderSnapshot = snap => {
       if (!active) return;
-      lastPayload = { calendar: snap.data()?.calendar || [], ...visible };
+      const data = snap.data() || {};
+      lastPayload = {
+        calendar: data.calendar || [],
+        entries: data.entries || [],
+        name: data.name || "",
+        ...visible,
+      };
       lastRenderedView = activePersonalView();
       render(lastPayload);
     };

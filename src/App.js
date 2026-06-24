@@ -415,9 +415,23 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   const [changeRequestError, setChangeRequestError] = useState("");
   useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
+    const requestChange = event => {
+      const detail = event.detail || {};
+      if (!detail.day || !detail.shift) return;
+      setRequestEdit({
+        year,
+        month,
+        day: Number(detail.day),
+        shift: detail.shift,
+      });
+    };
     window.addEventListener("planning-avd-open-meal", openMeal);
-    return () => window.removeEventListener("planning-avd-open-meal", openMeal);
-  }, []);
+    window.addEventListener("planning-avd-request-change", requestChange);
+    return () => {
+      window.removeEventListener("planning-avd-open-meal", openMeal);
+      window.removeEventListener("planning-avd-request-change", requestChange);
+    };
+  }, [year, month]);
   useEffect(() => {
     if (!authState.db || !authState.user) return;
     setChangeRequestError("");
