@@ -1,7 +1,9 @@
 import { MONTHS } from "./constants.js";
 import { mealForDate } from "./meal-planning.js";
 
-const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
+const normalizeEmail = email => String(email || "").trim().toLowerCase();
+const encodedEmailKey = email => encodeURIComponent(normalizeEmail(email));
+const shareEmailKey = email => normalizeEmail(email).replaceAll("/", "%2F");
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const shiftLabels = { morning: "Matin 11h", afternoon: "Après-midi 17h", night: "Soir" };
@@ -209,12 +211,38 @@ export async function initPersonalTeamCalendar() {
     activeKey = key;
     lastPayload = null;
     lastRenderedView = "";
-    unsubscribe = db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
+    let active = true;
+    let legacyUnsubscribe = null;
+    const renderSnapshot = snap => {
+      if (!active) return;
+      lastPayload = { calendar: snap.data()?.calendar || [], ...visible };
+      lastRenderedView = activePersonalView();
+      render(lastPayload);
+    };
+    const readLegacy = () => {
+      if (legacyUnsubscribe) return;
+      legacyUnsubscribe = db.collection("planning-avd-shares").doc(encodedEmailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
+        .onSnapshot(renderSnapshot, () => {
+          if (!active) return;
+          lastPayload = { calendar: [], ...visible };
+          render(lastPayload);
+        });
+    };
+    const primaryUnsubscribe = db.collection("planning-avd-shares").doc(shareEmailKey(user.email)).collection("months").doc(monthKey(visible.year, visible.month))
       .onSnapshot(snap => {
-        lastPayload = { calendar: snap.data()?.calendar || [], ...visible };
-        lastRenderedView = activePersonalView();
-        render(lastPayload);
-      }, () => {});
+        if (snap.exists) {
+          legacyUnsubscribe?.();
+          legacyUnsubscribe = null;
+          renderSnapshot(snap);
+          return;
+        }
+        readLegacy();
+      }, readLegacy);
+    unsubscribe = () => {
+      active = false;
+      primaryUnsubscribe();
+      legacyUnsubscribe?.();
+    };
   };
 
   auth.onAuthStateChanged(async user => {

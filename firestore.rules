@@ -44,7 +44,8 @@ service cloud.firestore {
 
     match /planning-avd-shares/{email}/months/{month} {
       allow read: if signedIn()
-        && request.auth.token.email == resource.data.email;
+        && (request.auth.token.email == email
+          || request.auth.token.email == resource.data.email);
       allow write: if isAdmin();
     }
 

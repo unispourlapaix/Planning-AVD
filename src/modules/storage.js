@@ -3,8 +3,9 @@ import { summarizeHours } from "./hour-accounting.js";
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
-const emailKey = email => encodeURIComponent(String(email || "").trim().toLowerCase());
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
+const encodedEmailKey = email => encodeURIComponent(normalizeEmail(email));
+const shareEmailKey = email => normalizeEmail(email).replaceAll("/", "%2F");
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const displayHours = summarizeHours;
@@ -109,12 +110,42 @@ export async function grantAdminByEmail({ db, user, email }) {
 
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
   if (!db || !user?.email) return () => {};
-  return db.collection("planning-avd-shares").doc(emailKey(user.email)).collection("months").doc(monthKey(year, month))
-    .onSnapshot(snap => onChange?.(snap.exists ? snap.data() : null), error => onError?.(error));
+  let legacyUnsubscribe = null;
+  let active = true;
+  const monthId = monthKey(year, month);
+  const readLegacy = () => {
+    if (legacyUnsubscribe) return;
+    legacyUnsubscribe = db.collection("planning-avd-shares").doc(encodedEmailKey(user.email)).collection("months").doc(monthId)
+      .onSnapshot(snap => {
+        if (active) onChange?.(snap.exists ? snap.data() : null);
+      }, error => {
+        console.warn("Lecture planning auxiliaire legacy impossible.", error);
+        if (active) onChange?.(null);
+      });
+  };
+  const primaryUnsubscribe = db.collection("planning-avd-shares").doc(shareEmailKey(user.email)).collection("months").doc(monthId)
+    .onSnapshot(snap => {
+      if (!active) return;
+      if (snap.exists) {
+        legacyUnsubscribe?.();
+        legacyUnsubscribe = null;
+        onChange?.(snap.data());
+        return;
+      }
+      readLegacy();
+    }, error => {
+      console.warn("Lecture planning auxiliaire impossible, essai compatibilite.", error);
+      readLegacy();
+    });
+  return () => {
+    active = false;
+    primaryUnsubscribe();
+    legacyUnsubscribe?.();
+  };
 }
 
 const changeRequestCollection = ({ db, email, year, month }) =>
-  db.collection("planning-avd-change-requests").doc(emailKey(email)).collection("months").doc(monthKey(year, month)).collection("items");
+  db.collection("planning-avd-change-requests").doc(encodedEmailKey(email)).collection("months").doc(monthKey(year, month)).collection("items");
 
 const requestSnapshotList = snapshot => snapshot.docs
   .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -221,8 +252,7 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       });
     });
     const email = String(aux.email).trim().toLowerCase();
-    const ref = db.collection("planning-avd-shares").doc(emailKey(email)).collection("months").doc(monthKey(year, month));
-    batch.set(ref, {
+    const sharePayload = {
       email,
       name: aux.name,
       year,
@@ -234,7 +264,11 @@ export async function publishPersonalPlannings({ db, user, year, month, auxiliar
       hours: displayHours(hours[aux.id], aux.quota),
       publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
       publishedBy: user.email || "",
-    });
+    };
+    const ref = db.collection("planning-avd-shares").doc(shareEmailKey(email)).collection("months").doc(monthKey(year, month));
+    batch.set(ref, sharePayload);
+    const legacyRef = db.collection("planning-avd-shares").doc(encodedEmailKey(email)).collection("months").doc(monthKey(year, month));
+    if (legacyRef.path !== ref.path) batch.set(legacyRef, sharePayload);
   });
   await batch.commit();
   return active.length;

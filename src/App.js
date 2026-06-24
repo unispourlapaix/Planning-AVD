@@ -15,7 +15,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-day-outings";
+} from "./modules/storage.js?v=20260624-personal-planning";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
