@@ -251,7 +251,7 @@ h2 { font-size: 16px; }
   font-weight: 900;
   line-height: 1.25;
 }
-.meal-tag {
+.meal-tag, .day-activity-btn {
   width: 100%;
   min-width: 0;
   display: grid;
@@ -268,9 +268,20 @@ h2 { font-size: 16px; }
   font-weight: 900;
   line-height: 1.1;
 }
+.day-activity-btn .activity-plus {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #68a887;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+}
 .meal-tag .icon { width: 14px; height: 14px; }
-.meal-tag span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-.meal-tag:hover, .meal-tag:focus-visible { outline: none; border-color: #68c49a; box-shadow: 0 5px 12px rgba(79,144,112,.14); }
+.meal-tag span, .day-activity-btn span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.meal-tag:hover, .meal-tag:focus-visible, .day-activity-btn:hover, .day-activity-btn:focus-visible { outline: none; border-color: #68c49a; box-shadow: 0 5px 12px rgba(79,144,112,.14); }
 .panel { border-radius: 8px; padding: 12px; }
 .week-grid, .hours-grid { display: grid; gap: 8px; }
 .week-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }

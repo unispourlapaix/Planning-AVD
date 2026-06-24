@@ -69,14 +69,14 @@ function IconLabel({ icon, label }) {
   return h(React.Fragment, null, h(Icon, { name: icon }), h("span", null, label));
 }
 
-function MealTag({ year, month, day, onOpen }) {
+function DayActivityButton({ year, month, day, onOpen }) {
   const meal = mealForDate(year, month, day);
   return h("button", {
-    className: "meal-tag",
+    className: "day-activity-btn",
     type: "button",
-    title: `Repas : ${meal.title}`,
+    title: `Activités du jour : repas, courses et détails. Repas : ${meal.title}`,
     onClick: () => onOpen?.({ year, month, day }),
-  }, h(Icon, { name: "meal" }), h("span", null, meal.short));
+  }, h("span", { className: "activity-plus" }, "+"), h("span", null, "Détail"));
 }
 
 function MealPlannerModal({ selectedDate, onClose }) {
@@ -333,7 +333,7 @@ function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal,
         h("span", null, "Repos"),
       );
     }),
-    h(MealTag, { year, month, day, onOpen: onOpenMeal }),
+    h(DayActivityButton, { year, month, day, onOpen: onOpenMeal }),
   );
 }
 
@@ -557,7 +557,7 @@ function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot, o
         ),
       );
     }),
-    h(MealTag, { year, month, day, onOpen: onOpenMeal }),
+    h(DayActivityButton, { year, month, day, onOpen: onOpenMeal }),
   );
 }
 
