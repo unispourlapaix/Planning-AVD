@@ -1,4 +1,4 @@
-const TOOL_LABELS = ["Heures", "Rapport", "Sauvegarde", "Restaurer"];
+const TOOL_LABELS = ["Heures", "Rapport", "Sauvegarde", "Restaurer", "Secours"];
 
 const findSourceButton = label => [...document.querySelectorAll(".app:not(.personal-app) .topbar .action-row .btn, .app:not(.personal-app) .topbar>.tabs .tab")]
   .find(button => button.textContent.includes(label));

@@ -2,12 +2,13 @@ import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
-import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-cloud-guard";
+import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-monthly-restore";
 import {
   createPlanningChangeRequest,
   defaultState,
   grantAdminByEmail,
   isAdminUser,
+  loadRestoreBackup,
   loadState,
   publishPersonalPlannings,
   resolvePlanningChangeRequest,
@@ -15,7 +16,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-cloud-guard";
+} from "./modules/storage.js?v=20260624-monthly-restore";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -253,7 +254,7 @@ const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && 
   .filter(([, items]) => items.length));
 const stateSignature = state => JSON.stringify(state);
 
-function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onPublish }) {
+function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -285,6 +286,7 @@ function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, yea
         h(Button, { onClick: onReport }, h(IconLabel, { icon: "file", label: "Rapport" })),
         h(Button, { onClick: onShareBackup }, h(IconLabel, { icon: "save", label: "Sauvegarde" })),
         h(Button, { onClick: onRestoreBackup }, h(IconLabel, { icon: "restore", label: "Restaurer" })),
+        authState.user && isAdmin ? h(Button, { onClick: onRestoreCloudBackup }, h(IconLabel, { icon: "restore", label: "Secours" })) : null,
         authState.user && isAdmin ? h(Button, { active: true, onClick: onPublish }, h(IconLabel, { icon: "cloud", label: "Sauvegarder" })) : null,
         authState.user
           ? h(Button, { active: true, onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Connecté" }))
@@ -1109,6 +1111,33 @@ export default function App() {
     }
   };
 
+  const applyRestoredPlanningState = next => {
+    if (!next || !Array.isArray(next.auxiliaries)) throw new Error("Format de sauvegarde incomplet.");
+    const nextYear = Number(next.year);
+    const nextMonth = Number(next.month);
+    const nextRotation = Number(next.rotationDays);
+    if (!Number.isInteger(nextYear) || !Number.isInteger(nextMonth) || nextMonth < 0 || nextMonth > 11) {
+      throw new Error("Mois ou annee invalide.");
+    }
+    const restoredState = {
+      year: nextYear,
+      month: nextMonth,
+      view: ["month", "week", "hours", "config"].includes(next.view) ? next.view : "month",
+      rotationDays: [1, 2, 3, 4].includes(nextRotation) ? nextRotation : 1,
+      auxiliaries: normalizeAuxiliaries({ auxiliaries: next.auxiliaries }),
+      overrides: next.overrides && typeof next.overrides === "object" ? next.overrides : {},
+      dayOutings: normalizeDayOutings(next.dayOutings),
+    };
+    setYear(restoredState.year);
+    setMonth(restoredState.month);
+    setView(restoredState.view);
+    setRotationDays(restoredState.rotationDays);
+    setAuxiliaries(restoredState.auxiliaries);
+    setOverrides(restoredState.overrides);
+    setDayOutings(restoredState.dayOutings);
+    return restoredState;
+  };
+
   const shareBackup = async () => {
     const backup = {
       app: "Planning-AVD",
@@ -1149,23 +1178,25 @@ export default function App() {
     try {
       const backup = JSON.parse(extractBackupJson(input));
       const next = backup?.state || backup;
-      if (!next || !Array.isArray(next.auxiliaries)) throw new Error("Format de sauvegarde incomplet.");
-      const nextYear = Number(next.year);
-      const nextMonth = Number(next.month);
-      const nextRotation = Number(next.rotationDays);
-      if (!Number.isInteger(nextYear) || !Number.isInteger(nextMonth) || nextMonth < 0 || nextMonth > 11) {
-        throw new Error("Mois ou annee invalide.");
-      }
-      setYear(nextYear);
-      setMonth(nextMonth);
-      setView(["month", "week", "hours", "config"].includes(next.view) ? next.view : "month");
-      setRotationDays([1, 2, 3, 4].includes(nextRotation) ? nextRotation : 1);
-      setAuxiliaries(normalizeAuxiliaries({ auxiliaries: next.auxiliaries }));
-      setOverrides(next.overrides && typeof next.overrides === "object" ? next.overrides : {});
-      setDayOutings(normalizeDayOutings(next.dayOutings));
+      applyRestoredPlanningState(next);
       alert("Sauvegarde restauree. Elle sera aussi sauvegardee dans le cloud si vous etes connecte.");
     } catch (error) {
       alert(`Sauvegarde impossible a restaurer : ${error.message}`);
+    }
+  };
+
+  const restoreCloudBackup = async () => {
+    if (!authState.user || !sessionRole.isAdmin) return alert("Connexion administrateur necessaire.");
+    if (!window.confirm("Restaurer la sauvegarde de secours du debut du mois ? La version actuelle sera gardee en secours si elle n'a pas deja ete archivee ce mois-ci.")) return;
+    try {
+      const backup = await loadRestoreBackup({ db: authState.db, user: authState.user });
+      const restored = applyRestoredPlanningState(backup.value);
+      cloudWriteReadyRef.current = true;
+      cloudBaseUpdatedAtRef.current = backup.currentUpdatedAt || cloudBaseUpdatedAtRef.current;
+      setCloudStatus({ kind: "saving", text: "Secours restauré" });
+      alert(`Sauvegarde de secours restauree : ${MONTHS[restored.month]} ${restored.year}. Elle va redevenir la sauvegarde cloud active.`);
+    } catch (error) {
+      alert(`Restauration secours impossible : ${error.message}`);
     }
   };
 
@@ -1189,6 +1220,7 @@ export default function App() {
       onReport: openReport,
       onShareBackup: shareBackup,
       onRestoreBackup: restoreBackup,
+      onRestoreCloudBackup: restoreCloudBackup,
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },

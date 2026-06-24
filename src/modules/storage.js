@@ -26,6 +26,7 @@ const withLoadMeta = (state, meta) => ({
   ...(state || {}),
   __cloud: meta,
 });
+const stateMonthKey = value => `${Number(value?.year) || new Date().getFullYear()}-${String((Number(value?.month) || 0) + 1).padStart(2, "0")}`;
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
@@ -81,7 +82,9 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return { local: true, cloud: false, reason: "not-connected" };
   try {
-    const ref = db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state");
+    const userRef = db.collection("planning-avd-users").doc(user.uid);
+    const appRef = userRef.collection("app");
+    const ref = appRef.doc("state");
     if (!force) {
       const currentSnap = await ref.get();
       const currentUpdatedAt = currentSnap.exists ? currentSnap.data()?.value?.updatedAt || "" : "";
@@ -95,6 +98,25 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
           currentUpdatedAt,
         };
       }
+      const currentValue = currentSnap.exists ? migrateState(currentSnap.data()?.value) : null;
+      if (currentValue && hasAuxiliaries(currentValue)) {
+        const restoreMonth = stateMonthKey(currentValue);
+        const monthRestoreRef = userRef.collection("restore-months").doc(restoreMonth);
+        const monthRestoreSnap = await monthRestoreRef.get();
+        const restorePayload = {
+          value: currentValue,
+          month: restoreMonth,
+          sourceUpdatedAt: currentUpdatedAt,
+          savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          savedBy: user.email || "",
+        };
+        if (!monthRestoreSnap.exists) {
+          await Promise.all([
+            appRef.doc("restore").set(restorePayload, { merge: true }),
+            monthRestoreRef.set(restorePayload),
+          ]);
+        }
+      }
     }
     await ref.set({
       value,
@@ -106,6 +128,22 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
     return { local: true, cloud: false, reason: "error", error: error.message || "Sauvegarde cloud impossible" };
   }
+}
+
+export async function loadRestoreBackup({ db, user }) {
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  const appRef = db.collection("planning-avd-users").doc(user.uid).collection("app");
+  const [snap, stateSnap] = await Promise.all([
+    appRef.doc("restore").get(),
+    appRef.doc("state").get(),
+  ]);
+  if (!snap.exists || !snap.data()?.value) throw new Error("Aucune sauvegarde de restauration disponible.");
+  return {
+    value: migrateState(snap.data().value),
+    month: snap.data()?.month || stateMonthKey(snap.data().value),
+    sourceUpdatedAt: snap.data()?.sourceUpdatedAt || "",
+    currentUpdatedAt: stateSnap.exists ? stateSnap.data()?.value?.updatedAt || "" : "",
+  };
 }
 
 export async function isAdminUser({ db, user }) {

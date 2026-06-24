@@ -1,11 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260603-shift-times";
-import { initPlanningShareButton } from "./modules/share-button.js?v=20260624-cloud-guard";
+import { initPlanningShareButton } from "./modules/share-button.js?v=20260624-monthly-restore";
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260624-cloud-guard";
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260607-topbar-settings";
 import { initPersonalMobileView } from "./modules/personal-mobile-view.js?v=20260607-personal-clean";
-import { initSettingsTools } from "./modules/settings-tools.js?v=20260607-a4-topbar";
+import { initSettingsTools } from "./modules/settings-tools.js?v=20260624-monthly-restore";
 import { initTopbarSettingsNav } from "./modules/topbar-settings-nav.js?v=20260608-print-label";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260615-github-update";
 import { initPrivateDisplay } from "./modules/private-display.js?v=20260614-meals-quota";
@@ -20,7 +20,7 @@ window.alert = message => nativeAlert(String(message)
   .replace("Publication impossible", "Sauvegarde impossible"));
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260624-cloud-guard"),
+  import("./App.js?v=20260624-monthly-restore"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
