@@ -16,7 +16,7 @@ import {
   subscribeAdminChangeRequests,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-aux-login";
+} from "./modules/storage.js?v=20260624-personal-fallback";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -917,7 +917,13 @@ export default function App() {
       user: authState.user,
       year,
       month,
-      onChange: setPersonalPlanning,
+      onChange: planning => {
+        setPersonalPlanning(planning);
+        if (planning && Number.isInteger(planning.year) && Number.isInteger(planning.month) && (planning.year !== year || planning.month !== month)) {
+          setYear(planning.year);
+          setMonth(planning.month);
+        }
+      },
       onError: error => setPersonalError(`Lecture du planning impossible : ${error.message}`),
     });
   }, [personalMode, authState.db, authState.user, year, month]);

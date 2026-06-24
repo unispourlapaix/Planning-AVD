@@ -16,6 +16,17 @@ const uniqueShareKeys = uniqueEmailKeys;
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const displayHours = summarizeHours;
+const nearbyMonths = (year, month) => {
+  const offsets = [0, ...Array.from({ length: 12 }, (_, index) => index + 1).flatMap(offset => [-offset, offset])];
+  return offsets.map(offset => {
+    const date = new Date(year, month + offset, 1);
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      id: monthKey(date.getFullYear(), date.getMonth()),
+    };
+  });
+};
 const migrateState = state => {
   if (!state || state.rotationRevision === ROTATION_REVISION) return state;
   return { ...state, overrides: {}, rotationRevision: ROTATION_REVISION };
@@ -185,53 +196,48 @@ export async function grantAdminByEmail({ db, user, email }) {
 
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
   if (!db || !user?.email) return () => {};
-  const email = normalizeEmail(user.email);
   const rawEmail = cleanEmail(user.email);
   const monthId = monthKey(year, month);
-  const refs = uniqueShareKeys(rawEmail).map(key => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId));
+  const shareKeys = uniqueShareKeys(rawEmail);
+  const refs = shareKeys.map(key => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId));
   let directPending = refs.length;
-  let queryUnsubscribe = null;
   let active = true;
   let hasDirectPlanning = false;
-  const stopQuery = () => {
-    queryUnsubscribe?.();
-    queryUnsubscribe = null;
-  };
-  const startQueryFallback = () => {
-    if (queryUnsubscribe || !active || hasDirectPlanning) return;
-    queryUnsubscribe = db.collectionGroup("months")
-      .where("email", "==", email)
-      .where("year", "==", year)
-      .where("month", "==", month)
-      .limit(1)
-      .onSnapshot(snapshot => {
-        if (!active) return;
-        onChange?.(snapshot.empty ? null : snapshot.docs[0].data());
-      }, error => {
-        console.warn("Recherche planning auxiliaire impossible.", error);
-        if (active) onChange?.(null);
-        onError?.(error);
-      });
+  let nearbySearchStarted = false;
+  const startNearbyFallback = async () => {
+    if (nearbySearchStarted || !active || hasDirectPlanning) return;
+    nearbySearchStarted = true;
+    for (const candidate of nearbyMonths(year, month).filter(item => item.id !== monthId)) {
+      for (const key of shareKeys) {
+        try {
+          const snap = await db.collection("planning-avd-shares").doc(key).collection("months").doc(candidate.id).get();
+          if (!active || hasDirectPlanning) return;
+          if (snap.exists) {
+            onChange?.(snap.data());
+            return;
+          }
+        } catch {}
+      }
+    }
+    if (active && !hasDirectPlanning) onChange?.(null);
   };
   const directUnsubscribers = refs.map(ref => ref.onSnapshot(snap => {
       if (!active) return;
       directPending = Math.max(0, directPending - 1);
       if (snap.exists) {
         hasDirectPlanning = true;
-        stopQuery();
         onChange?.(snap.data());
         return;
       }
-      if (directPending === 0 && !hasDirectPlanning) startQueryFallback();
+      if (directPending === 0 && !hasDirectPlanning) startNearbyFallback();
     }, error => {
       console.warn("Lecture planning auxiliaire directe impossible.", error);
       directPending = Math.max(0, directPending - 1);
-      if (directPending === 0 && !hasDirectPlanning) startQueryFallback();
+      if (directPending === 0 && !hasDirectPlanning) startNearbyFallback();
     }));
   return () => {
     active = false;
     directUnsubscribers.forEach(unsubscribe => unsubscribe());
-    stopQuery();
   };
 }
 
