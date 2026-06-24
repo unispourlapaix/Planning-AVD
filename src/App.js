@@ -253,6 +253,14 @@ const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && 
     .filter(item => item.title)])
   .filter(([, items]) => items.length));
 const stateSignature = state => JSON.stringify(state);
+const ADMIN_ROLE_TIMEOUT_MS = 4500;
+const withTimeout = (promise, ms, fallback) => new Promise(resolve => {
+  const timer = setTimeout(() => resolve(fallback), ms);
+  promise
+    .then(value => resolve(value))
+    .catch(() => resolve(fallback))
+    .finally(() => clearTimeout(timer));
+});
 
 function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
   const moveMonth = delta => {
@@ -888,10 +896,13 @@ export default function App() {
       setSessionRole({ ready: true, isAdmin: false });
       return;
     }
+    let active = true;
     setSessionRole({ ready: false, isAdmin: false });
-    isAdminUser({ db: authState.db, user: authState.user })
-      .then(isAdmin => setSessionRole({ ready: true, isAdmin }))
-      .catch(() => setSessionRole({ ready: true, isAdmin: false }));
+    withTimeout(isAdminUser({ db: authState.db, user: authState.user }), ADMIN_ROLE_TIMEOUT_MS, false)
+      .then(isAdmin => {
+        if (active) setSessionRole({ ready: true, isAdmin });
+      });
+    return () => { active = false; };
   }, [authState.ready, authState.user, authState.db]);
 
   const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin;
@@ -968,11 +979,11 @@ export default function App() {
   useEffect(() => {
     if (!stateLoaded) return;
     if (authState.user && !sessionRole.ready) {
-      setCloudStatus({ kind: "saving", text: "Vérification admin" });
+      setCloudStatus({ kind: "saving", text: "Connexion en cours" });
       return;
     }
     if (authState.user && !sessionRole.isAdmin) {
-      setCloudStatus({ kind: "error", text: "Admin non reconnu" });
+      setCloudStatus({ kind: "local", text: "Mode auxiliaire" });
       return;
     }
     const currentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
