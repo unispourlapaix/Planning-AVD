@@ -1011,6 +1011,30 @@ export default function App() {
     setCloudStatus({ kind: "error", text: "Cloud protégé : rechargez" });
     return false;
   };
+  const saveStateWithOverwriteOption = async currentState => {
+    const baseResult = await saveState({
+      db: authState.db,
+      user: authState.user,
+      state: currentState,
+      expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
+    });
+    if (baseResult?.reason !== "conflict") return baseResult;
+    const overwrite = window.confirm([
+      "Une version cloud plus récente existe.",
+      "",
+      "Voulez-vous écraser le cloud avec la version affichée sur cet appareil ?",
+      "À utiliser seulement si cette version est la bonne.",
+    ].join("\n"));
+    if (!overwrite) return { ...baseResult, reason: "overwrite-cancelled", error: "Écrasement cloud annulé." };
+    setCloudStatus({ kind: "saving", text: "Écrasement cloud..." });
+    const forcedResult = await saveState({
+      db: authState.db,
+      user: authState.user,
+      state: currentState,
+      force: true,
+    });
+    return forcedResult?.cloud ? { ...forcedResult, forced: true } : forcedResult;
+  };
   const updateDayOutings = (key, items) => setDayOutings(current => {
     const cleaned = normalizeDayOutings({ [key]: items })[key] || [];
     const next = { ...current };
@@ -1045,15 +1069,12 @@ export default function App() {
       setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
       const currentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
       const signature = stateSignature(currentState);
-      const cloudResult = await saveState({
-        db: authState.db,
-        user: authState.user,
-        state: currentState,
-        expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
-      });
+      const cloudResult = await saveStateWithOverwriteOption(currentState);
       setCloudResult(cloudResult);
       if (!cloudResult?.cloud) {
-        alert(cloudResult?.reason === "conflict"
+        alert(cloudResult?.reason === "overwrite-cancelled"
+          ? "Sauvegarde annulée : la version cloud a été conservée."
+          : cloudResult?.reason === "conflict"
           ? "Sauvegarde bloquée : une version cloud plus récente existe. Rechargez l'app avant de republier."
           : `Sauvegarde cloud impossible : ${cloudResult?.error || "réessayez plus tard."}`);
         return;
@@ -1061,7 +1082,7 @@ export default function App() {
       cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
       lastSavedSignatureRef.current = signature;
       const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours, dayOutings });
-      alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.cloud ? "Sauvegarde cloud à jour." : "Configuration conservée en local seulement."}`);
+      alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.forced ? "Cloud écrasé volontairement." : "Sauvegarde cloud à jour."}`);
     } catch (error) {
       alert(`Sauvegarde impossible : ${error.message}`);
     }

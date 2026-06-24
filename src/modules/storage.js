@@ -85,37 +85,35 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
     const userRef = db.collection("planning-avd-users").doc(user.uid);
     const appRef = userRef.collection("app");
     const ref = appRef.doc("state");
-    if (!force) {
-      const currentSnap = await ref.get();
-      const currentUpdatedAt = currentSnap.exists ? currentSnap.data()?.value?.updatedAt || "" : "";
-      const expectedProvided = expectedUpdatedAt !== undefined;
-      if (currentSnap.exists && (!expectedProvided || currentUpdatedAt !== expectedUpdatedAt)) {
-        return {
-          local: true,
-          cloud: false,
-          reason: "conflict",
-          error: "Une sauvegarde cloud plus récente existe. Rechargez avant de sauvegarder.",
-          currentUpdatedAt,
-        };
-      }
-      const currentValue = currentSnap.exists ? migrateState(currentSnap.data()?.value) : null;
-      if (currentValue && hasAuxiliaries(currentValue)) {
-        const restoreMonth = stateMonthKey(currentValue);
-        const monthRestoreRef = userRef.collection("restore-months").doc(restoreMonth);
-        const monthRestoreSnap = await monthRestoreRef.get();
-        const restorePayload = {
-          value: currentValue,
-          month: restoreMonth,
-          sourceUpdatedAt: currentUpdatedAt,
-          savedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          savedBy: user.email || "",
-        };
-        if (!monthRestoreSnap.exists) {
-          await Promise.all([
-            appRef.doc("restore").set(restorePayload, { merge: true }),
-            monthRestoreRef.set(restorePayload),
-          ]);
-        }
+    const currentSnap = await ref.get();
+    const currentUpdatedAt = currentSnap.exists ? currentSnap.data()?.value?.updatedAt || "" : "";
+    const expectedProvided = expectedUpdatedAt !== undefined;
+    if (!force && currentSnap.exists && (!expectedProvided || currentUpdatedAt !== expectedUpdatedAt)) {
+      return {
+        local: true,
+        cloud: false,
+        reason: "conflict",
+        error: "Une sauvegarde cloud plus récente existe. Rechargez avant de sauvegarder.",
+        currentUpdatedAt,
+      };
+    }
+    const currentValue = currentSnap.exists ? migrateState(currentSnap.data()?.value) : null;
+    if (currentValue && hasAuxiliaries(currentValue)) {
+      const restoreMonth = stateMonthKey(currentValue);
+      const monthRestoreRef = userRef.collection("restore-months").doc(restoreMonth);
+      const monthRestoreSnap = await monthRestoreRef.get();
+      const restorePayload = {
+        value: currentValue,
+        month: restoreMonth,
+        sourceUpdatedAt: currentUpdatedAt,
+        savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        savedBy: user.email || "",
+      };
+      if (!monthRestoreSnap.exists) {
+        await Promise.all([
+          appRef.doc("restore").set(restorePayload, { merge: true }),
+          monthRestoreRef.set(restorePayload),
+        ]);
       }
     }
     await ref.set({
