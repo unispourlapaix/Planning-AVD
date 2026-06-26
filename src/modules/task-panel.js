@@ -60,7 +60,7 @@ function normalizeWorkers({ auxiliaries = [], user, isAdmin }) {
   return workers;
 }
 
-export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, month, canContribute = true }) {
+export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, month, beneficiaryId = "", canContribute = true }) {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("normal");
@@ -81,10 +81,11 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
     return subscribeTasks({
       db: authState.db,
       user: authState.user,
+      beneficiaryId,
       onChange: setTasks,
       onError: nextError => setError(`Liste indisponible : ${nextError.message}`),
     });
-  }, [authState.db, authState.user]);
+  }, [authState.db, authState.user, beneficiaryId]);
 
   useEffect(() => {
     const nextDate = monthDateValue(year, month);
@@ -107,6 +108,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
       await createTask({
         db: authState.db,
         user: authState.user,
+        beneficiaryId,
         title,
         priority,
         assignedName: selectedWorker?.name || "",

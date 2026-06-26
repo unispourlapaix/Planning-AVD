@@ -2,7 +2,9 @@ import { WEEKLY_SHOPPING } from "./meal-planning.js";
 
 const cache = new Map();
 const weekKey = week => week[0]?.dateKey || "unknown-week";
-const localKey = week => `planning-avd-shopping-${weekKey(week)}`;
+const cleanBeneficiaryId = value => String(value || "").trim();
+const cacheKey = (week, beneficiaryId = "") => `${cleanBeneficiaryId(beneficiaryId) || "local"}-${weekKey(week)}`;
+const localKey = (week, beneficiaryId = "") => `planning-avd-shopping-${cacheKey(week, beneficiaryId)}`;
 
 const emptyState = () => ({ checked: {}, customItems: [] });
 const normalizeState = value => ({
@@ -10,23 +12,27 @@ const normalizeState = value => ({
   customItems: Array.isArray(value?.customItems) ? value.customItems.filter(item => item?.id && item?.text) : [],
 });
 
-const readLocal = week => {
+const readLocal = (week, beneficiaryId = "") => {
   try {
-    return normalizeState(JSON.parse(localStorage.getItem(localKey(week)) || "null"));
+    return normalizeState(JSON.parse(localStorage.getItem(localKey(week, beneficiaryId)) || "null"));
   } catch {
     return emptyState();
   }
 };
 
-const saveLocal = (week, state) => {
+const saveLocal = (week, state, beneficiaryId = "") => {
   const normalized = normalizeState(state);
-  cache.set(weekKey(week), normalized);
-  localStorage.setItem(localKey(week), JSON.stringify(normalized));
+  cache.set(cacheKey(week, beneficiaryId), normalized);
+  localStorage.setItem(localKey(week, beneficiaryId), JSON.stringify(normalized));
   return normalized;
 };
 
-const currentState = week => cache.get(weekKey(week)) || saveLocal(week, readLocal(week));
-const cloudRef = (db, week) => db.collection("planning-avd-shopping").doc(weekKey(week));
+const currentState = (week, beneficiaryId = "") => cache.get(cacheKey(week, beneficiaryId)) || saveLocal(week, readLocal(week, beneficiaryId), beneficiaryId);
+const cloudRef = (db, beneficiaryId, week) => {
+  const safeBeneficiaryId = cleanBeneficiaryId(beneficiaryId);
+  if (!safeBeneficiaryId) return null;
+  return db.collection("planning-avd-beneficiaries").doc(safeBeneficiaryId).collection("shopping").doc(weekKey(week));
+};
 
 export function shoppingItems(week, state = currentState(week)) {
   const base = WEEKLY_SHOPPING.flatMap((group, groupIndex) => group.items.map((text, itemIndex) => ({
@@ -39,25 +45,28 @@ export function shoppingItems(week, state = currentState(week)) {
     .map(item => ({ ...item, checked: !!state.checked[item.id] }));
 }
 
-export function subscribeShopping({ db, user, week, onChange, onError }) {
-  const local = currentState(week);
+export function subscribeShopping({ db, user, beneficiaryId = "", week, onChange, onError }) {
+  const local = currentState(week, beneficiaryId);
   onChange?.(local);
-  if (!db || !user?.uid) return () => {};
-  return cloudRef(db, week).onSnapshot(snapshot => {
+  const ref = cloudRef(db, beneficiaryId, week);
+  if (!db || !user?.uid || !ref) return () => {};
+  return ref.onSnapshot(snapshot => {
     if (!snapshot.exists) return;
-    onChange?.(saveLocal(week, snapshot.data()));
+    onChange?.(saveLocal(week, snapshot.data(), beneficiaryId));
   }, error => onError?.(error));
 }
 
-export async function setShoppingChecked({ db, user, week, itemId, checked }) {
-  const local = currentState(week);
-  const next = saveLocal(week, { ...local, checked: { ...local.checked, [itemId]: !!checked } });
-  if (!db || !user?.uid) return next;
+export async function setShoppingChecked({ db, user, beneficiaryId = "", week, itemId, checked }) {
+  const local = currentState(week, beneficiaryId);
+  const next = saveLocal(week, { ...local, checked: { ...local.checked, [itemId]: !!checked } }, beneficiaryId);
+  const ref = cloudRef(db, beneficiaryId, week);
+  if (!db || !user?.uid || !ref) return next;
   await db.runTransaction(async transaction => {
-    const ref = cloudRef(db, week);
     const snapshot = await transaction.get(ref);
     const remote = normalizeState(snapshot.exists ? snapshot.data() : next);
     transaction.set(ref, {
+      beneficiaryId: cleanBeneficiaryId(beneficiaryId),
+      weekId: weekKey(week),
       checked: { ...remote.checked, [itemId]: !!checked },
       customItems: remote.customItems,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -67,7 +76,7 @@ export async function setShoppingChecked({ db, user, week, itemId, checked }) {
   return next;
 }
 
-export async function addShoppingItem({ db, user, week, text }) {
+export async function addShoppingItem({ db, user, beneficiaryId = "", week, text }) {
   const cleanText = String(text || "").trim().slice(0, 120);
   if (!cleanText) throw new Error("Ecrivez un article.");
   const item = {
@@ -76,14 +85,16 @@ export async function addShoppingItem({ db, user, week, text }) {
     category: "Ajouts",
     createdBy: user?.email || "",
   };
-  const local = currentState(week);
-  const next = saveLocal(week, { ...local, customItems: [...local.customItems, item] });
-  if (!db || !user?.uid) return next;
+  const local = currentState(week, beneficiaryId);
+  const next = saveLocal(week, { ...local, customItems: [...local.customItems, item] }, beneficiaryId);
+  const ref = cloudRef(db, beneficiaryId, week);
+  if (!db || !user?.uid || !ref) return next;
   await db.runTransaction(async transaction => {
-    const ref = cloudRef(db, week);
     const snapshot = await transaction.get(ref);
     const remote = normalizeState(snapshot.exists ? snapshot.data() : local);
     transaction.set(ref, {
+      beneficiaryId: cleanBeneficiaryId(beneficiaryId),
+      weekId: weekKey(week),
       checked: remote.checked,
       customItems: [...remote.customItems, item],
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),

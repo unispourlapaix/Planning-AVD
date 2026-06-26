@@ -516,6 +516,17 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
     return () => window.removeEventListener("planning-avd-open-life", openLife);
   }, []);
   useEffect(() => {
+    if (!planning) return;
+    window.__planningAvdCurrentState = {
+      ...(window.__planningAvdCurrentState || {}),
+      year,
+      month,
+      beneficiaryId: planning.beneficiaryId || "",
+      beneficiaryName: planning.beneficiaryName || "",
+      personal: true,
+    };
+  }, [planning, year, month]);
+  useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
     const requestChange = event => {
       if (!canContribute) return;
@@ -631,7 +642,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
     ),
     h("section", { className: "layout" },
       error ? h("div", { className: "panel muted" }, error) : null,
-      personalView === "life" ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month, canContribute }) : null,
+      personalView === "life" ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month, beneficiaryId: planning?.beneficiaryId || "", canContribute }) : null,
       personalView !== "life" && planning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, beneficiaryLabel)),
@@ -1764,7 +1775,7 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
-      view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month }) : null,
+      view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,

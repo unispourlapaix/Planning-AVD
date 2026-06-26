@@ -72,8 +72,17 @@ const firebaseContext = () => {
   return { db: firebase.firestore(), user: firebase.auth().currentUser };
 };
 
+const beneficiaryContext = () => {
+  const state = globalThis.__planningAvdCurrentState || {};
+  return {
+    beneficiaryId: String(state.beneficiaryId || "").trim(),
+    beneficiaryName: String(state.beneficiaryName || "").trim(),
+  };
+};
+
 const openMealModal = (week, initialIndex) => {
   document.getElementById(MODAL_ID)?.remove();
+  const beneficiary = beneficiaryContext();
   let selectedIndex = initialIndex;
   let shoppingState = { checked: {}, customItems: [] };
   let unsubscribe = () => {};
@@ -184,7 +193,7 @@ const openMealModal = (week, initialIndex) => {
           render();
           const { db, user } = firebaseContext();
           try {
-            await setShoppingChecked({ db, user, week, itemId: item.id, checked: checkbox.checked });
+            await setShoppingChecked({ db, user, beneficiaryId: beneficiary.beneficiaryId, week, itemId: item.id, checked: checkbox.checked });
           } catch (error) {
             alert(`Mise a jour impossible : ${error.message}`);
           }
@@ -211,7 +220,7 @@ const openMealModal = (week, initialIndex) => {
       event.preventDefault();
       const { db, user } = firebaseContext();
       try {
-        shoppingState = await addShoppingItem({ db, user, week, text: input.value });
+        shoppingState = await addShoppingItem({ db, user, beneficiaryId: beneficiary.beneficiaryId, week, text: input.value });
         render();
       } catch (error) {
         alert(`Ajout impossible : ${error.message}`);
@@ -228,6 +237,7 @@ const openMealModal = (week, initialIndex) => {
   unsubscribe = subscribeShopping({
     db,
     user,
+    beneficiaryId: beneficiary.beneficiaryId,
     week,
     onChange: state => {
       shoppingState = state;
@@ -246,10 +256,11 @@ const renderBanner = () => {
     return;
   }
   const today = new Date();
+  const beneficiary = beneficiaryContext();
   const currentMonth = today.getFullYear() === period.year && today.getMonth() === period.month;
   const week = mealWeekForDate(period.year, period.month, currentMonth ? today.getDate() : 1);
   const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
-  const signature = `${period.year}-${period.month}-${week[0].dateKey}`;
+  const signature = `${beneficiary.beneficiaryId || "local"}-${period.year}-${period.month}-${week[0].dateKey}`;
   let bar = document.getElementById(BAR_ID);
   if (bar?.dataset.signature === signature) {
     if (bar.previousElementSibling !== topbar) topbar.insertAdjacentElement("afterend", bar);

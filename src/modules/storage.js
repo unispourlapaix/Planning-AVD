@@ -72,6 +72,17 @@ const withLoadMeta = (state, meta) => ({
 const stateMonthKey = value => `${Number(value?.year) || new Date().getFullYear()}-${String((Number(value?.month) || 0) + 1).padStart(2, "0")}`;
 const stateRestoreKey = value => `${String(value?.beneficiaryId || "legacy")}-${stateMonthKey(value)}`;
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
+const beneficiaryRoot = (db, beneficiaryId) => db.collection("planning-avd-beneficiaries").doc(String(beneficiaryId || "").trim());
+const beneficiaryMemberKey = email => normalizeEmail(email);
+const buildBeneficiaryMember = ({ email, name = "", role = "auxiliary", active = true, updatedBy = "" }) => ({
+  email: normalizeEmail(email),
+  emailLower: normalizeEmail(email),
+  name: String(name || email || "").trim(),
+  role: normalizeAccessRole(role),
+  active: active !== false,
+  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  updatedBy,
+});
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
   if (!local) return cloud;
@@ -83,6 +94,41 @@ const mergeSavedState = (local, cloud) => {
     dayOutings: cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
   };
 };
+
+async function syncBeneficiaryGroup({ db, user, state }) {
+  const identified = ensureBeneficiaryIdentity(state);
+  const beneficiaryId = String(identified?.beneficiaryId || "").trim();
+  const adminEmail = normalizeEmail(user?.email);
+  if (!db || !beneficiaryId || !adminEmail) return;
+  const root = beneficiaryRoot(db, beneficiaryId);
+  const batch = db.batch();
+  batch.set(root, {
+    beneficiaryId,
+    beneficiaryName: String(identified.beneficiaryName || "").trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: adminEmail,
+  }, { merge: true });
+  batch.set(root.collection("members").doc(beneficiaryMemberKey(adminEmail)), buildBeneficiaryMember({
+    email: adminEmail,
+    name: String(user.displayName || adminEmail).trim(),
+    role: "admin",
+    active: true,
+    updatedBy: adminEmail,
+  }), { merge: true });
+  (Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
+    .filter(aux => String(aux.email || "").trim())
+    .forEach(aux => {
+      const email = beneficiaryMemberKey(aux.email);
+      batch.set(root.collection("members").doc(email), buildBeneficiaryMember({
+        email,
+        name: aux.name || email,
+        role: "auxiliary",
+        active: aux.active !== false,
+        updatedBy: adminEmail,
+      }), { merge: true });
+    });
+  await batch.commit();
+}
 
 export const defaultState = () => {
   const now = new Date();
@@ -168,6 +214,7 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
+    await syncBeneficiaryGroup({ db, user, state: value });
     return { local: true, cloud: true, updatedAt: value.updatedAt };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
@@ -326,6 +373,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
       updatedBy: email,
     }, { merge: true }),
   ]);
+  await syncBeneficiaryGroup({ db, user, state: value });
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   return { email, beneficiaryId, beneficiaryName: cleanBeneficiary, role: "admin" };
 }
@@ -789,11 +837,35 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
   });
   if (!payloads.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
   const batch = db.batch();
+  const adminEmail = normalizeEmail(user.email);
+  const beneficiaryRef = beneficiaryRoot(db, safeBeneficiaryId);
+  batch.set(beneficiaryRef, {
+    beneficiaryId: safeBeneficiaryId,
+    beneficiaryName: String(beneficiaryName || "").trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: adminEmail,
+  }, { merge: true });
+  if (adminEmail) {
+    batch.set(beneficiaryRef.collection("members").doc(beneficiaryMemberKey(adminEmail)), buildBeneficiaryMember({
+      email: adminEmail,
+      name: user.displayName || adminEmail,
+      role: "admin",
+      active: true,
+      updatedBy: adminEmail,
+    }), { merge: true });
+  }
   auxiliaries
     .filter(aux => String(aux.email || "").trim())
     .forEach(aux => {
       const rawEmail = cleanEmail(aux.email);
       const email = normalizeEmail(rawEmail);
+      batch.set(beneficiaryRef.collection("members").doc(beneficiaryMemberKey(email)), buildBeneficiaryMember({
+        email,
+        name: aux.name || email,
+        role: "auxiliary",
+        active: aux.active !== false,
+        updatedBy: adminEmail,
+      }), { merge: true });
       uniqueEmailKeys(rawEmail).forEach(key => {
         const memberRef = db.collection("planning-avd-team-members").doc(key);
         batch.set(memberRef, {

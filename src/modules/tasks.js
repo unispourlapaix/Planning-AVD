@@ -1,4 +1,9 @@
-const taskCollection = db => db.collection("planning-avd-tasks");
+const cleanBeneficiaryId = value => String(value || "").trim();
+const taskCollection = (db, beneficiaryId) => {
+  const safeBeneficiaryId = cleanBeneficiaryId(beneficiaryId);
+  if (!safeBeneficiaryId) return null;
+  return db.collection("planning-avd-beneficiaries").doc(safeBeneficiaryId).collection("tasks");
+};
 
 const priorityRank = { urgent: 0, important: 1, normal: 2 };
 const allowedPriorities = ["normal", "important", "urgent"];
@@ -168,9 +173,14 @@ export function buildGoogleCalendarUrl(task, options = {}) {
   return url.toString();
 }
 
-export function subscribeTasks({ db, user, onChange, onError }) {
+export function subscribeTasks({ db, user, beneficiaryId = "", onChange, onError }) {
   if (!db || !user?.uid) return () => {};
-  return taskCollection(db)
+  const collection = taskCollection(db, beneficiaryId);
+  if (!collection) {
+    onChange?.([]);
+    return () => {};
+  }
+  return collection
     .orderBy("createdAt", "desc")
     .limit(200)
     .onSnapshot(snapshot => {
@@ -182,6 +192,7 @@ export function subscribeTasks({ db, user, onChange, onError }) {
 export async function createTask({
   db,
   user,
+  beneficiaryId = "",
   title,
   priority,
   assignedName = "",
@@ -193,13 +204,16 @@ export async function createTask({
 }) {
   const cleanTitle = cleanText(title, 160);
   if (!db || !user?.uid || !user?.email) throw new Error("Connexion necessaire.");
+  const safeBeneficiaryId = cleanBeneficiaryId(beneficiaryId);
+  if (!safeBeneficiaryId) throw new Error("Beneficiaire non identifie.");
   if (!cleanTitle) throw new Error("Ecrivez la tache a ajouter.");
   const cleanPriority = allowedPriorities.includes(priority) ? priority : "normal";
   const requestedSchedule = allowedScheduleModes.includes(scheduleMode) ? scheduleMode : "none";
   const schedule = normalizeTaskSchedule({ scheduleMode: requestedSchedule, date, time, endDate });
   if (requestedSchedule !== "none" && schedule.scheduleMode === "none") throw new Error("Choisissez une date valide pour le creneau.");
 
-  await taskCollection(db).add({
+  await taskCollection(db, safeBeneficiaryId).add({
+    beneficiaryId: safeBeneficiaryId,
     title: cleanTitle,
     priority: cleanPriority,
     assignedName: cleanText(assignedName, 80),
@@ -216,7 +230,9 @@ export async function createTask({
 
 export async function setTaskCompleted({ db, user, task, completed }) {
   if (!db || !user?.uid || !task?.id) throw new Error("Tache introuvable.");
-  await taskCollection(db).doc(task.id).update({
+  const safeBeneficiaryId = cleanBeneficiaryId(task.beneficiaryId);
+  if (!safeBeneficiaryId) throw new Error("Beneficiaire non identifie.");
+  await taskCollection(db, safeBeneficiaryId).doc(task.id).update({
     completed: !!completed,
     completedBy: String(user.email || "").trim().toLowerCase(),
     completedAt: completed ? firebase.firestore.FieldValue.serverTimestamp() : null,
@@ -226,5 +242,7 @@ export async function setTaskCompleted({ db, user, task, completed }) {
 
 export async function deleteTask({ db, user, task }) {
   if (!db || !user?.uid || !task?.id) throw new Error("Tache introuvable.");
-  await taskCollection(db).doc(task.id).delete();
+  const safeBeneficiaryId = cleanBeneficiaryId(task.beneficiaryId);
+  if (!safeBeneficiaryId) throw new Error("Beneficiaire non identifie.");
+  await taskCollection(db, safeBeneficiaryId).doc(task.id).delete();
 }
