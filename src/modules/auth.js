@@ -1,5 +1,6 @@
 const CDN = "https://www.gstatic.com/firebasejs/10.14.1";
 const REDIRECT_ERROR_KEY = "planning-avd-google-redirect-error";
+const POPUP_TIMEOUT_MS = 9000;
 
 const isStandaloneApp = () =>
   window.matchMedia?.("(display-mode: standalone)")?.matches
@@ -11,8 +12,20 @@ const shouldFallbackToRedirect = error => {
     "auth/cancelled-popup-request",
     "auth/operation-not-supported-in-this-environment",
     "auth/popup-blocked",
+    "auth/popup-closed-by-user",
+    "auth/popup-timeout",
   ].includes(code);
 };
+
+const isMobileLike = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+
+const popupTimeout = () => new Promise((_, reject) => {
+  window.setTimeout(() => {
+    const error = new Error("La fenêtre Google semble bloquée. Passage en redirection.");
+    error.code = "auth/popup-timeout";
+    reject(error);
+  }, POPUP_TIMEOUT_MS);
+});
 const readRedirectError = () => {
   try {
     return sessionStorage.getItem(REDIRECT_ERROR_KEY) || "";
@@ -80,7 +93,7 @@ export async function initGoogleAuth(onChange) {
     const email = String(user?.email || "").toLowerCase();
     const allowed = Array.isArray(cfg.allowedEmails) ? cfg.allowedEmails.map(item => String(item).toLowerCase()) : [];
     const blocked = cfg.restrictSignIn === true && !!email && allowed.length > 0 && !allowed.includes(email);
-    onChange?.({ user: blocked ? null : user, auth, db, ready: true, error: blocked ? "Email non autorise" : storedRedirectError });
+    onChange?.({ user: blocked ? null : user, auth, db, ready: true, error: blocked ? "Email non autorise" : user ? "" : storedRedirectError });
     if (blocked) auth.signOut();
   });
 
@@ -91,10 +104,15 @@ export async function signInWithGoogle(auth) {
   if (!auth || !window.firebase) throw new Error("Connexion non disponible");
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+  if (isStandaloneApp() || isMobileLike()) {
+    await auth.signInWithRedirect(provider);
+    return;
+  }
   try {
-    await auth.signInWithPopup(provider);
+    await Promise.race([auth.signInWithPopup(provider), popupTimeout()]);
   } catch (error) {
-    if (!isStandaloneApp() && !shouldFallbackToRedirect(error)) throw error;
+    if (!shouldFallbackToRedirect(error)) throw error;
+    writeRedirectError("Connexion relancée par redirection, car la fenêtre Google a été bloquée ou fermée.");
     await auth.signInWithRedirect(provider);
   }
 }

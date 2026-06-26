@@ -2,7 +2,7 @@ import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
-import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-aux-login";
+import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260626-popup-fallback";
 import {
   createPlanningChangeRequest,
   createNewBeneficiaryAdmin,
@@ -30,7 +30,7 @@ import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { TaskPanel } from "./modules/task-panel.js?v=20260626-member-roles";
+import { TaskPanel } from "./modules/task-panel.js?v=20260626-popup-fallback";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useRef, useState } = React;
@@ -268,8 +268,27 @@ const withTimeout = (promise, ms, fallback) => new Promise(resolve => {
     .catch(() => resolve(fallback))
     .finally(() => clearTimeout(timer));
 });
+const openHtmlDocument = ({ html, fileName, blockedMessage }) => {
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    return true;
+  }
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  alert(blockedMessage);
+  return false;
+};
 
-function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, beneficiaryName, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
+function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, beneficiaryName, loginPending = false, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -315,7 +334,7 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
         authState.user && isAdmin ? h(Button, { active: true, onClick: onPublish }, h(IconLabel, { icon: "cloud", label: "Sauvegarder" })) : null,
         authState.user
           ? h(Button, { active: true, onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Connecté" }))
-          : h(Button, { onClick: onLogin }, h(IconLabel, { icon: "login", label: "Connexion Google" })),
+          : h(Button, { onClick: onLogin, disabled: loginPending }, h(IconLabel, { icon: "login", label: loginPending ? "Connexion..." : "Connexion Google" })),
       ),
     ),
     authState.error ? h("div", { className: "muted" }, authState.error) : null,
@@ -435,6 +454,11 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   const [changeRequestError, setChangeRequestError] = useState("");
   const canContribute = sessionRole?.canContribute !== false;
   const personalRoleText = sessionRole?.role === "viewer" ? ACCESS_ROLE_LABELS.viewer : "Auxiliaire";
+  useEffect(() => {
+    const openLife = () => setPersonalView("life");
+    window.addEventListener("planning-avd-open-life", openLife);
+    return () => window.removeEventListener("planning-avd-open-life", openLife);
+  }, []);
   useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
     const requestChange = event => {
@@ -1173,6 +1197,7 @@ function ConfigView({ beneficiaryName, setBeneficiaryName, auxiliaries, setAuxil
 export default function App() {
   const [stateLoaded, setStateLoaded] = useState(false);
   const [authState, setAuthState] = useState({ user: null, auth: null, db: null, ready: false, error: "" });
+  const [loginPending, setLoginPending] = useState(false);
   const [year, setYear] = useState(defaultState().year);
   const [month, setMonth] = useState(defaultState().month);
   const [view, setView] = useState("month");
@@ -1211,6 +1236,16 @@ export default function App() {
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
+  }, []);
+
+  useEffect(() => {
+    if (authState.ready && authState.user) setLoginPending(false);
+  }, [authState.ready, authState.user]);
+
+  useEffect(() => {
+    const openLife = () => setView("life");
+    window.addEventListener("planning-avd-open-life", openLife);
+    return () => window.removeEventListener("planning-avd-open-life", openLife);
   }, []);
 
   useEffect(() => {
@@ -1318,7 +1353,7 @@ export default function App() {
   useEffect(() => {
     if (!stateLoaded) return;
     if (authState.user && !sessionRole.ready) {
-      setCloudStatus({ kind: "saving", text: "Connexion en cours" });
+      setCloudStatus({ kind: "saving", text: "Vérification du compte..." });
       return;
     }
     if (authState.user && !sessionRole.isAdmin) {
@@ -1395,18 +1430,20 @@ export default function App() {
 
   const openReport = () => {
     const html = buildReportHtml({ year, month, beneficiaryName, auxiliaries: activeAux, schedule, hours });
-    const win = window.open("", "_blank");
-    win.document.write(html);
-    win.document.close();
-    win.focus();
+    openHtmlDocument({
+      html,
+      fileName: `rapport-planning-avd-${year}-${String(month + 1).padStart(2, "0")}.html`,
+      blockedMessage: "Le navigateur a bloqué l'ouverture du rapport. Je l'ai téléchargé à la place.",
+    });
   };
 
   const openCleanView = () => {
     const html = buildCleanPlanningHtml({ year, month, beneficiaryName, auxiliaries: activeAux, schedule });
-    const win = window.open("", "_blank");
-    win.document.write(html);
-    win.document.close();
-    win.focus();
+    openHtmlDocument({
+      html,
+      fileName: `planning-avd-impression-${year}-${String(month + 1).padStart(2, "0")}.html`,
+      blockedMessage: "Le navigateur a bloqué l'ouverture de la vue imprimée. Je l'ai téléchargée à la place.",
+    });
   };
 
   const publishPlanning = async () => {
@@ -1588,6 +1625,18 @@ export default function App() {
     }
   };
 
+  const startLogin = async () => {
+    if (loginPending) return;
+    setLoginPending(true);
+    try {
+      await signInWithGoogle(authState.auth);
+    } catch (error) {
+      alert(`Connexion impossible : ${error.message}`);
+    } finally {
+      window.setTimeout(() => setLoginPending(false), 800);
+    }
+  };
+
   if (firstConnectionMode) return h(FirstConnectionPanel, { authState, onLogout: () => signOut(authState.auth) });
   if (personalMode) return h(PersonalView, { authState, sessionRole, year, month, setYear, setMonth, planning: personalPlanning, error: personalError, onLogout: () => signOut(authState.auth) });
 
@@ -1603,9 +1652,10 @@ export default function App() {
       year,
       month,
       beneficiaryName,
+      loginPending,
       setYear,
       setMonth,
-      onLogin: () => signInWithGoogle(authState.auth).catch(error => alert(error.message)),
+      onLogin: startLogin,
       onLogout: () => signOut(authState.auth),
       onCleanView: openCleanView,
       onReport: openReport,

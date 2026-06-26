@@ -17,6 +17,8 @@ const addStyle = () => {
     #${BAR_ID} .meal-banner-days{display:flex;align-items:center;gap:5px}
     #${BAR_ID} button{width:27px;height:27px;padding:0;border:1px solid rgba(104,196,154,.42);border-radius:50%;background:#fff;color:#39735b;font-size:11px;font-weight:900}
     #${BAR_ID} button.active{background:#68a887;border-color:#68a887;color:#fff}
+    #${BAR_ID} .meal-banner-task{width:auto;min-width:72px;padding:0 10px;border-radius:999px;background:rgba(235,245,255,.96);border-color:rgba(123,175,212,.5);color:#2c6f9e}
+    #${BAR_ID} .meal-banner-task.active{background:#7bafd4;border-color:#7bafd4;color:#fff}
     #${MODAL_ID}{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:14px;background:rgba(34,51,60,.34);backdrop-filter:blur(4px)}
     #${MODAL_ID} .meal-modal-card{width:min(900px,100%);max-height:92vh;overflow:auto;padding:16px;border:1px solid rgba(180,211,201,.94);border-radius:8px;background:rgba(255,255,255,.98);box-shadow:0 20px 60px rgba(30,62,52,.22)}
     #${MODAL_ID} .meal-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
@@ -239,7 +241,7 @@ const renderBanner = () => {
   const topbar = document.querySelector(".app > .topbar, .personal-app > .topbar");
   const period = visibleMonth();
   const app = document.querySelector(".app, .personal-app");
-  if (!topbar || !period || !app?.classList.contains("life-view")) {
+  if (!topbar || !period || !app) {
     document.getElementById(BAR_ID)?.remove();
     return;
   }
@@ -251,6 +253,7 @@ const renderBanner = () => {
   let bar = document.getElementById(BAR_ID);
   if (bar?.dataset.signature === signature) {
     if (bar.previousElementSibling !== topbar) topbar.insertAdjacentElement("afterend", bar);
+    bar.querySelector(".meal-banner-task")?.classList.toggle("active", app.classList.contains("life-view"));
     return;
   }
   if (!bar) {
@@ -262,7 +265,15 @@ const renderBanner = () => {
   bar.replaceChildren();
   const title = document.createElement("div");
   title.className = "meal-banner-title";
-  title.textContent = "Idees repas";
+  title.textContent = "Repas / Taches";
+  const taskButton = document.createElement("button");
+  taskButton.type = "button";
+  taskButton.className = `meal-banner-task${app.classList.contains("life-view") ? " active" : ""}`;
+  taskButton.textContent = "Taches";
+  taskButton.title = "Ouvrir les taches et les repas";
+  taskButton.addEventListener("click", () => {
+    window.dispatchEvent(new Event("planning-avd-open-life"));
+  });
   const days = document.createElement("div");
   days.className = "meal-banner-days";
   week.forEach((meal, index) => {
@@ -274,7 +285,7 @@ const renderBanner = () => {
     button.addEventListener("click", () => openMealModal(week, index));
     days.appendChild(button);
   });
-  bar.append(title, days);
+  bar.append(title, taskButton, days);
 };
 
 export function initMealBanner() {
@@ -284,6 +295,6 @@ export function initMealBanner() {
     clearTimeout(timer);
     timer = window.setTimeout(renderBanner, 40);
   };
-  new MutationObserver(refresh).observe(document.getElementById("root"), { childList: true, subtree: true, characterData: true });
+  new MutationObserver(refresh).observe(document.getElementById("root"), { childList: true, subtree: true, characterData: true, attributes: true });
   refresh();
 }

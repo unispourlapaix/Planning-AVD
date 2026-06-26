@@ -9,7 +9,7 @@ import { initSettingsTools } from "./modules/settings-tools.js?v=20260624-monthl
 import { initTopbarSettingsNav } from "./modules/topbar-settings-nav.js?v=20260608-print-label";
 import { initPwaInstall } from "./modules/pwa-install.js?v=20260615-github-update";
 import { initPrivateDisplay } from "./modules/private-display.js?v=20260624-timeout-fix";
-import { initMealBanner } from "./modules/meal-banner.js?v=20260624-life-separate";
+import { initMealBanner } from "./modules/meal-banner.js?v=20260626-global-life-banner";
 
 globalThis.React = React;
 globalThis.ReactDOM = ReactDOM;
@@ -20,7 +20,7 @@ window.alert = message => nativeAlert(String(message)
   .replace("Publication impossible", "Sauvegarde impossible"));
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260626-new-beneficiary-admin"),
+  import("./App.js?v=20260626-popup-global-banner"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));

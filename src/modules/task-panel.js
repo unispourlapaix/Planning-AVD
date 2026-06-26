@@ -28,6 +28,12 @@ const SCHEDULE_LABELS = {
 
 const pad = value => String(value).padStart(2, "0");
 
+const openExternalUrl = url => {
+  if (!url) return;
+  const win = window.open(url, "_blank", "noopener,noreferrer");
+  if (!win) window.location.href = url;
+};
+
 function monthDateValue(year, month, day = 1) {
   if (!Number.isInteger(year) || !Number.isInteger(month)) {
     const now = new Date();
@@ -218,12 +224,10 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
           ),
           h("div", { className: "task-actions" },
             h("span", { className: `task-priority ${task.priority || "normal"}` }, PRIORITY_LABELS[task.priority] || PRIORITY_LABELS.normal),
-            calendarUrl ? h("a", {
-              className: "btn task-calendar-link",
-              href: calendarUrl,
-              target: "_blank",
-              rel: "noopener noreferrer",
+            calendarUrl ? h(Button, {
+              className: "task-calendar-link",
               title: "Exporter vers Google Agenda",
+              onClick: () => openExternalUrl(calendarUrl),
             }, "Agenda") : null,
             isAdmin ? h(Button, { className: "task-delete", title: "Supprimer la tache", onClick: () => removeTask(task) }, "Supprimer") : null,
           ),
