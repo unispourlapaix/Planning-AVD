@@ -419,32 +419,27 @@ function mergeAccessMembers(adminDocs, teamDocs) {
     || a.name.localeCompare(b.name));
 }
 
-export function subscribeAccessMembers({ db, user, onChange, onError }) {
+export function subscribeAccessMembers({ db, user, beneficiaryId = "", onChange, onError }) {
   if (!db || !user?.uid) return () => {};
-  let admins = [];
-  let team = [];
-  const emit = () => onChange?.(mergeAccessMembers(admins, team));
-  const adminUnsubscribe = db.collection("planning-avd-admins").onSnapshot(snapshot => {
-    admins = snapshot.docs.map(doc => normalizeMemberDoc(doc, "admin")).filter(Boolean);
-    emit();
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  if (!safeBeneficiaryId) {
+    onChange?.([]);
+    return () => {};
+  }
+  return beneficiaryRoot(db, safeBeneficiaryId).collection("members").onSnapshot(snapshot => {
+    onChange?.(mergeAccessMembers([], snapshot.docs.map(doc => normalizeMemberDoc(doc, "team")).filter(Boolean)));
   }, error => onError?.(error));
-  const teamUnsubscribe = db.collection("planning-avd-team-members").onSnapshot(snapshot => {
-    team = snapshot.docs.map(doc => normalizeMemberDoc(doc, "team")).filter(Boolean);
-    emit();
-  }, error => onError?.(error));
-  return () => {
-    adminUnsubscribe();
-    teamUnsubscribe();
-  };
 }
 
-export async function grantMemberRole({ db, user, email, role = "auxiliary", name = "" }) {
+export async function grantMemberRole({ db, user, email, role = "auxiliary", name = "", beneficiaryId = "", beneficiaryName = "" }) {
   const clean = normalizeEmail(email);
   const cleanRole = normalizeAccessRole(role);
   const cleanName = String(name || "").trim().slice(0, 80);
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  const adminEmail = normalizeEmail(user?.email);
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!clean || !clean.includes("@")) throw new Error("Email invalide.");
-  if (clean === normalizeEmail(user.email) && cleanRole !== "admin") throw new Error("Votre propre acces administrateur reste protege.");
+  if (clean === adminEmail && cleanRole !== "admin") throw new Error("Votre propre acces administrateur reste protege.");
   const existingAdmin = cleanRole === "admin"
     ? null
     : await db.collection("planning-avd-admins").doc(clean).get().catch(() => null);
@@ -457,20 +452,37 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
     role: effectiveRole,
     active: true,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy: normalizeEmail(user.email),
+    updatedBy: adminEmail,
   };
   const writes = [
     db.collection("planning-avd-team-members").doc(clean).set({
       ...common,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: normalizeEmail(user.email),
+      createdBy: adminEmail,
     }, { merge: true }),
   ];
+  if (safeBeneficiaryId) {
+    writes.push(
+      beneficiaryRoot(db, safeBeneficiaryId).set({
+        beneficiaryId: safeBeneficiaryId,
+        beneficiaryName: String(beneficiaryName || "").trim(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminEmail,
+      }, { merge: true }),
+      beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(clean)).set(buildBeneficiaryMember({
+        email: clean,
+        name: cleanName || clean,
+        role: effectiveRole,
+        active: true,
+        updatedBy: adminEmail,
+      }), { merge: true }),
+    );
+  }
   if (effectiveRole === "admin") {
     writes.push(db.collection("planning-avd-admins").doc(clean).set({
       ...common,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: normalizeEmail(user.email),
+      createdBy: adminEmail,
     }, { merge: true }));
   } else {
     writes.push(db.collection("planning-avd-admins").doc(clean).set({
@@ -479,25 +491,35 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
       active: false,
       role: "admin",
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: normalizeEmail(user.email),
+      updatedBy: adminEmail,
     }, { merge: true }));
   }
   await Promise.all(writes);
   return { email: clean, role: effectiveRole, requestedRole: cleanRole };
 }
 
-export async function setMemberAccess({ db, user, email, role = "auxiliary", active = true }) {
+export async function setMemberAccess({ db, user, email, role = "auxiliary", active = true, beneficiaryId = "", beneficiaryName = "" }) {
   const clean = normalizeEmail(email);
   const cleanRole = normalizeAccessRole(role);
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!clean || !clean.includes("@")) throw new Error("Email invalide.");
   if (!active && clean === normalizeEmail(user.email)) throw new Error("Vous ne pouvez pas desactiver votre propre acces.");
-  if (active) return grantMemberRole({ db, user, email: clean, role: cleanRole });
+  if (active) return grantMemberRole({ db, user, email: clean, role: cleanRole, beneficiaryId: safeBeneficiaryId, beneficiaryName });
   const payload = {
     active: false,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: normalizeEmail(user.email),
   };
+  if (safeBeneficiaryId) {
+    await beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(clean)).set({
+      email: clean,
+      emailLower: clean,
+      role: cleanRole,
+      ...payload,
+    }, { merge: true });
+    return { email: clean, role: cleanRole, active: false };
+  }
   await Promise.all([
     db.collection("planning-avd-team-members").doc(clean).set({ email: clean, emailLower: clean, ...payload }, { merge: true }),
     db.collection("planning-avd-admins").doc(clean).set({ email: clean, emailLower: clean, ...payload }, { merge: true }),
@@ -505,7 +527,7 @@ export async function setMemberAccess({ db, user, email, role = "auxiliary", act
   return { email: clean, role: cleanRole, active: false };
 }
 
-export async function resolveAccessRequest({ db, user, request, status }) {
+export async function resolveAccessRequest({ db, user, request, status, beneficiaryId = "", beneficiaryName = "" }) {
   const email = normalizeEmail(request?.email || request?.id);
   const cleanStatus = status === "approved" ? "approved" : "rejected";
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
@@ -517,6 +539,8 @@ export async function resolveAccessRequest({ db, user, request, status }) {
       email,
       role: normalizeAccessRole(request.role),
       name: request.name || email,
+      beneficiaryId,
+      beneficiaryName,
     });
   }
   await db.collection("planning-avd-access-requests").doc(email).set({

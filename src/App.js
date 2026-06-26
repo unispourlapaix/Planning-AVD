@@ -874,6 +874,11 @@ const ACCESS_MEMBER_FILTERS = [
   { id: "viewer", label: "Lecture" },
   { id: "inactive", label: "Inactifs" },
 ];
+const normalizeBeneficiaryLabel = value => String(value || "")
+  .trim()
+  .toLocaleLowerCase("fr")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "");
 
 const FIRST_ROLE_CHOICES = [
   {
@@ -1008,7 +1013,7 @@ function FirstConnectionPanel({ authState, onLogout }) {
   );
 }
 
-function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
+function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
   const [members, setMembers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
   const [email, setEmail] = useState("");
@@ -1028,10 +1033,11 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
     return subscribeAccessMembers({
       db: authState.db,
       user: authState.user,
+      beneficiaryId,
       onChange: setMembers,
       onError: error => setAccessError(`Liste des acces indisponible : ${error.message}`),
     });
-  }, [authState.db, authState.user, isAdmin]);
+  }, [authState.db, authState.user, isAdmin, beneficiaryId]);
 
   useEffect(() => {
     if (!authState.db || !authState.user || !isAdmin) {
@@ -1099,12 +1105,17 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
     if (memberFilter === "admin") return ["admin", "owner"].includes(member.role);
     return member.role === memberFilter;
   });
+  const currentBeneficiaryLabel = normalizeBeneficiaryLabel(beneficiaryName);
+  const visibleAccessRequests = accessRequests.filter(request => {
+    const requestBeneficiaryLabel = normalizeBeneficiaryLabel(request.beneficiaryName);
+    return !currentBeneficiaryLabel || !requestBeneficiaryLabel || requestBeneficiaryLabel === currentBeneficiaryLabel;
+  });
 
   return h("section", { className: "panel admin-access-panel" },
     h("div", { className: "title-row" },
       h("div", null,
         h("h3", null, "Membres et roles"),
-        h("div", { className: "muted" }, connectedEmail ? `Connecté : ${connectedEmail}` : "Connexion Google nécessaire."),
+        h("div", { className: "muted" }, connectedEmail ? `Groupe ${beneficiaryName || "bénéficiaire"} · ${connectedEmail}` : "Connexion Google nécessaire."),
       ),
       h("span", { className: `role-pill ${isAdmin ? "saved" : "local"}` }, isAdmin ? "Administrateur" : "Auxiliaire"),
     ),
@@ -1159,11 +1170,11 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
             h("div", { className: "title-row" },
               h("div", null,
                 h("h3", null, "Demandes de première connexion"),
-                h("div", { className: "muted" }, `${accessRequests.filter(item => item.status === "pending").length} en attente.`),
+                h("div", { className: "muted" }, `${visibleAccessRequests.filter(item => item.status === "pending").length} en attente pour ce groupe.`),
               ),
             ),
-            accessRequests.length
-              ? accessRequests.slice(0, 12).map(request => {
+            visibleAccessRequests.length
+              ? visibleAccessRequests.slice(0, 12).map(request => {
                   const pending = request.status === "pending";
                   return h("article", { key: request.id || request.email, className: `access-request ${request.status || "pending"}` },
                     h("div", null,
@@ -1616,15 +1627,15 @@ export default function App() {
   };
 
   const saveAccessMember = async ({ email, name, role }) => {
-    return grantMemberRole({ db: authState.db, user: authState.user, email, name, role });
+    return grantMemberRole({ db: authState.db, user: authState.user, email, name, role, beneficiaryId, beneficiaryName });
   };
 
   const changeMemberAccess = async ({ email, role, active }) => {
-    return setMemberAccess({ db: authState.db, user: authState.user, email, role, active });
+    return setMemberAccess({ db: authState.db, user: authState.user, email, role, active, beneficiaryId, beneficiaryName });
   };
 
   const answerAccessRequest = async ({ request, status }) => {
-    return resolveAccessRequest({ db: authState.db, user: authState.user, request, status });
+    return resolveAccessRequest({ db: authState.db, user: authState.user, request, status, beneficiaryId, beneficiaryName });
   };
 
   const approveChangeRequest = async (request, workerId) => {
@@ -1821,7 +1832,7 @@ export default function App() {
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
-      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
       view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {
