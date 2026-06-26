@@ -6,31 +6,35 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function authEmail() {
+      return request.auth.token.email.lower();
+    }
+
     function isAdmin() {
       return signedIn()
         && ((exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.uid))
             && get(/databases/$(database)/documents/planning-avd-admins/$(request.auth.uid)).data.active != false)
-          || (exists(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(request.auth.token.email))
-            && get(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(request.auth.token.email)).data.active == true)
-          || (exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.token.email))
-            && get(/databases/$(database)/documents/planning-avd-admins/$(request.auth.token.email)).data.active == true)
-          || (exists(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email))
-            && get(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email)).data.active == true));
+          || (exists(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(authEmail()))
+            && get(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(authEmail())).data.active == true)
+          || (exists(/databases/$(database)/documents/planning-avd-admins/$(authEmail()))
+            && get(/databases/$(database)/documents/planning-avd-admins/$(authEmail())).data.active == true)
+          || (exists(/databases/$(database)/documents/planning-avd-admin-emails/$(authEmail()))
+            && get(/databases/$(database)/documents/planning-avd-admin-emails/$(authEmail())).data.active == true));
     }
 
     function isTeamMember() {
       return signedIn()
         && (isAdmin()
-          || (exists(/databases/$(database)/documents/planning-avd-team-members/$(request.auth.token.email))
-            && get(/databases/$(database)/documents/planning-avd-team-members/$(request.auth.token.email)).data.active == true));
+          || (exists(/databases/$(database)/documents/planning-avd-team-members/$(authEmail()))
+            && get(/databases/$(database)/documents/planning-avd-team-members/$(authEmail())).data.active == true));
     }
 
     function canContribute() {
       return signedIn()
         && (isAdmin()
-          || (exists(/databases/$(database)/documents/planning-avd-team-members/$(request.auth.token.email))
-            && get(/databases/$(database)/documents/planning-avd-team-members/$(request.auth.token.email)).data.active == true
-            && get(/databases/$(database)/documents/planning-avd-team-members/$(request.auth.token.email)).data.role != "viewer"));
+          || (exists(/databases/$(database)/documents/planning-avd-team-members/$(authEmail()))
+            && get(/databases/$(database)/documents/planning-avd-team-members/$(authEmail())).data.active == true
+            && get(/databases/$(database)/documents/planning-avd-team-members/$(authEmail())).data.role != "viewer"));
     }
 
     match /planning-avd-users/{userId}/{document=**} {
@@ -40,45 +44,58 @@ service cloud.firestore {
     match /planning-avd-admins/{userId} {
       allow read: if signedIn()
         && (request.auth.uid == userId
-          || request.auth.token.email == userId
-          || resource.data.email == request.auth.token.email
+          || authEmail() == userId
+          || resource.data.email == authEmail()
+          || resource.data.emailLower == authEmail()
           || isAdmin());
       allow create, update: if isAdmin();
-      allow delete: if isAdmin() && request.auth.uid != userId && request.auth.token.email != userId;
+      allow delete: if isAdmin() && request.auth.uid != userId && authEmail() != userId;
     }
 
     match /planning-avd-admin-emails/{email} {
-      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow read: if signedIn() && (authEmail() == email || isAdmin());
       allow create, update: if isAdmin();
-      allow delete: if isAdmin() && request.auth.token.email != email;
+      allow delete: if isAdmin() && authEmail() != email;
     }
 
     match /planning-avd-admin-bootstraps/{email} {
-      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow read: if signedIn() && (authEmail() == email || isAdmin());
       allow create: if signedIn()
-        && request.auth.token.email == email
-        && request.resource.data.email == request.auth.token.email
+        && authEmail() == email
+        && request.resource.data.email == authEmail()
+        && request.resource.data.emailLower == authEmail()
         && request.resource.data.role == "admin"
         && request.resource.data.active == true
+        && request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.beneficiaryName is string
         && request.resource.data.beneficiaryName.size() > 0
         && request.resource.data.beneficiaryName.size() <= 120;
-      allow update: if isAdmin();
-      allow delete: if isAdmin() && request.auth.token.email != email;
+      allow update: if isAdmin()
+        || (signedIn()
+          && authEmail() == email
+          && resource.data.createdByUid == request.auth.uid
+          && request.resource.data.email == authEmail()
+          && request.resource.data.emailLower == authEmail()
+          && request.resource.data.role == "admin"
+          && request.resource.data.active == true
+          && request.resource.data.beneficiaryName is string
+          && request.resource.data.beneficiaryName.size() > 0
+          && request.resource.data.beneficiaryName.size() <= 120);
+      allow delete: if isAdmin() && authEmail() != email;
     }
 
     match /planning-avd-access-requests/{email} {
-      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow read: if signedIn() && (authEmail() == email || isAdmin());
       allow create: if signedIn()
-        && request.auth.token.email == email
-        && request.resource.data.email == request.auth.token.email
+        && authEmail() == email
+        && request.resource.data.email == authEmail()
         && request.resource.data.role in ["admin", "auxiliary", "viewer"]
         && request.resource.data.status == "pending";
       allow update: if isAdmin()
         || (signedIn()
-          && request.auth.token.email == email
+          && authEmail() == email
           && resource.data.status != "approved"
-          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.email == authEmail()
           && request.resource.data.role in ["admin", "auxiliary", "viewer"]
           && request.resource.data.status == "pending");
       allow delete: if isAdmin();
@@ -86,29 +103,29 @@ service cloud.firestore {
 
     match /planning-avd-shares/{email}/months/{month} {
       allow read: if signedIn()
-        && (request.auth.token.email == email
-          || request.auth.token.email == resource.data.email
-          || request.auth.token.email == resource.data.emailOriginal
+        && (authEmail() == email
+          || authEmail() == resource.data.email
+          || authEmail() == resource.data.emailOriginal
           || (resource.data.readEmails is list
-            && request.auth.token.email in resource.data.readEmails));
+            && authEmail() in resource.data.readEmails));
       allow write: if isAdmin();
     }
 
     match /planning-avd-change-requests/{email}/months/{month}/items/{requestId} {
       allow create: if canContribute()
-        && request.resource.data.requesterEmail == request.auth.token.email
+        && request.resource.data.requesterEmail == authEmail()
         && request.resource.data.status == "pending";
       allow read: if request.auth != null
-        && (resource.data.requesterEmail == request.auth.token.email || isAdmin());
+        && (resource.data.requesterEmail == authEmail() || isAdmin());
       allow update: if isAdmin();
       allow delete: if false;
     }
 
     match /planning-avd-team-members/{email} {
       allow read: if signedIn()
-        && (request.auth.token.email == email
-          || request.auth.token.email == resource.data.email
-          || request.auth.token.email == resource.data.emailLower
+        && (authEmail() == email
+          || authEmail() == resource.data.email
+          || authEmail() == resource.data.emailLower
           || isAdmin());
       allow write: if isAdmin();
     }
@@ -122,12 +139,12 @@ service cloud.firestore {
         && request.resource.data.priority in ["normal", "important", "urgent"]
         && request.resource.data.completed == false
         && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.createdByEmail == request.auth.token.email;
+        && request.resource.data.createdByEmail == authEmail();
       allow update: if canContribute()
         && (isAdmin()
           || (request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(["completed", "completedAt", "completedBy", "updatedAt"])
-            && request.resource.data.completedBy == request.auth.token.email));
+            && request.resource.data.completedBy == authEmail()));
       allow delete: if isAdmin();
     }
 
