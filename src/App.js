@@ -6,10 +6,12 @@ import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=2
 import {
   createPlanningChangeRequest,
   createNewBeneficiaryAdmin,
+  createBeneficiaryId,
   defaultState,
   ensureBeneficiaryIdentity,
   ensureBeneficiaryGroup,
   getUserAccess,
+  loadBeneficiaryState,
   grantMemberRole,
   loadRestoreBackup,
   loadState,
@@ -23,6 +25,7 @@ import {
   subscribeAccessRequests,
   subscribeOwnAccessRequest,
   subscribeAccessMembers,
+  subscribeUserBeneficiaries,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
 } from "./modules/storage.js?v=20260626-new-beneficiary-admin";
@@ -1200,7 +1203,13 @@ function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, 
   );
 }
 
-function ConfigView({ beneficiaryId, beneficiaryName, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
+function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
+  const beneficiaryChoices = [
+    ...beneficiaryOptions,
+    ...(beneficiaryId && !beneficiaryOptions.some(item => item.beneficiaryId === beneficiaryId)
+      ? [{ beneficiaryId, beneficiaryName: beneficiaryName || "Bénéficiaire actuel" }]
+      : []),
+  ];
   const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => ({
     ...aux,
     ...(patch.lead === true && aux.id !== id ? { lead: false } : {}),
@@ -1229,6 +1238,23 @@ function ConfigView({ beneficiaryId, beneficiaryName, setBeneficiaryName, auxili
           h("h3", null, "Bénéficiaire"),
           h("div", { className: "muted" }, "Personne accompagnée par ce planning."),
         ),
+      ),
+      h("div", { className: "form-grid" },
+        h(Field, { label: "Dossier actif" }, h(Select, {
+          value: beneficiaryId,
+          disabled: beneficiarySwitching,
+          onChange: value => onSelectBeneficiary?.(value),
+        },
+          beneficiaryChoices.map(item => h("option", {
+            key: item.beneficiaryId,
+            value: item.beneficiaryId,
+          }, item.beneficiaryName || "Bénéficiaire sans nom")),
+        )),
+        h(Field, { label: "Nouveau dossier" }, h(Button, {
+          active: true,
+          disabled: beneficiarySwitching,
+          onClick: onCreateBeneficiary,
+        }, "+ Créer")),
       ),
       h(Field, { label: "Nom du bénéficiaire" }, h(TextInput, {
         value: beneficiaryName,
@@ -1324,6 +1350,8 @@ export default function App() {
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
   const [adminChangeError, setAdminChangeError] = useState("");
   const [beneficiaryGroupReady, setBeneficiaryGroupReady] = useState(true);
+  const [beneficiaryOptions, setBeneficiaryOptions] = useState([]);
+  const [beneficiarySwitching, setBeneficiarySwitching] = useState(false);
   const [cloudStatus, setCloudStatus] = useState({ kind: "local", text: "Local uniquement" });
   const [accountingNow, setAccountingNow] = useState(() => new Date());
   const cloudBaseUpdatedAtRef = useRef(undefined);
@@ -1386,6 +1414,19 @@ export default function App() {
   const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin && sessionRole.isMember;
 
   const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active !== false), [auxiliaries]);
+
+  useEffect(() => {
+    if (!authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin) {
+      setBeneficiaryOptions([]);
+      return;
+    }
+    return subscribeUserBeneficiaries({
+      db: authState.db,
+      user: authState.user,
+      onChange: setBeneficiaryOptions,
+      onError: error => console.warn("Liste des bénéficiaires indisponible.", error),
+    });
+  }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin]);
 
   useEffect(() => {
     if (!personalMode) return;
@@ -1722,6 +1763,46 @@ export default function App() {
     return restoredState;
   };
 
+  const selectBeneficiary = async nextBeneficiaryId => {
+    const cleanId = String(nextBeneficiaryId || "").trim();
+    if (!cleanId || cleanId === beneficiaryId || beneficiarySwitching) return;
+    setBeneficiarySwitching(true);
+    try {
+      const next = await loadBeneficiaryState({ db: authState.db, user: authState.user, beneficiaryId: cleanId });
+      const restored = applyRestoredPlanningState(next);
+      beneficiaryGroupSignatureRef.current = "";
+      lastSavedSignatureRef.current = "";
+      setCloudStatus({ kind: "saving", text: `Dossier ${restored.beneficiaryName || "bénéficiaire"} chargé` });
+    } catch (error) {
+      alert(`Changement de bénéficiaire impossible : ${error.message}`);
+    } finally {
+      setBeneficiarySwitching(false);
+    }
+  };
+
+  const createBeneficiary = () => {
+    if (beneficiarySwitching) return;
+    const name = window.prompt("Nom du nouveau bénéficiaire ?");
+    const cleanName = String(name || "").trim();
+    if (!cleanName) return;
+    const now = new Date();
+    const next = {
+      ...defaultState(),
+      year: now.getFullYear(),
+      month: now.getMonth(),
+      view: "config",
+      beneficiaryId: createBeneficiaryId(cleanName),
+      beneficiaryName: cleanName,
+      auxiliaries: cloneDefaultAux(),
+      overrides: {},
+      dayOutings: {},
+    };
+    applyRestoredPlanningState(next);
+    beneficiaryGroupSignatureRef.current = "";
+    lastSavedSignatureRef.current = "";
+    setCloudStatus({ kind: "saving", text: "Nouveau dossier créé" });
+  };
+
   const shareBackup = async () => {
     const backup = {
       app: "Planning-AVD",
@@ -1833,7 +1914,7 @@ export default function App() {
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
-      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
+      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {
       edit: slotEdit,

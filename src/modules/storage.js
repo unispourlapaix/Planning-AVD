@@ -73,6 +73,8 @@ const stateMonthKey = value => `${Number(value?.year) || new Date().getFullYear(
 const stateRestoreKey = value => `${String(value?.beneficiaryId || "legacy")}-${stateMonthKey(value)}`;
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
 const beneficiaryRoot = (db, beneficiaryId) => db.collection("planning-avd-beneficiaries").doc(String(beneficiaryId || "").trim());
+const userBeneficiaryRef = (db, user, beneficiaryId) =>
+  db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries").doc(String(beneficiaryId || "").trim());
 const beneficiaryMemberKey = email => normalizeEmail(email);
 const buildBeneficiaryMember = ({ email, name = "", role = "auxiliary", active = true, updatedBy = "" }) => ({
   email: normalizeEmail(email),
@@ -214,12 +216,49 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
+    await userBeneficiaryRef(db, user, value.beneficiaryId).set({
+      beneficiaryId: value.beneficiaryId,
+      beneficiaryName: String(value.beneficiaryName || "").trim(),
+      value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: user.email || "",
+    }, { merge: true });
     await ensureBeneficiaryGroup({ db, user, state: value });
     return { local: true, cloud: true, updatedAt: value.updatedAt };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
     return { local: true, cloud: false, reason: "error", error: error.message || "Sauvegarde cloud impossible" };
   }
+}
+
+export function subscribeUserBeneficiaries({ db, user, onChange, onError }) {
+  if (!db || !user?.uid) return () => {};
+  return db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries")
+    .orderBy("updatedAt", "desc")
+    .limit(80)
+    .onSnapshot(snapshot => {
+      const items = snapshot.docs.map(doc => {
+        const data = doc.data() || {};
+        const value = data.value || {};
+        return {
+          id: doc.id,
+          beneficiaryId: data.beneficiaryId || value.beneficiaryId || doc.id,
+          beneficiaryName: String(data.beneficiaryName || value.beneficiaryName || "Bénéficiaire sans nom").trim(),
+          year: Number.isInteger(value.year) ? value.year : null,
+          month: Number.isInteger(value.month) ? value.month : null,
+          updatedAt: data.updatedAt || value.updatedAt || null,
+        };
+      });
+      onChange?.(items);
+    }, error => onError?.(error));
+}
+
+export async function loadBeneficiaryState({ db, user, beneficiaryId }) {
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  if (!db || !user?.uid || !safeBeneficiaryId) throw new Error("Bénéficiaire introuvable.");
+  const snap = await userBeneficiaryRef(db, user, safeBeneficiaryId).get();
+  if (!snap.exists || !snap.data()?.value) throw new Error("Sauvegarde bénéficiaire introuvable.");
+  return ensureBeneficiaryIdentity(migrateState(snap.data().value));
 }
 
 export async function loadRestoreBackup({ db, user }) {
@@ -368,6 +407,13 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }, { merge: true }),
     db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({
+      value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: email,
+    }, { merge: true }),
+    userBeneficiaryRef(db, user, beneficiaryId).set({
+      beneficiaryId,
+      beneficiaryName: cleanBeneficiary,
       value,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: email,
