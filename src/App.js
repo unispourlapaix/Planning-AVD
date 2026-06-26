@@ -853,6 +853,13 @@ const ACCESS_ROLE_LABELS = {
   auxiliary: "Auxiliaire",
   viewer: "Bénéficiaire lecture seule",
 };
+const ACCESS_MEMBER_FILTERS = [
+  { id: "all", label: "Tous" },
+  { id: "admin", label: "Admins" },
+  { id: "auxiliary", label: "Auxiliaires" },
+  { id: "viewer", label: "Lecture" },
+  { id: "inactive", label: "Inactifs" },
+];
 
 const FIRST_ROLE_CHOICES = [
   {
@@ -995,6 +1002,7 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
   const [role, setRole] = useState("auxiliary");
   const [saving, setSaving] = useState(false);
   const [accessError, setAccessError] = useState("");
+  const [memberFilter, setMemberFilter] = useState("all");
   const connectedEmail = authState.user?.email || "";
 
   useEffect(() => {
@@ -1063,6 +1071,20 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
       alert(`Réponse impossible : ${error.message}`);
     }
   };
+  const memberCounts = {
+    all: members.length,
+    admin: members.filter(member => ["admin", "owner"].includes(member.role) && member.active !== false).length,
+    auxiliary: members.filter(member => member.role === "auxiliary" && member.active !== false).length,
+    viewer: members.filter(member => member.role === "viewer" && member.active !== false).length,
+    inactive: members.filter(member => member.active === false).length,
+  };
+  const filteredMembers = members.filter(member => {
+    if (memberFilter === "all") return true;
+    if (memberFilter === "inactive") return member.active === false;
+    if (member.active === false) return false;
+    if (memberFilter === "admin") return ["admin", "owner"].includes(member.role);
+    return member.role === memberFilter;
+  });
 
   return h("section", { className: "panel admin-access-panel" },
     h("div", { className: "title-row" },
@@ -1095,8 +1117,14 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
             h("div", { className: "muted access-help" }, "Admin : réglages et sauvegarde. Auxiliaire : planning, tâches et demandes. Lecture seule : consultation protégée."),
           ),
           accessError ? h("div", { className: "task-error" }, accessError) : null,
-          h("div", { className: "access-member-list" }, members.length
-            ? members.map(member => {
+          h("div", { className: "access-member-tabs" }, ACCESS_MEMBER_FILTERS.map(filter => h(Button, {
+            key: filter.id,
+            active: memberFilter === filter.id,
+            disabled: memberCounts[filter.id] === 0 && memberFilter !== filter.id,
+            onClick: () => setMemberFilter(filter.id),
+          }, `${filter.label} ${memberCounts[filter.id]}`))),
+          h("div", { className: "access-member-list" }, filteredMembers.length
+            ? filteredMembers.map(member => {
                 const isSelf = String(member.email || "").toLowerCase() === String(connectedEmail || "").toLowerCase();
                 return h("article", { key: member.email, className: `access-member ${member.active ? "active" : "inactive"}` },
                   h("div", null,
@@ -1112,7 +1140,7 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess,
                   }, member.active ? "Desactiver" : "Reactiver"),
                 );
               })
-            : h("div", { className: "muted" }, "Aucun membre charge pour le moment.")),
+            : h("div", { className: "muted" }, members.length ? "Aucun membre dans cet onglet." : "Aucun membre charge pour le moment.")),
           h("div", { className: "access-request-list" },
             h("div", { className: "title-row" },
               h("div", null,

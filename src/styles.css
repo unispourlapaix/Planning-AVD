@@ -79,7 +79,10 @@ h2 { font-size: 16px; }
 .admin-form .muted { grid-column: 1 / -1; }
 .access-form { grid-template-columns: minmax(180px, 1fr) minmax(150px, .8fr) 150px auto; }
 .access-help { font-size: 11px; }
-.access-member-list { display: grid; gap: 7px; }
+.access-member-tabs { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 6px; border: 1px solid rgba(213,225,229,.7); border-radius: 9px; background: rgba(248,251,252,.72); }
+.access-member-tabs .btn { min-height: 28px; padding: 5px 8px; border-radius: 999px; font-size: 10px; }
+.access-member-tabs .btn:disabled { opacity: .45; cursor: default; }
+.access-member-list { display: grid; gap: 7px; max-height: min(360px, 42vh); overflow-y: auto; padding: 2px 5px 2px 0; overscroll-behavior: contain; scrollbar-width: thin; }
 .access-member { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 8px 9px; border: 1px solid rgba(213,225,229,.86); border-radius: 8px; background: rgba(255,255,255,.72); }
 .access-member.inactive { opacity: .62; background: rgba(244,247,248,.78); }
 .access-member b { display: block; color: #344753; font-size: 13px; overflow-wrap: anywhere; }
@@ -478,5 +481,7 @@ h2 { font-size: 16px; }
   .new-beneficiary-admin-banner { align-items: stretch; flex-direction: column; }
   .access-member { grid-template-columns: minmax(0, 1fr) auto; }
   .access-member .btn { grid-column: 1 / -1; justify-self: start; }
+  .access-member-list { max-height: min(330px, 44vh); }
+  .access-member-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .access-request { grid-template-columns: minmax(0, 1fr); }
 }
