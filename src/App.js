@@ -395,8 +395,11 @@ function PersonalChangeRequestsPanel({ requests, error }) {
   );
 }
 
-function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true }) {
-  return h("div", { className: `day-card personal-day${dayTone(year, month, day)}` },
+function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true, currentWeek = false }) {
+  const hasPresence = entries.length > 0;
+  const today = new Date();
+  const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === Number(day);
+  return h("div", { className: `day-card personal-day${dayTone(year, month, day)}${hasPresence ? " presence-day" : " rest-day"}${isToday ? " today" : ""}${currentWeek ? " current-week-day" : ""}` },
     h("div", { className: "day-head" }, h("span", null, day)),
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
@@ -475,8 +478,13 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   const byDay = Object.fromEntries(Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => [index + 1, []]));
   (planning?.entries || []).forEach(entry => { if (byDay[entry.day]) byDay[entry.day].push(entry); });
   const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
-  const weekGroups = [];
-  for (let day = 1; day <= Object.keys(byDay).length; day += 7) weekGroups.push(Array.from({ length: 7 }, (_, index) => day + index).filter(item => byDay[item]));
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const weekGroups = weekStarts(year, month).map(start => Array.from({ length: 7 }, (_, index) => start + index).filter(item => byDay[item]));
+  const currentWeekIndex = isCurrentMonth ? weekGroups.findIndex(days => days.includes(today.getDate())) : -1;
+  const orderedWeekGroups = currentWeekIndex > -1
+    ? [...weekGroups.slice(currentWeekIndex), ...weekGroups.slice(0, currentWeekIndex)]
+    : weekGroups;
   const requestBySlot = Object.fromEntries(changeRequests.map(request => [requestSlotKey(request.day, request.shift), request]));
   const beneficiaryLabel = planning?.beneficiaryName ? `Bénéficiaire : ${planning.beneficiaryName}` : "Planning personnel transmis par votre administrateur.";
   const logout = async () => {
@@ -559,10 +567,13 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
         : null,
       personalView !== "life" && canContribute ? h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }) : null,
       planning && personalView === "week"
-        ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
-            h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
-            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute }))),
-          )))
+        ? h("div", { className: "week-grid" }, orderedWeekGroups.map(days => {
+            const currentWeek = isCurrentMonth && days.includes(today.getDate());
+            return h("section", { className: `panel personal-week-panel${currentWeek ? " current-week" : ""}`, key: days.join("-") },
+              h("h3", null, currentWeek ? `Semaine actuelle · ${days[0]} ${MONTHS[month]}` : `Semaine du ${days[0]} ${MONTHS[month]}`),
+              h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute, currentWeek }))),
+            );
+          }))
         : null,
       planning && personalView === "month"
         ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))

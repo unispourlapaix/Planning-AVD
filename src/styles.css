@@ -396,8 +396,16 @@ h2 { font-size: 16px; }
 .personal-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .personal-month { display: grid; grid-template-columns: repeat(7, minmax(116px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
 .personal-day { min-height: 146px; }
+.personal-week-panel.current-week { border-color: rgba(104,196,154,.5); background: rgba(250,255,253,.9); }
+.personal-week-panel.current-week h3 { color: #1f7450; }
+.personal-day.rest-day { opacity: .58; }
+.personal-day.presence-day { border-color: rgba(86,137,201,.58); background: linear-gradient(135deg, rgba(237,247,255,.96), rgba(255,250,254,.94)); box-shadow: inset 4px 0 0 rgba(86,137,201,.45), 0 10px 24px rgba(86,137,201,.1); }
+.personal-day.presence-day .day-head span::after { content: "Presence"; margin-left: 6px; padding: 2px 6px; border-radius: 999px; background: rgba(228,248,240,.95); color: #1a6a44; font-size: 9px; font-weight: 900; vertical-align: middle; }
+.personal-day.today { outline: 2px solid rgba(212,106,168,.32); outline-offset: 2px; }
+.personal-day.current-week-day.presence-day { box-shadow: inset 4px 0 0 rgba(212,106,168,.46), 0 12px 26px rgba(212,106,168,.12); }
 .personal-slot { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 6px; align-items: center; padding: 5px; border-radius: 10px; color: #918a80; background: rgba(255,255,255,.46); border: 1px solid #eee7dc; font-size: 12px; font-weight: 800; }
 .personal-slot.scheduled { color: #5689c9; background: rgba(235,245,255,.82); border-color: #d5e7f7; }
+.personal-day.presence-day .personal-slot.scheduled { color: #2f6fa7; background: rgba(226,242,255,.98); border-color: rgba(123,175,212,.62); }
 @media print {
   body { background: #fff; }
   .personal-app { width: 100%; padding: 0; }
