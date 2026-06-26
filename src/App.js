@@ -11,14 +11,18 @@ import {
   loadRestoreBackup,
   loadState,
   publishPersonalPlannings,
+  requestAccessRole,
+  resolveAccessRequest,
   resolvePlanningChangeRequest,
   saveState,
   setMemberAccess,
   subscribeAdminChangeRequests,
+  subscribeAccessRequests,
+  subscribeOwnAccessRequest,
   subscribeAccessMembers,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260626-member-roles";
+} from "./modules/storage.js?v=20260626-first-role";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -280,7 +284,7 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
       : isAdmin
         ? "Administrateur"
         : sessionRole?.role === "viewer"
-          ? "Lecture seule"
+          ? ACCESS_ROLE_LABELS.viewer
           : "Auxiliaire";
 
   const tabs = [
@@ -426,7 +430,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   const [changeRequests, setChangeRequests] = useState([]);
   const [changeRequestError, setChangeRequestError] = useState("");
   const canContribute = sessionRole?.canContribute !== false;
-  const personalRoleText = sessionRole?.role === "viewer" ? "Lecture seule" : "Auxiliaire";
+  const personalRoleText = sessionRole?.role === "viewer" ? ACCESS_ROLE_LABELS.viewer : "Auxiliaire";
   useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
     const requestChange = event => {
@@ -756,11 +760,117 @@ const ACCESS_ROLE_LABELS = {
   owner: "Proprietaire",
   admin: "Administrateur",
   auxiliary: "Auxiliaire",
-  viewer: "Lecture seule",
+  viewer: "Bénéficiaire lecture seule",
 };
 
-function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess }) {
+const FIRST_ROLE_CHOICES = [
+  {
+    role: "auxiliary",
+    title: "Auxiliaire",
+    detail: "Je dois consulter mon planning, mes tâches et faire des demandes d'échange.",
+  },
+  {
+    role: "viewer",
+    title: ACCESS_ROLE_LABELS.viewer,
+    detail: "Je veux consulter le planning du bénéficiaire sans modifier l'organisation.",
+  },
+  {
+    role: "admin",
+    title: "Administrateur",
+    detail: "Je crée ou gère le planning d'un bénéficiaire et les auxiliaires affectés.",
+  },
+];
+
+function FirstConnectionPanel({ authState, onLogout }) {
+  const [role, setRole] = useState("auxiliary");
+  const [beneficiaryName, setBeneficiaryName] = useState("");
+  const [message, setMessage] = useState("");
+  const [request, setRequest] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const selected = FIRST_ROLE_CHOICES.find(choice => choice.role === role) || FIRST_ROLE_CHOICES[0];
+
+  useEffect(() => {
+    if (!authState.db || !authState.user) {
+      setRequest(null);
+      return;
+    }
+    setError("");
+    return subscribeOwnAccessRequest({
+      db: authState.db,
+      user: authState.user,
+      onChange: setRequest,
+      onError: error => setError(`Demande d'accès indisponible : ${error.message}`),
+    });
+  }, [authState.db, authState.user]);
+
+  const submit = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await requestAccessRole({ db: authState.db, user: authState.user, role, beneficiaryName, message });
+      setMessage("");
+      setError("");
+      alert(`Demande envoyée : ${selected.title}.`);
+    } catch (error) {
+      setError(`Demande impossible : ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const statusText = request?.status === "approved"
+    ? "Accès validé : rechargez l'application pour entrer."
+    : request?.status === "rejected"
+      ? "Demande refusée : vous pouvez corriger le rôle ou le message puis renvoyer."
+      : request?.status === "pending"
+        ? "Demande envoyée : un administrateur doit valider l'accès."
+        : "Choisissez votre rôle de connexion.";
+
+  return h("main", { className: "app first-role-app" },
+    h("section", { className: "panel first-role-panel" },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h1", null, "Première connexion"),
+          h("div", { className: "muted" }, authState.user?.email || ""),
+        ),
+        h(Button, { onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Sortir" })),
+      ),
+      h("div", { className: "first-role-status" }, statusText),
+      h("h3", null, "Vous vous connectez pour :"),
+      h("div", { className: "first-role-grid" }, FIRST_ROLE_CHOICES.map(choice => h(Button, {
+        key: choice.role,
+        active: role === choice.role,
+        className: "first-role-choice",
+        onClick: () => setRole(choice.role),
+      },
+        h("b", null, choice.title),
+        h("small", null, choice.detail),
+      ))),
+      h("div", { className: "form-grid" },
+        h(Field, { label: "Bénéficiaire concerné" }, h(TextInput, {
+          value: beneficiaryName,
+          onChange: setBeneficiaryName,
+          placeholder: "Ex : Payet Emmanuel",
+        })),
+        h(Field, { label: "Message pour l'administrateur" }, h(TextInput, {
+          value: message,
+          onChange: setMessage,
+          placeholder: "Ex : nouvelle auxiliaire, famille, second admin...",
+        })),
+      ),
+      error ? h("div", { className: "task-error" }, error) : null,
+      h("div", { className: "request-actions" },
+        h(Button, { active: true, disabled: saving, onClick: submit }, saving ? "Envoi..." : "Envoyer la demande"),
+        request?.status === "approved" ? h(Button, { onClick: () => window.location.reload() }, "Recharger") : null,
+      ),
+    ),
+  );
+}
+
+function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
   const [members, setMembers] = useState([]);
+  const [accessRequests, setAccessRequests] = useState([]);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("auxiliary");
@@ -779,6 +889,19 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess 
       user: authState.user,
       onChange: setMembers,
       onError: error => setAccessError(`Liste des acces indisponible : ${error.message}`),
+    });
+  }, [authState.db, authState.user, isAdmin]);
+
+  useEffect(() => {
+    if (!authState.db || !authState.user || !isAdmin) {
+      setAccessRequests([]);
+      return;
+    }
+    return subscribeAccessRequests({
+      db: authState.db,
+      user: authState.user,
+      onChange: setAccessRequests,
+      onError: error => setAccessError(`Demandes de connexion indisponibles : ${error.message}`),
     });
   }, [authState.db, authState.user, isAdmin]);
 
@@ -810,6 +933,15 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess 
       });
     } catch (error) {
       alert(`Impossible de ${label} cet acces : ${error.message}`);
+    }
+  };
+
+  const answerRequest = async (request, status) => {
+    try {
+      await onResolveAccessRequest({ request, status });
+      alert(status === "approved" ? `${request.email} est validé.` : `${request.email} est refusé.`);
+    } catch (error) {
+      alert(`Réponse impossible : ${error.message}`);
     }
   };
 
@@ -862,6 +994,35 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess 
                 );
               })
             : h("div", { className: "muted" }, "Aucun membre charge pour le moment.")),
+          h("div", { className: "access-request-list" },
+            h("div", { className: "title-row" },
+              h("div", null,
+                h("h3", null, "Demandes de première connexion"),
+                h("div", { className: "muted" }, `${accessRequests.filter(item => item.status === "pending").length} en attente.`),
+              ),
+            ),
+            accessRequests.length
+              ? accessRequests.slice(0, 12).map(request => {
+                  const pending = request.status === "pending";
+                  return h("article", { key: request.id || request.email, className: `access-request ${request.status || "pending"}` },
+                    h("div", null,
+                      h("b", null, request.name || request.email),
+                      h("small", null, [
+                        request.email,
+                        ACCESS_ROLE_LABELS[request.role] || request.role,
+                        request.beneficiaryName ? `Bénéficiaire : ${request.beneficiaryName}` : "",
+                      ].filter(Boolean).join(" · ")),
+                      request.message ? h("em", null, request.message) : null,
+                    ),
+                    h("span", { className: `cloud-status ${pending ? "saving" : request.status === "approved" ? "saved" : "local"}` }, pending ? "En attente" : request.status === "approved" ? "Validée" : "Refusée"),
+                    pending ? h("div", { className: "request-admin-actions" },
+                      h(Button, { active: true, onClick: () => answerRequest(request, "approved") }, "Valider"),
+                      h(Button, { onClick: () => answerRequest(request, "rejected") }, "Refuser"),
+                    ) : null,
+                  );
+                })
+              : h("div", { className: "muted" }, "Aucune demande de première connexion."),
+          ),
         )
       : h("div", { className: "muted" }, "Mode auxiliaire : accès au planning personnel, demandes d'échange, tâches et courses. Demandez à un administrateur d'ajouter votre email pour gérer l'app."),
   );
@@ -1034,7 +1195,8 @@ export default function App() {
     return () => { active = false; };
   }, [authState.ready, authState.user, authState.db]);
 
-  const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin;
+  const firstConnectionMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin && !sessionRole.isMember;
+  const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin && sessionRole.isMember;
 
   const activeAux = useMemo(() => auxiliaries.filter(aux => aux.active !== false), [auxiliaries]);
 
@@ -1244,6 +1406,10 @@ export default function App() {
     return setMemberAccess({ db: authState.db, user: authState.user, email, role, active });
   };
 
+  const answerAccessRequest = async ({ request, status }) => {
+    return resolveAccessRequest({ db: authState.db, user: authState.user, request, status });
+  };
+
   const approveChangeRequest = async (request, workerId) => {
     if (!requireSafeCloudWrite()) return;
     const worker = activeAux.find(aux => aux.id === workerId);
@@ -1382,6 +1548,7 @@ export default function App() {
     }
   };
 
+  if (firstConnectionMode) return h(FirstConnectionPanel, { authState, onLogout: () => signOut(authState.auth) });
   if (personalMode) return h(PersonalView, { authState, sessionRole, year, month, setYear, setMonth, planning: personalPlanning, error: personalError, onLogout: () => signOut(authState.auth) });
 
   return h("main", { className: `app${view === "life" ? " life-view" : ""}` },
@@ -1416,7 +1583,7 @@ export default function App() {
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
-      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
       view === "config" ? h(ConfigView, { beneficiaryName, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {

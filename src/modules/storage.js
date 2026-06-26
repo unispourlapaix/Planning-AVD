@@ -203,6 +203,45 @@ export async function getUserAccess({ db, user }) {
   }
 }
 
+export function subscribeOwnAccessRequest({ db, user, onChange, onError }) {
+  const email = normalizeEmail(user?.email);
+  if (!db || !email) return () => {};
+  return db.collection("planning-avd-access-requests").doc(email)
+    .onSnapshot(snapshot => onChange?.(snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : null), error => onError?.(error));
+}
+
+export function subscribeAccessRequests({ db, user, onChange, onError }) {
+  if (!db || !user?.uid) return () => {};
+  return db.collection("planning-avd-access-requests")
+    .orderBy("updatedAt", "desc")
+    .limit(80)
+    .onSnapshot(snapshot => {
+      const requests = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1)
+          || String(b.updatedAt?.seconds || "").localeCompare(String(a.updatedAt?.seconds || "")));
+      onChange?.(requests);
+    }, error => onError?.(error));
+}
+
+export async function requestAccessRole({ db, user, role = "auxiliary", beneficiaryName = "", message = "" }) {
+  const email = normalizeEmail(user?.email);
+  const cleanRole = normalizeAccessRole(role);
+  if (!db || !user?.uid || !email) throw new Error("Connexion necessaire.");
+  await db.collection("planning-avd-access-requests").doc(email).set({
+    email,
+    name: String(user.displayName || email).trim(),
+    role: cleanRole,
+    beneficiaryName: String(beneficiaryName || "").trim().slice(0, 120),
+    message: String(message || "").trim().slice(0, 500),
+    status: "pending",
+    userUid: user.uid,
+    requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { email, role: cleanRole };
+}
+
 function normalizeMemberDoc(doc, source) {
   const data = doc.data() || {};
   const email = normalizeEmail(data.emailLower || data.email || doc.id);
@@ -323,6 +362,29 @@ export async function setMemberAccess({ db, user, email, role = "auxiliary", act
     db.collection("planning-avd-admins").doc(clean).set({ email: clean, emailLower: clean, ...payload }, { merge: true }),
   ]);
   return { email: clean, role: cleanRole, active: false };
+}
+
+export async function resolveAccessRequest({ db, user, request, status }) {
+  const email = normalizeEmail(request?.email || request?.id);
+  const cleanStatus = status === "approved" ? "approved" : "rejected";
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  if (!email) throw new Error("Demande introuvable.");
+  if (cleanStatus === "approved") {
+    await grantMemberRole({
+      db,
+      user,
+      email,
+      role: normalizeAccessRole(request.role),
+      name: request.name || email,
+    });
+  }
+  await db.collection("planning-avd-access-requests").doc(email).set({
+    status: cleanStatus,
+    resolvedBy: normalizeEmail(user.email),
+    resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { email, status: cleanStatus };
 }
 
 export async function grantAdminByEmail({ db, user, email }) {

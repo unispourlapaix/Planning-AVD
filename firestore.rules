@@ -51,6 +51,23 @@ service cloud.firestore {
       allow delete: if isAdmin() && request.auth.token.email != email;
     }
 
+    match /planning-avd-access-requests/{email} {
+      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow create: if signedIn()
+        && request.auth.token.email == email
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role in ["admin", "auxiliary", "viewer"]
+        && request.resource.data.status == "pending";
+      allow update: if isAdmin()
+        || (signedIn()
+          && request.auth.token.email == email
+          && resource.data.status != "approved"
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.role in ["admin", "auxiliary", "viewer"]
+          && request.resource.data.status == "pending");
+      allow delete: if isAdmin();
+    }
+
     match /planning-avd-shares/{email}/months/{month} {
       allow read: if signedIn()
         && (request.auth.token.email == email
