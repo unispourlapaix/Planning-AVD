@@ -309,11 +309,16 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!clean || !clean.includes("@")) throw new Error("Email invalide.");
   if (clean === normalizeEmail(user.email) && cleanRole !== "admin") throw new Error("Votre propre acces administrateur reste protege.");
+  const existingAdmin = cleanRole === "admin"
+    ? null
+    : await db.collection("planning-avd-admins").doc(clean).get().catch(() => null);
+  const targetIsActiveAdmin = !!existingAdmin?.exists && existingAdmin.data()?.active !== false;
+  const effectiveRole = targetIsActiveAdmin ? "admin" : cleanRole;
   const common = {
     email: clean,
     emailLower: clean,
     name: cleanName,
-    role: cleanRole,
+    role: effectiveRole,
     active: true,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: normalizeEmail(user.email),
@@ -325,7 +330,7 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
       createdBy: normalizeEmail(user.email),
     }, { merge: true }),
   ];
-  if (cleanRole === "admin") {
+  if (effectiveRole === "admin") {
     writes.push(db.collection("planning-avd-admins").doc(clean).set({
       ...common,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -342,7 +347,7 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
     }, { merge: true }));
   }
   await Promise.all(writes);
-  return { email: clean, role: cleanRole };
+  return { email: clean, role: effectiveRole, requestedRole: cleanRole };
 }
 
 export async function setMemberAccess({ db, user, email, role = "auxiliary", active = true }) {
