@@ -37,20 +37,41 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/planning-avd-team-members/$(authEmail())).data.role != "viewer"));
     }
 
-    function isBeneficiaryMember(beneficiaryId) {
+    function hasBeneficiaryMemberDoc(beneficiaryId) {
       return signedIn()
         && exists(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail()))
         && get(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail())).data.active == true;
     }
 
+    function hasBeneficiaryShare(beneficiaryId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/planning-avd-shares/$(authEmail())/beneficiaries/$(beneficiaryId));
+    }
+
+    function hasBeneficiaryBootstrap(beneficiaryId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(authEmail()))
+        && get(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(authEmail())).data.active == true
+        && get(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(authEmail())).data.beneficiaryId == beneficiaryId;
+    }
+
+    function isBeneficiaryMember(beneficiaryId) {
+      return hasBeneficiaryMemberDoc(beneficiaryId)
+        || hasBeneficiaryShare(beneficiaryId)
+        || hasBeneficiaryBootstrap(beneficiaryId);
+    }
+
     function canContributeBeneficiary(beneficiaryId) {
-      return isBeneficiaryMember(beneficiaryId)
-        && get(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail())).data.role != "viewer";
+      return (hasBeneficiaryMemberDoc(beneficiaryId)
+          && get(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail())).data.role != "viewer")
+        || (hasBeneficiaryShare(beneficiaryId) && canContribute())
+        || hasBeneficiaryBootstrap(beneficiaryId);
     }
 
     function isBeneficiaryAdmin(beneficiaryId) {
-      return isBeneficiaryMember(beneficiaryId)
-        && get(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail())).data.role in ["admin", "owner"];
+      return (hasBeneficiaryMemberDoc(beneficiaryId)
+          && get(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail())).data.role in ["admin", "owner"])
+        || hasBeneficiaryBootstrap(beneficiaryId);
     }
 
     match /planning-avd-users/{userId}/{document=**} {

@@ -95,7 +95,7 @@ const mergeSavedState = (local, cloud) => {
   };
 };
 
-async function syncBeneficiaryGroup({ db, user, state }) {
+export async function ensureBeneficiaryGroup({ db, user, state }) {
   const identified = ensureBeneficiaryIdentity(state);
   const beneficiaryId = String(identified?.beneficiaryId || "").trim();
   const adminEmail = normalizeEmail(user?.email);
@@ -214,7 +214,7 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
-    await syncBeneficiaryGroup({ db, user, state: value });
+    await ensureBeneficiaryGroup({ db, user, state: value });
     return { local: true, cloud: true, updatedAt: value.updatedAt };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
@@ -373,7 +373,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
       updatedBy: email,
     }, { merge: true }),
   ]);
-  await syncBeneficiaryGroup({ db, user, state: value });
+  await ensureBeneficiaryGroup({ db, user, state: value });
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   return { email, beneficiaryId, beneficiaryName: cleanBeneficiary, role: "admin" };
 }
@@ -697,6 +697,7 @@ const changeRequestCollections = ({ db, email, year, month, beneficiaryId = "" }
 const requestSnapshotList = snapshot => snapshot.docs
   .map(doc => ({ id: doc.id, ...doc.data() }))
   .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || a.day - b.day || String(a.shift).localeCompare(String(b.shift)));
+const isPermissionError = error => error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission");
 
 export function subscribePersonalChangeRequests({ db, user, year, month, beneficiaryId = "", onChange, onError }) {
   if (!db || !user?.email) return () => {};
@@ -712,7 +713,12 @@ export function subscribePersonalChangeRequests({ db, user, year, month, benefic
       .onSnapshot(snapshot => {
         buckets.set(index, requestSnapshotList(snapshot));
         emit();
-      }, error => onError?.(error)));
+      }, error => {
+        console.warn("Lecture demande d'échange auxiliaire ignorée.", error);
+        buckets.delete(index);
+        emit();
+        if (!isPermissionError(error)) onError?.(error);
+      }));
   return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
@@ -732,7 +738,12 @@ export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, ben
     .map((collection, index) => collection.onSnapshot(snapshot => {
       buckets.set(`${email}:${index}`, requestSnapshotList(snapshot));
       emit();
-    }, error => onError?.(error))));
+    }, error => {
+      console.warn("Lecture demande d'échange admin ignorée.", error);
+      buckets.delete(`${email}:${index}`);
+      emit();
+      if (!isPermissionError(error)) onError?.(error);
+    })));
   return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 

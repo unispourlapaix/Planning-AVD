@@ -8,6 +8,7 @@ import {
   createNewBeneficiaryAdmin,
   defaultState,
   ensureBeneficiaryIdentity,
+  ensureBeneficiaryGroup,
   getUserAccess,
   grantMemberRole,
   loadRestoreBackup,
@@ -1311,11 +1312,13 @@ export default function App() {
   const [personalError, setPersonalError] = useState("");
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
   const [adminChangeError, setAdminChangeError] = useState("");
+  const [beneficiaryGroupReady, setBeneficiaryGroupReady] = useState(true);
   const [cloudStatus, setCloudStatus] = useState({ kind: "local", text: "Local uniquement" });
   const [accountingNow, setAccountingNow] = useState(() => new Date());
   const cloudBaseUpdatedAtRef = useRef(undefined);
   const cloudWriteReadyRef = useRef(false);
   const lastSavedSignatureRef = useRef("");
+  const beneficiaryGroupSignatureRef = useRef("");
   const setCloudResult = result => {
     if (result?.cloud) {
       setCloudStatus({ kind: "saved", text: `Cloud sauvegardé ${formatCloudTime()}` });
@@ -1393,7 +1396,42 @@ export default function App() {
   }, [personalMode, authState.db, authState.user, year, month]);
 
   useEffect(() => {
-    if (!authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin) {
+    if (!stateLoaded || !authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin || !beneficiaryId) {
+      setBeneficiaryGroupReady(true);
+      return;
+    }
+    const signature = stateSignature({
+      beneficiaryId,
+      beneficiaryName,
+      auxiliaries: activeAux.map(aux => ({
+        id: aux.id,
+        name: aux.name,
+        email: aux.email,
+        active: aux.active !== false,
+      })),
+    });
+    if (signature === beneficiaryGroupSignatureRef.current) {
+      setBeneficiaryGroupReady(true);
+      return;
+    }
+    let active = true;
+    setBeneficiaryGroupReady(false);
+    ensureBeneficiaryGroup({
+      db: authState.db,
+      user: authState.user,
+      state: { beneficiaryId, beneficiaryName, auxiliaries: activeAux },
+    }).then(() => {
+      beneficiaryGroupSignatureRef.current = signature;
+    }).catch(error => {
+      console.warn("Synchronisation groupe bénéficiaire impossible.", error);
+    }).finally(() => {
+      if (active) setBeneficiaryGroupReady(true);
+    });
+    return () => { active = false; };
+  }, [stateLoaded, authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, beneficiaryId, beneficiaryName, activeAux]);
+
+  useEffect(() => {
+    if (!authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin || !beneficiaryGroupReady) {
       setAdminChangeRequests([]);
       return;
     }
@@ -1407,7 +1445,7 @@ export default function App() {
       onChange: setAdminChangeRequests,
       onError: error => setAdminChangeError(`Demandes indisponibles : ${error.message}`),
     });
-  }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, activeAux, beneficiaryId, year, month]);
+  }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, beneficiaryGroupReady, activeAux, beneficiaryId, year, month]);
 
   useEffect(() => {
     window.__planningAvdCurrentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
