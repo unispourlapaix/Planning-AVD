@@ -23,7 +23,7 @@ import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { TaskPanel } from "./modules/task-panel.js";
+import { TaskPanel } from "./modules/task-panel.js?v=20260626-task-calendar";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useRef, useState } = React;
@@ -517,7 +517,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
     ),
     h("section", { className: "layout" },
       error ? h("div", { className: "panel muted" }, error) : null,
-      personalView === "life" ? h(TaskPanel, { authState }) : null,
+      personalView === "life" ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month }) : null,
       personalView !== "life" && planning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
@@ -1290,7 +1290,7 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
-      view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin }) : null,
+      view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month }) : null,
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
