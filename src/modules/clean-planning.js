@@ -12,7 +12,7 @@ const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.fi
 const colorFor = index => PALETTE[index % PALETTE.length];
 const shiftNames = { morning: "Matin 11h", afternoon: "Apres-midi 17h", night: "Soir" };
 
-export function buildCleanPlanningHtml({ year, month, auxiliaries = [], schedule = {} }) {
+export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxiliaries = [], schedule = {} }) {
   const active = auxiliaries.filter(aux => aux.active !== false);
   const indexById = Object.fromEntries(active.map((aux, index) => [aux.id, index]));
   const nameById = Object.fromEntries(active.map(aux => [aux.id, aux.name || "A definir"]));
@@ -36,6 +36,8 @@ export function buildCleanPlanningHtml({ year, month, auxiliaries = [], schedule
     return `<div class="day${tone}"><div class="head"><span>${day}</span><em>${DAYS_SHORT[dayIndex(year, month, day)]}</em></div>${slots}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></div>`;
   };
 
+  const beneficiaryText = beneficiaryName ? `Bénéficiaire : ${beneficiaryName} · ` : "";
+
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Planning-AVD A4 paysage - ${MONTHS[month]} ${year}</title><style>
     @page{size:A4 landscape;margin:8mm}
     *{box-sizing:border-box}html{background:#fffefa}body{margin:0;padding:14px;font-family:Inter,Arial,sans-serif;color:#26333a;background:#fffefa}
@@ -54,7 +56,7 @@ export function buildCleanPlanningHtml({ year, month, auxiliaries = [], schedule
     footer{margin-top:10px;color:#6e7c84;font-size:10px;font-weight:700;text-align:right}
     @media print{html,body{width:297mm;min-height:210mm;background:#fff}body{padding:0}.sheet{width:auto;min-height:194mm;box-shadow:none;border-radius:0;border:0}footer{display:none}}
   </style></head><body><section class="sheet">
-    <header><div><h1>Planning-AVD</h1><p>${MONTHS[month]} ${year} · calendrier A4 paysage pret a imprimer</p></div><div class="badges"><div class="badge white">A4 paysage</div><div class="badge">${active.length} auxiliaire(s)</div></div></header>
+    <header><div><h1>Planning-AVD</h1><p>${esc(beneficiaryText)}${MONTHS[month]} ${year} · calendrier A4 paysage pret a imprimer</p></div><div class="badges"><div class="badge white">A4 paysage</div><div class="badge">${active.length} auxiliaire(s) affecté(s)</div></div></header>
     <div class="calendar">${DAYS_SHORT.map(day => `<div class="dow">${day}</div>`).join("")}${monthGrid(year, month).map(dayHtml).join("")}</div>
     <footer>Planning genere depuis Planning-AVD</footer>
   </section></body></html>`;

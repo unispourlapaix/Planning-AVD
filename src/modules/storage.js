@@ -61,6 +61,7 @@ export const defaultState = () => {
     month: now.getMonth(),
     view: "month",
     rotationDays: 1,
+    beneficiaryName: "",
     auxiliaries: null,
     dayOutings: {},
     updatedAt: "",
@@ -462,7 +463,7 @@ export async function resolvePlanningChangeRequest({ db, user, request, status, 
   }, { merge: true });
 }
 
-export function buildPersonalSharePayloads({ year, month, auxiliaries, schedule, dayOutings = {}, publishedAt = null, publishedBy = "" }) {
+export function buildPersonalSharePayloads({ year, month, beneficiaryName = "", auxiliaries, schedule, dayOutings = {}, publishedAt = null, publishedBy = "" }) {
   const active = auxiliaries.filter(aux => aux.active !== false && String(aux.email || "").trim());
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
   const outingPrefix = `${year}-${month}-`;
@@ -493,6 +494,7 @@ export function buildPersonalSharePayloads({ year, month, auxiliaries, schedule,
       emailOriginal: rawEmail,
       readEmails,
       name: aux.name,
+      beneficiaryName: String(beneficiaryName || "").trim(),
       year,
       month,
       entries,
@@ -506,11 +508,12 @@ export function buildPersonalSharePayloads({ year, month, auxiliaries, schedule,
   });
 }
 
-export async function publishPersonalPlannings({ db, user, year, month, auxiliaries, schedule, dayOutings = {} }) {
+export async function publishPersonalPlannings({ db, user, year, month, beneficiaryName = "", auxiliaries, schedule, dayOutings = {} }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   const payloads = buildPersonalSharePayloads({
     year,
     month,
+    beneficiaryName,
     auxiliaries,
     schedule,
     dayOutings,

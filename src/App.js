@@ -264,7 +264,7 @@ const withTimeout = (promise, ms, fallback) => new Promise(resolve => {
     .finally(() => clearTimeout(timer));
 });
 
-function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
+function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, beneficiaryName, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -297,6 +297,7 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
         h("div", { className: "cloud-line" },
           h("span", { className: `role-pill ${roleKind}` }, roleText),
           h("span", { className: `cloud-status ${statusKind}` }, statusText),
+          beneficiaryName ? h("span", { className: "muted" }, `Bénéficiaire : ${beneficiaryName}`) : null,
           h("span", { className: "muted" }, authState.user ? authState.user.email : "Connexion Google disponible"),
         ),
       ),
@@ -472,6 +473,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   const weekGroups = [];
   for (let day = 1; day <= Object.keys(byDay).length; day += 7) weekGroups.push(Array.from({ length: 7 }, (_, index) => day + index).filter(item => byDay[item]));
   const requestBySlot = Object.fromEntries(changeRequests.map(request => [requestSlotKey(request.day, request.shift), request]));
+  const beneficiaryLabel = planning?.beneficiaryName ? `Bénéficiaire : ${planning.beneficiaryName}` : "Planning personnel transmis par votre administrateur.";
   const logout = async () => {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -538,7 +540,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
       personalView === "life" ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month, canContribute }) : null,
       personalView !== "life" && planning
         ? h("div", { className: "panel personal-summary" },
-            h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
+            h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, beneficiaryLabel)),
           )
         : null,
       personalView !== "life" && !planning
@@ -865,7 +867,7 @@ function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess 
   );
 }
 
-function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
+function ConfigView({ beneficiaryName, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
   const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => ({
     ...aux,
     ...(patch.lead === true && aux.id !== id ? { lead: false } : {}),
@@ -888,6 +890,19 @@ function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays
     }];
   });
   return h("section", { className: "layout" },
+    h("div", { className: "panel beneficiary-panel" },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h3", null, "Bénéficiaire"),
+          h("div", { className: "muted" }, "Personne accompagnée par ce planning."),
+        ),
+      ),
+      h(Field, { label: "Nom du bénéficiaire" }, h(TextInput, {
+        value: beneficiaryName,
+        onChange: setBeneficiaryName,
+        placeholder: "Ex : Payet Emmanuel",
+      })),
+    ),
     h("div", { className: "panel" },
       h("div", { className: "title-row" },
         h("div", null,
@@ -902,13 +917,16 @@ function ConfigView({ auxiliaries, setAuxiliaries, rotationDays, setRotationDays
       }, h("span", null, option.label), h("small", null, option.detail)))),
     ),
     h("div", { className: "panel title-row" },
-      h("div", null, h("h3", null, "Configuration equipe"), h("div", { className: "muted" }, `${auxiliaries.length} auxiliaire(s), maximum ${MAX_AUXILIARIES}`)),
+      h("div", null,
+        h("h3", null, "Auxiliaires affectés"),
+        h("div", { className: "muted" }, `${auxiliaries.filter(aux => aux.active !== false).length}/${auxiliaries.length} affecté(s) au bénéficiaire, maximum ${MAX_AUXILIARIES}`),
+      ),
       h(Button, { onClick: addAux }, "+ Ajouter"),
     ),
     h("div", { className: "aux-grid" }, auxiliaries.map((aux, index) => h("div", { className: "aux-card", key: aux.id },
       h("div", { className: "title-row" },
         h("b", { style: { color: colorFor(index).text } }, aux.name || aux.id),
-        h(Checkbox, { checked: aux.active, onChange: value => patchAux(aux.id, { active: value }), label: "Actif" }),
+        h(Checkbox, { checked: aux.active, onChange: value => patchAux(aux.id, { active: value }), label: "Affecté" }),
       ),
       h("div", { className: "form-grid" },
         h(Field, { label: "Prenom complet" }, h(TextInput, { value: aux.name, onChange: value => patchAux(aux.id, { name: value }) })),
@@ -958,6 +976,7 @@ export default function App() {
   const [month, setMonth] = useState(defaultState().month);
   const [view, setView] = useState("month");
   const [rotationDays, setRotationDays] = useState(defaultState().rotationDays);
+  const [beneficiaryName, setBeneficiaryName] = useState(defaultState().beneficiaryName);
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
   const [overrides, setOverrides] = useState({});
   const [dayOutings, setDayOutings] = useState({});
@@ -1055,8 +1074,8 @@ export default function App() {
   }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, activeAux, year, month]);
 
   useEffect(() => {
-    window.__planningAvdCurrentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
-  }, [year, month, view, rotationDays, auxiliaries, overrides, dayOutings]);
+    window.__planningAvdCurrentState = { year, month, view, rotationDays, beneficiaryName, auxiliaries, overrides, dayOutings };
+  }, [year, month, view, rotationDays, beneficiaryName, auxiliaries, overrides, dayOutings]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;
@@ -1066,6 +1085,7 @@ export default function App() {
         month: Number.isInteger(saved?.month) ? saved.month : month,
         view: saved?.view || view,
         rotationDays: [1, 2, 3, 4].includes(Number(saved?.rotationDays)) ? Number(saved.rotationDays) : rotationDays,
+        beneficiaryName: String(saved?.beneficiaryName || "").trim(),
         auxiliaries: saved?.auxiliaries || saved?.names ? normalizeAuxiliaries(saved) : auxiliaries,
         overrides: saved?.overrides && typeof saved.overrides === "object" ? saved.overrides : overrides,
         dayOutings: saved?.dayOutings && typeof saved.dayOutings === "object" ? normalizeDayOutings(saved.dayOutings) : dayOutings,
@@ -1085,6 +1105,7 @@ export default function App() {
       setMonth(nextState.month);
       setView(nextState.view);
       setRotationDays(nextState.rotationDays);
+      setBeneficiaryName(nextState.beneficiaryName);
       setAuxiliaries(nextState.auxiliaries);
       setOverrides(nextState.overrides);
       setDayOutings(nextState.dayOutings);
@@ -1102,7 +1123,7 @@ export default function App() {
       setCloudStatus({ kind: "local", text: "Mode auxiliaire" });
       return;
     }
-    const currentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
+    const currentState = { year, month, view, rotationDays, beneficiaryName, auxiliaries, overrides, dayOutings };
     const signature = stateSignature(currentState);
     if (signature === lastSavedSignatureRef.current) return;
     if (authState.user && !cloudWriteReadyRef.current) {
@@ -1121,7 +1142,7 @@ export default function App() {
       if (result?.cloud || result?.reason === "not-connected") lastSavedSignatureRef.current = signature;
     }), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, auxiliaries, overrides, dayOutings]);
+  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, beneficiaryName, auxiliaries, overrides, dayOutings]);
 
   const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
@@ -1171,7 +1192,7 @@ export default function App() {
   });
 
   const openReport = () => {
-    const html = buildReportHtml({ year, month, auxiliaries: activeAux, schedule, hours });
+    const html = buildReportHtml({ year, month, beneficiaryName, auxiliaries: activeAux, schedule, hours });
     const win = window.open("", "_blank");
     win.document.write(html);
     win.document.close();
@@ -1179,7 +1200,7 @@ export default function App() {
   };
 
   const openCleanView = () => {
-    const html = buildCleanPlanningHtml({ year, month, auxiliaries: activeAux, schedule });
+    const html = buildCleanPlanningHtml({ year, month, beneficiaryName, auxiliaries: activeAux, schedule });
     const win = window.open("", "_blank");
     win.document.write(html);
     win.document.close();
@@ -1194,7 +1215,7 @@ export default function App() {
     }
     try {
       setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
-      const currentState = { year, month, view, rotationDays, auxiliaries, overrides, dayOutings };
+      const currentState = { year, month, view, rotationDays, beneficiaryName, auxiliaries, overrides, dayOutings };
       const signature = stateSignature(currentState);
       const cloudResult = await saveStateWithOverwriteOption(currentState);
       setCloudResult(cloudResult);
@@ -1208,7 +1229,7 @@ export default function App() {
       }
       cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
       lastSavedSignatureRef.current = signature;
-      const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule, hours, dayOutings });
+      const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, beneficiaryName, auxiliaries: activeAux, schedule, hours, dayOutings });
       alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.forced ? "Cloud écrasé volontairement." : "Sauvegarde cloud à jour."}`);
     } catch (error) {
       alert(`Sauvegarde impossible : ${error.message}`);
@@ -1232,7 +1253,7 @@ export default function App() {
       const nextOverrides = { ...overrides, [key]: worker.id };
       const nextSchedule = applyOverrides({ schedule: planning.schedule, overrides: nextOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
-      const nextState = { year, month, view, rotationDays, auxiliaries, overrides: nextOverrides, dayOutings };
+      const nextState = { year, month, view, rotationDays, beneficiaryName, auxiliaries, overrides: nextOverrides, dayOutings };
       const signature = stateSignature(nextState);
       const cloudResult = await saveState({
         db: authState.db,
@@ -1250,7 +1271,7 @@ export default function App() {
       cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
       lastSavedSignatureRef.current = signature;
       setOverrides(nextOverrides);
-      await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours, dayOutings });
+      await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, beneficiaryName, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours, dayOutings });
       await resolvePlanningChangeRequest({
         db: authState.db,
         user: authState.user,
@@ -1374,6 +1395,7 @@ export default function App() {
       setView,
       year,
       month,
+      beneficiaryName,
       setYear,
       setMonth,
       onLogin: () => signInWithGoogle(authState.auth).catch(error => alert(error.message)),
@@ -1395,7 +1417,7 @@ export default function App() {
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess }) : null,
-      view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
+      view === "config" ? h(ConfigView, { beneficiaryName, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {
       edit: slotEdit,

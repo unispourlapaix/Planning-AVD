@@ -68,6 +68,7 @@ const assert = (condition, message) => {
 const checkPayload = ({ payload, aux, schedule, year, month }) => {
   assert(!("hours" in payload), `${aux.name}: les heures ne doivent pas etre envoyees a la vue auxiliaire`);
   assert(payload.team.every(member => !member.email), `${aux.name}: les emails de l'equipe ne doivent pas etre exposes`);
+  assert(payload.beneficiaryName === "Payet Emmanuel", `${aux.name}: bénéficiaire absent du planning personnel`);
   assert(payload.calendar.length === daysInMonth(year, month), `${aux.name}: calendrier mensuel incomplet`);
   payload.calendar.forEach(day => {
     shifts.forEach(shift => {
@@ -100,6 +101,7 @@ const issues = [];
     year,
     month,
     auxiliaries: team,
+    beneficiaryName: "Payet Emmanuel",
     schedule,
     dayOutings: {
       "2026-5-3": [{ id: "outing-1", title: "Sortie test" }],
