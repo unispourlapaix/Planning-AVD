@@ -242,6 +242,59 @@ export async function requestAccessRole({ db, user, role = "auxiliary", benefici
   return { email, role: cleanRole };
 }
 
+export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = "" }) {
+  const email = normalizeEmail(user?.email);
+  const cleanBeneficiary = String(beneficiaryName || "").trim().slice(0, 120);
+  if (!db || !user?.uid || !email) throw new Error("Connexion necessaire.");
+  if (!cleanBeneficiary) throw new Error("Indiquez le nom du bénéficiaire.");
+
+  await db.collection("planning-avd-admin-bootstraps").doc(email).set({
+    email,
+    emailLower: email,
+    name: String(user.displayName || email).trim(),
+    role: "admin",
+    active: true,
+    beneficiaryName: cleanBeneficiary,
+    createdByUid: user.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const value = {
+    ...defaultState(),
+    beneficiaryName: cleanBeneficiary,
+    updatedAt: new Date().toISOString(),
+  };
+  await Promise.all([
+    db.collection("planning-avd-team-members").doc(email).set({
+      email,
+      emailLower: email,
+      name: String(user.displayName || email).trim(),
+      role: "admin",
+      active: true,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: email,
+    }, { merge: true }),
+    db.collection("planning-avd-access-requests").doc(email).set({
+      email,
+      name: String(user.displayName || email).trim(),
+      role: "admin",
+      beneficiaryName: cleanBeneficiary,
+      status: "approved",
+      resolvedBy: email,
+      resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true }),
+    db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({
+      value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: email,
+    }, { merge: true }),
+  ]);
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
+  return { email, beneficiaryName: cleanBeneficiary, role: "admin" };
+}
+
 function normalizeMemberDoc(doc, source) {
   const data = doc.data() || {};
   const email = normalizeEmail(data.emailLower || data.email || doc.id);

@@ -5,6 +5,7 @@ import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=2
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260624-aux-login";
 import {
   createPlanningChangeRequest,
+  createNewBeneficiaryAdmin,
   defaultState,
   getUserAccess,
   grantMemberRole,
@@ -22,7 +23,7 @@ import {
   subscribeAccessMembers,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260626-first-role";
+} from "./modules/storage.js?v=20260626-new-beneficiary-admin";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -787,6 +788,7 @@ function FirstConnectionPanel({ authState, onLogout }) {
   const [message, setMessage] = useState("");
   const [request, setRequest] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [error, setError] = useState("");
   const selected = FIRST_ROLE_CHOICES.find(choice => choice.role === role) || FIRST_ROLE_CHOICES[0];
 
@@ -816,6 +818,26 @@ function FirstConnectionPanel({ authState, onLogout }) {
       setError(`Demande impossible : ${error.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const becomeNewBeneficiaryAdmin = async () => {
+    if (creatingAdmin) return;
+    if (!beneficiaryName.trim()) {
+      setError("Indiquez d'abord le nom du nouveau bénéficiaire.");
+      return;
+    }
+    const ok = window.confirm(`Créer un nouveau bénéficiaire "${beneficiaryName.trim()}" et devenir administrateur ?`);
+    if (!ok) return;
+    setCreatingAdmin(true);
+    try {
+      await createNewBeneficiaryAdmin({ db: authState.db, user: authState.user, beneficiaryName });
+      alert("Nouvel espace bénéficiaire créé. L'application va se recharger en mode administrateur.");
+      window.location.reload();
+    } catch (error) {
+      setError(`Création admin impossible : ${error.message}`);
+    } finally {
+      setCreatingAdmin(false);
     }
   };
 
@@ -863,6 +885,13 @@ function FirstConnectionPanel({ authState, onLogout }) {
       h("div", { className: "request-actions" },
         h(Button, { active: true, disabled: saving, onClick: submit }, saving ? "Envoi..." : "Envoyer la demande"),
         request?.status === "approved" ? h(Button, { onClick: () => window.location.reload() }, "Recharger") : null,
+      ),
+      h("div", { className: "new-beneficiary-admin-banner" },
+        h("div", null,
+          h("b", null, "Nouveau bénéficiaire ?"),
+          h("small", null, "Créez un nouvel accompagnement et devenez son administrateur."),
+        ),
+        h(Button, { active: true, disabled: creatingAdmin, onClick: becomeNewBeneficiaryAdmin }, creatingAdmin ? "Création..." : "Devenir admin d'un nouveau bénéficiaire"),
       ),
     ),
   );

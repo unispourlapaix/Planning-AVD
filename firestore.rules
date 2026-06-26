@@ -10,6 +10,8 @@ service cloud.firestore {
       return signedIn()
         && ((exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.uid))
             && get(/databases/$(database)/documents/planning-avd-admins/$(request.auth.uid)).data.active != false)
+          || (exists(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(request.auth.token.email))
+            && get(/databases/$(database)/documents/planning-avd-admin-bootstraps/$(request.auth.token.email)).data.active == true)
           || (exists(/databases/$(database)/documents/planning-avd-admins/$(request.auth.token.email))
             && get(/databases/$(database)/documents/planning-avd-admins/$(request.auth.token.email)).data.active == true)
           || (exists(/databases/$(database)/documents/planning-avd-admin-emails/$(request.auth.token.email))
@@ -48,6 +50,20 @@ service cloud.firestore {
     match /planning-avd-admin-emails/{email} {
       allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
       allow create, update: if isAdmin();
+      allow delete: if isAdmin() && request.auth.token.email != email;
+    }
+
+    match /planning-avd-admin-bootstraps/{email} {
+      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow create: if signedIn()
+        && request.auth.token.email == email
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == "admin"
+        && request.resource.data.active == true
+        && request.resource.data.beneficiaryName is string
+        && request.resource.data.beneficiaryName.size() > 0
+        && request.resource.data.beneficiaryName.size() <= 120;
+      allow update: if isAdmin();
       allow delete: if isAdmin() && request.auth.token.email != email;
     }
 
