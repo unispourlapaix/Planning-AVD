@@ -6,24 +6,26 @@ import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=2
 import {
   createPlanningChangeRequest,
   defaultState,
-  grantAdminByEmail,
-  isAdminUser,
+  getUserAccess,
+  grantMemberRole,
   loadRestoreBackup,
   loadState,
   publishPersonalPlannings,
   resolvePlanningChangeRequest,
   saveState,
+  setMemberAccess,
   subscribeAdminChangeRequests,
+  subscribeAccessMembers,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260624-personal-privacy";
+} from "./modules/storage.js?v=20260626-member-roles";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { TaskPanel } from "./modules/task-panel.js?v=20260626-task-calendar";
+import { TaskPanel } from "./modules/task-panel.js?v=20260626-member-roles";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useRef, useState } = React;
@@ -262,7 +264,7 @@ const withTimeout = (promise, ms, fallback) => new Promise(resolve => {
     .finally(() => clearTimeout(timer));
 });
 
-function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
+function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -271,7 +273,15 @@ function TopBar({ authState, isAdmin, roleReady, cloudStatus, view, setView, yea
   const statusKind = cloudStatus?.kind || (authState.user ? "idle" : "local");
   const statusText = cloudStatus?.text || (authState.user ? "Cloud pret" : "Local uniquement");
   const roleKind = !authState.user ? "local" : !roleReady ? "saving" : isAdmin ? "saved" : "local";
-  const roleText = !authState.user ? "Non connecté" : !roleReady ? "Rôle..." : isAdmin ? "Administrateur" : "Auxiliaire";
+  const roleText = !authState.user
+    ? "Non connecté"
+    : !roleReady
+      ? "Rôle..."
+      : isAdmin
+        ? "Administrateur"
+        : sessionRole?.role === "viewer"
+          ? "Lecture seule"
+          : "Auxiliaire";
 
   const tabs = [
     ["week", "week", "Semaine"],
@@ -379,7 +389,7 @@ function PersonalChangeRequestsPanel({ requests, error }) {
   );
 }
 
-function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal, onRequestChange }) {
+function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true }) {
   return h("div", { className: `day-card personal-day${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day)),
     SHIFT_DEFS.map(shift => {
@@ -390,22 +400,23 @@ function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal,
         h("span", { key: "text" }, entry ? SHIFT_LABEL[shift.id] : "Repos"),
         request ? h("span", { key: "request", className: `request-badge ${request.status || "pending"}` }, requestStatusLabel(request.status)) : null,
       ];
-      return entry ? h("button", {
+      if (entry && canRequest) return h("button", {
         className: `personal-slot scheduled requestable-slot ${request ? "has-request" : ""}`,
         key: shift.id,
         title: request ? "Demande déjà envoyée" : "Demander un échange",
         disabled: request?.status === "pending",
         onClick: () => onRequestChange({ year, month, day, shift: shift.id }),
-      }, content) : h("div", { className: "personal-slot", key: shift.id },
+      }, content);
+      return h("div", { className: `personal-slot${entry ? " scheduled" : ""}`, key: shift.id },
         h("span", { className: "slot-label" }, SHIFT_COMPACT_LABEL[shift.id]),
-        h("span", null, "Repos"),
+        h("span", null, entry ? SHIFT_LABEL[shift.id] : "Repos"),
       );
     }),
     h(DayActivityButton, { year, month, day, onOpen: onOpenMeal }),
   );
 }
 
-function PersonalView({ authState, year, month, setYear, setMonth, planning, error, onLogout }) {
+function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, planning, error, onLogout }) {
   const [personalView, setPersonalView] = useState("week");
   const [mealDate, setMealDate] = useState(null);
   const [requestEdit, setRequestEdit] = useState(null);
@@ -413,9 +424,12 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   const [loggingOut, setLoggingOut] = useState(false);
   const [changeRequests, setChangeRequests] = useState([]);
   const [changeRequestError, setChangeRequestError] = useState("");
+  const canContribute = sessionRole?.canContribute !== false;
+  const personalRoleText = sessionRole?.role === "viewer" ? "Lecture seule" : "Auxiliaire";
   useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
     const requestChange = event => {
+      if (!canContribute) return;
       const detail = event.detail || {};
       if (!detail.day || !detail.shift) return;
       setRequestEdit({
@@ -431,9 +445,12 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       window.removeEventListener("planning-avd-open-meal", openMeal);
       window.removeEventListener("planning-avd-request-change", requestChange);
     };
-  }, [year, month]);
+  }, [year, month, canContribute]);
   useEffect(() => {
-    if (!authState.db || !authState.user) return;
+    if (!authState.db || !authState.user || !canContribute) {
+      setChangeRequests([]);
+      return;
+    }
     setChangeRequestError("");
     return subscribePersonalChangeRequests({
       db: authState.db,
@@ -443,7 +460,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
       onChange: setChangeRequests,
       onError: error => setChangeRequestError(`Demandes indisponibles : ${error.message}`),
     });
-  }, [authState.db, authState.user, year, month]);
+  }, [authState.db, authState.user, year, month, canContribute]);
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -467,6 +484,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
   };
   const sendChangeRequest = async ({ targetEmail, targetName, message }) => {
     if (!requestEdit) return;
+    if (!canContribute) return alert("Votre acces est en lecture seule.");
     setRequestSaving(true);
     try {
       await createPlanningChangeRequest({
@@ -494,7 +512,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
         h("div", null,
           h("h1", null, "Mon planning"),
           h("div", { className: "cloud-line" },
-            h("span", { className: "role-pill local" }, "Auxiliaire"),
+            h("span", { className: "role-pill local" }, personalRoleText),
             h("span", { className: `cloud-status ${planning ? "saved" : "saving"}` }, planning ? "Planning reçu" : "En attente"),
             h("span", { className: "muted" }, authState.user?.email || ""),
           ),
@@ -517,7 +535,7 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
     ),
     h("section", { className: "layout" },
       error ? h("div", { className: "panel muted" }, error) : null,
-      personalView === "life" ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month }) : null,
+      personalView === "life" ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month, canContribute }) : null,
       personalView !== "life" && planning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, "Planning personnel transmis par votre administrateur.")),
@@ -532,15 +550,15 @@ function PersonalView({ authState, year, month, setYear, setMonth, planning, err
             ),
           )
         : null,
-      personalView !== "life" ? h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }) : null,
+      personalView !== "life" && canContribute ? h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }) : null,
       planning && personalView === "week"
         ? h("div", { className: "week-grid" }, weekGroups.map((days, index) => h("section", { className: "panel", key: index },
             h("h3", null, `Semaine du ${days[0]} ${MONTHS[month]}`),
-            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit }))),
+            h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute }))),
           )))
         : null,
       planning && personalView === "month"
-        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit })))
+        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
         : null,
     ),
     h(ChangeRequestModal, { edit: requestEdit, planning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
@@ -732,42 +750,116 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
   );
 }
 
-function AdminAccessPanel({ authState, isAdmin, onGrantAdmin }) {
+const ACCESS_ROLE_LABELS = {
+  owner: "Proprietaire",
+  admin: "Administrateur",
+  auxiliary: "Auxiliaire",
+  viewer: "Lecture seule",
+};
+
+function AdminAccessPanel({ authState, isAdmin, onSaveMember, onSetMemberAccess }) {
+  const [members, setMembers] = useState([]);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("auxiliary");
   const [saving, setSaving] = useState(false);
+  const [accessError, setAccessError] = useState("");
   const connectedEmail = authState.user?.email || "";
+
+  useEffect(() => {
+    if (!authState.db || !authState.user || !isAdmin) {
+      setMembers([]);
+      return;
+    }
+    setAccessError("");
+    return subscribeAccessMembers({
+      db: authState.db,
+      user: authState.user,
+      onChange: setMembers,
+      onError: error => setAccessError(`Liste des acces indisponible : ${error.message}`),
+    });
+  }, [authState.db, authState.user, isAdmin]);
+
   const submit = async () => {
     if (saving) return;
     setSaving(true);
     try {
-      const cleanEmail = await onGrantAdmin(email);
+      const result = await onSaveMember({ email, name, role });
       setEmail("");
-      alert(`${cleanEmail} est maintenant administrateur. La personne devra se reconnecter ou recharger l'app.`);
+      setName("");
+      setRole("auxiliary");
+      alert(`${result.email} est maintenant ${ACCESS_ROLE_LABELS[result.role] || "membre"}. La personne devra se connecter ou recharger l'app.`);
     } catch (error) {
-      alert(`Ajout administrateur impossible : ${error.message}`);
+      alert(`Invitation impossible : ${error.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleAccess = async member => {
+    const nextActive = !member.active;
+    const label = nextActive ? "reactiver" : "desactiver";
+    if (!nextActive && !window.confirm(`Desactiver l'acces de ${member.name || member.email} ?`)) return;
+    try {
+      await onSetMemberAccess({
+        email: member.email,
+        role: member.role === "owner" ? "admin" : member.role,
+        active: nextActive,
+      });
+    } catch (error) {
+      alert(`Impossible de ${label} cet acces : ${error.message}`);
     }
   };
 
   return h("section", { className: "panel admin-access-panel" },
     h("div", { className: "title-row" },
       h("div", null,
-        h("h3", null, "Accès et rôles"),
+        h("h3", null, "Membres et roles"),
         h("div", { className: "muted" }, connectedEmail ? `Connecté : ${connectedEmail}` : "Connexion Google nécessaire."),
       ),
       h("span", { className: `role-pill ${isAdmin ? "saved" : "local"}` }, isAdmin ? "Administrateur" : "Auxiliaire"),
     ),
     isAdmin
-      ? h("div", { className: "admin-form" },
-          h(Field, { label: "Ajouter un administrateur par email" }, h(TextInput, {
-            type: "email",
-            value: email,
-            onChange: setEmail,
-            placeholder: "adresse@email.com",
-          })),
-          h(Button, { active: true, disabled: saving || !email.trim(), onClick: submit }, saving ? "Ajout..." : "Ajouter admin"),
-          h("div", { className: "muted" }, "L'email ajouté pourra gérer la configuration, sauvegarder le cloud et transmettre les plannings."),
+      ? h(React.Fragment, null,
+          h("div", { className: "admin-form access-form" },
+            h(Field, { label: "Email utilisateur" }, h(TextInput, {
+              type: "email",
+              value: email,
+              onChange: setEmail,
+              placeholder: "adresse@email.com",
+            })),
+            h(Field, { label: "Nom affiche" }, h(TextInput, {
+              value: name,
+              onChange: setName,
+              placeholder: "Prenom ou equipe",
+            })),
+            h(Field, { label: "Role" }, h(Select, { value: role, onChange: setRole },
+              h("option", { value: "auxiliary" }, ACCESS_ROLE_LABELS.auxiliary),
+              h("option", { value: "admin" }, ACCESS_ROLE_LABELS.admin),
+              h("option", { value: "viewer" }, ACCESS_ROLE_LABELS.viewer),
+            )),
+            h(Button, { active: true, disabled: saving || !email.trim(), onClick: submit }, saving ? "Ajout..." : "Inviter"),
+            h("div", { className: "muted access-help" }, "Admin : réglages et sauvegarde. Auxiliaire : planning, tâches et demandes. Lecture seule : consultation protégée."),
+          ),
+          accessError ? h("div", { className: "task-error" }, accessError) : null,
+          h("div", { className: "access-member-list" }, members.length
+            ? members.map(member => {
+                const isSelf = String(member.email || "").toLowerCase() === String(connectedEmail || "").toLowerCase();
+                return h("article", { key: member.email, className: `access-member ${member.active ? "active" : "inactive"}` },
+                  h("div", null,
+                    h("b", null, member.name || member.email),
+                    h("small", null, member.email),
+                  ),
+                  h("span", { className: `role-pill ${member.role === "admin" || member.role === "owner" ? "saved" : member.role === "viewer" ? "saving" : "local"}` }, ACCESS_ROLE_LABELS[member.role] || member.role),
+                  h("span", { className: `cloud-status ${member.active ? "saved" : "local"}` }, member.active ? "Actif" : "Inactif"),
+                  h(Button, {
+                    disabled: isSelf || member.role === "owner",
+                    title: isSelf ? "Votre propre acces reste protege" : member.active ? "Desactiver" : "Reactiver",
+                    onClick: () => toggleAccess(member),
+                  }, member.active ? "Desactiver" : "Reactiver"),
+                );
+              })
+            : h("div", { className: "muted" }, "Aucun membre charge pour le moment.")),
         )
       : h("div", { className: "muted" }, "Mode auxiliaire : accès au planning personnel, demandes d'échange, tâches et courses. Demandez à un administrateur d'ajouter votre email pour gérer l'app."),
   );
@@ -871,7 +963,7 @@ export default function App() {
   const [dayOutings, setDayOutings] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
   const [mealDate, setMealDate] = useState(null);
-  const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false });
+  const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false });
   const [personalPlanning, setPersonalPlanning] = useState(null);
   const [personalError, setPersonalError] = useState("");
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
@@ -911,14 +1003,14 @@ export default function App() {
   useEffect(() => {
     if (!authState.ready) return;
     if (!authState.user) {
-      setSessionRole({ ready: true, isAdmin: false });
+      setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false });
       return;
     }
     let active = true;
-    setSessionRole({ ready: false, isAdmin: false });
-    withTimeout(isAdminUser({ db: authState.db, user: authState.user }), ADMIN_ROLE_TIMEOUT_MS, false)
-      .then(isAdmin => {
-        if (active) setSessionRole({ ready: true, isAdmin });
+    setSessionRole({ ready: false, isAdmin: false, role: "guest", canContribute: false, isMember: false });
+    withTimeout(getUserAccess({ db: authState.db, user: authState.user }), ADMIN_ROLE_TIMEOUT_MS, { isAdmin: false, role: "guest", canContribute: false, isMember: false })
+      .then(access => {
+        if (active) setSessionRole({ ready: true, ...access });
       });
     return () => { active = false; };
   }, [authState.ready, authState.user, authState.db]);
@@ -1123,9 +1215,12 @@ export default function App() {
     }
   };
 
-  const addAdminEmail = async email => {
-    const cleanEmail = await grantAdminByEmail({ db: authState.db, user: authState.user, email });
-    return cleanEmail;
+  const saveAccessMember = async ({ email, name, role }) => {
+    return grantMemberRole({ db: authState.db, user: authState.user, email, name, role });
+  };
+
+  const changeMemberAccess = async ({ email, role, active }) => {
+    return setMemberAccess({ db: authState.db, user: authState.user, email, role, active });
   };
 
   const approveChangeRequest = async (request, workerId) => {
@@ -1266,11 +1361,12 @@ export default function App() {
     }
   };
 
-  if (personalMode) return h(PersonalView, { authState, year, month, setYear, setMonth, planning: personalPlanning, error: personalError, onLogout: () => signOut(authState.auth) });
+  if (personalMode) return h(PersonalView, { authState, sessionRole, year, month, setYear, setMonth, planning: personalPlanning, error: personalError, onLogout: () => signOut(authState.auth) });
 
   return h("main", { className: `app${view === "life" ? " life-view" : ""}` },
     h(TopBar, {
       authState,
+      sessionRole,
       isAdmin: sessionRole.isAdmin,
       roleReady: sessionRole.ready,
       cloudStatus,
@@ -1298,7 +1394,7 @@ export default function App() {
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
-      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onGrantAdmin: addAdminEmail }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess }) : null,
       view === "config" ? h(ConfigView, { auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {

@@ -52,6 +52,14 @@ h2 { font-size: 16px; }
 .admin-access-panel { display: grid; gap: 10px; }
 .admin-form { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 8px; align-items: end; }
 .admin-form .muted { grid-column: 1 / -1; }
+.access-form { grid-template-columns: minmax(180px, 1fr) minmax(150px, .8fr) 150px auto; }
+.access-help { font-size: 11px; }
+.access-member-list { display: grid; gap: 7px; }
+.access-member { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 8px 9px; border: 1px solid rgba(213,225,229,.86); border-radius: 8px; background: rgba(255,255,255,.72); }
+.access-member.inactive { opacity: .62; background: rgba(244,247,248,.78); }
+.access-member b { display: block; color: #344753; font-size: 13px; overflow-wrap: anywhere; }
+.access-member small { display: block; color: #697981; font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
+.access-member .btn { padding: 6px 8px; font-size: 10px; }
 .btn {
   border: 1px solid rgba(255,255,255,.95);
   border-radius: 8px;
@@ -411,4 +419,6 @@ h2 { font-size: 16px; }
   .task-item { grid-template-columns: minmax(0, 1fr) auto; }
   .task-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .admin-form { grid-template-columns: 1fr; }
+  .access-member { grid-template-columns: minmax(0, 1fr) auto; }
+  .access-member .btn { grid-column: 1 / -1; justify-self: start; }
 }

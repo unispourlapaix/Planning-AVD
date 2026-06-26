@@ -20,7 +20,7 @@ window.alert = message => nativeAlert(String(message)
   .replace("Publication impossible", "Sauvegarde impossible"));
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260626-task-calendar"),
+  import("./App.js?v=20260626-member-roles"),
   import("./ui.js"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));

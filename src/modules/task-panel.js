@@ -54,7 +54,7 @@ function normalizeWorkers({ auxiliaries = [], user, isAdmin }) {
   return workers;
 }
 
-export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, month }) {
+export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, month, canContribute = true }) {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("normal");
@@ -95,7 +95,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
   const showEndDate = scheduleMode === "range";
 
   const addTask = async () => {
-    if (!title.trim() || saving) return;
+    if (!canContribute || !title.trim() || saving) return;
     setSaving(true);
     try {
       await createTask({
@@ -122,6 +122,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
   };
 
   const toggleTask = async task => {
+    if (!canContribute) return;
     try {
       await setTaskCompleted({ db: authState.db, user: authState.user, task, completed: !task.completed });
     } catch (nextError) {
@@ -142,10 +143,12 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
     h("div", { className: "title-row" },
       h("div", null,
         h("h3", null, "Taches a faire"),
-        h("div", { className: "muted" }, `${tasks.filter(task => !task.completed).length} restante(s) · attribution, creneau et export Google Agenda.`),
+        h("div", { className: "muted" }, canContribute
+          ? `${tasks.filter(task => !task.completed).length} restante(s) · attribution, creneau et export Google Agenda.`
+          : `${tasks.filter(task => !task.completed).length} restante(s) · consultation seule.`),
       ),
     ),
-    h("div", { className: "task-form" },
+    canContribute ? h("div", { className: "task-form" },
       h(TextInput, {
         value: title,
         maxLength: 160,
@@ -192,7 +195,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
         title: "Fin",
       }) : null,
       h(Button, { active: true, disabled: saving || !title.trim(), onClick: addTask }, saving ? "Ajout..." : "Ajouter"),
-    ),
+    ) : null,
     error ? h("div", { className: "task-error" }, error) : null,
     tasks.length
       ? h("div", { className: "task-list" }, tasks.map(task => {
@@ -207,7 +210,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
             className: `task-item priority-${task.priority || "normal"}${task.completed ? " completed" : ""}`,
           },
           h("label", { className: "task-check" },
-            h("input", { type: "checkbox", checked: !!task.completed, onChange: () => toggleTask(task) }),
+            h("input", { type: "checkbox", checked: !!task.completed, disabled: !canContribute, onChange: () => toggleTask(task) }),
             h("span", { className: "task-main" },
               h("b", null, task.title),
               h("small", null, meta),
