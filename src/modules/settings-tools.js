@@ -1,7 +1,14 @@
-const TOOL_LABELS = ["Heures", "Rapport", "Sauvegarde", "Restaurer", "Secours"];
+const TOOLS = [
+  { action: "view-hours", label: "Heures", hint: "Heures / Hours" },
+  { action: "report", label: "Rapport", hint: "Rapport / Report" },
+  { action: "backup", label: "Sauvegarde", hint: "Sauvegarde / Backup" },
+  { action: "restore", label: "Restaurer", hint: "Restaurer / Restore" },
+  { action: "restore-cloud", label: "Secours", hint: "Secours cloud / Cloud restore" },
+];
 
-const findSourceButton = label => [...document.querySelectorAll(".app:not(.personal-app) .topbar .action-row .btn, .app:not(.personal-app) .topbar>.tabs .tab")]
-  .find(button => button.textContent.includes(label));
+const findSourceButton = tool => document.querySelector(`.app:not(.personal-app) .topbar [data-action="${tool.action}"]`)
+  || [...document.querySelectorAll(".app:not(.personal-app) .topbar .action-row .btn, .app:not(.personal-app) .topbar>.tabs .tab")]
+    .find(button => button.textContent.includes(tool.label));
 
 const buildPanel = () => {
   const panel = document.createElement("section");
@@ -19,7 +26,7 @@ const buildPanel = () => {
 
 const refreshSettingsTools = () => {
   const config = document.querySelector(".app:not(.personal-app) .rotation-options")?.closest(".layout");
-  const sources = TOOL_LABELS.map(label => findSourceButton(label)).filter(Boolean);
+  const sources = TOOLS.map(tool => findSourceButton(tool)).filter(Boolean);
   sources.forEach(button => button.classList.add("settings-tool-source"));
 
   if (!config) {
@@ -30,9 +37,9 @@ const refreshSettingsTools = () => {
   const panel = document.getElementById("settings-tools-panel") || buildPanel();
   if (!panel.isConnected) config.prepend(panel);
   const actions = panel.querySelector(".settings-actions");
-  TOOL_LABELS.forEach(label => {
-    const source = findSourceButton(label);
-    let button = actions.querySelector(`[data-settings-tool="${label}"]`);
+  TOOLS.forEach(tool => {
+    const source = findSourceButton(tool);
+    let button = actions.querySelector(`[data-settings-tool="${tool.action}"]`);
     if (!source) {
       button?.remove();
       return;
@@ -41,11 +48,13 @@ const refreshSettingsTools = () => {
       button = document.createElement("button");
       button.type = "button";
       button.className = "btn";
-      button.dataset.settingsTool = label;
-      button.addEventListener("click", () => findSourceButton(label)?.click());
+      button.dataset.settingsTool = tool.action;
+      button.title = tool.hint;
+      button.setAttribute("aria-label", tool.label);
+      button.addEventListener("click", () => findSourceButton(tool)?.click());
       actions.appendChild(button);
     }
-    button.textContent = source.textContent;
+    button.textContent = tool.label;
   });
 };
 

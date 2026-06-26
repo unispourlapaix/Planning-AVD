@@ -25,6 +25,31 @@ button { cursor: pointer; }
 .topbar > .month-row { justify-content: center; gap: 5px; }
 .topbar > .month-row h2 { min-width: 130px; text-align: center; }
 .topbar > .month-row .icon-only { width: 30px; height: 30px; padding: 0; font-size: 20px; line-height: 1; }
+.has-tooltip { position: relative; }
+.has-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: min(250px, 86vw);
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(39,51,58,.96);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(39,51,58,.2);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+  transition: opacity .14s ease, transform .14s ease;
+  white-space: normal;
+}
+.has-tooltip:hover::after, .has-tooltip:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
 h1, h2, h3, .brand { font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif; letter-spacing: 0; }
 h1 { margin: 0; font-size: 19px; color: #344753; }
 h2 { font-size: 16px; }
@@ -100,10 +125,15 @@ h2 { font-size: 16px; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 5px; }
+.tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(40px, 1fr)); gap: 5px; }
 .tab { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 5px; line-height: 1; padding: 7px 9px; }
+.icon-tab { min-width: 38px; padding: 0; border-radius: 999px; }
+.icon-tab .icon { width: 17px; height: 17px; }
 .topbar .action-row { justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
 .topbar .action-row .btn { padding: 7px 8px; font-size: 12px; white-space: nowrap; }
+.topbar .action-row .menu-icon { width: 34px; height: 34px; padding: 0; border-radius: 999px; }
+.topbar .menu-icon .icon { width: 17px; height: 17px; }
+.month-nav-btn { border-radius: 999px; }
 .month-title-btn {
   min-width: 150px;
   height: 32px;
@@ -390,7 +420,7 @@ h2 { font-size: 16px; }
 .shopping-card .btn { padding: 6px 8px; font-size: 11px; }
 .shopping-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .shopping-groups section { padding: 9px; border-radius: 7px; background: rgba(235,249,241,.74); }
-.personal-tabs { grid-template-columns: minmax(0, 1fr); }
+.personal-tabs { grid-template-columns: repeat(3, minmax(42px, 1fr)); }
 .personal-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .personal-summary h3 { margin: 0 0 4px; }
 .personal-empty-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

@@ -164,7 +164,12 @@ const ensureStyle = () => {
 
 const activePersonalView = () => {
   if (document.querySelector(".personal-app .month-title-btn.active")) return "month";
-  const active = document.querySelector(".personal-app .personal-tabs .btn.active")?.textContent || "";
+  const activeButton = document.querySelector(".personal-app .personal-tabs .btn.active");
+  const view = activeButton?.dataset.view || "";
+  if (view === "life") return "";
+  if (view === "month") return "month";
+  if (view === "week") return "week";
+  const active = activeButton?.textContent || "";
   if (active.includes("Repas") || active.includes("Tâches") || active.includes("Taches")) return "";
   return active.includes("Mois") ? "month" : "week";
 };

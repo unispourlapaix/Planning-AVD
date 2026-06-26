@@ -75,8 +75,12 @@ export async function initPlanningShareButton() {
     renameSaveButton(actions);
     const button = document.createElement("button");
     button.id = "planning-share-button";
-    button.className = "btn active";
-    button.innerHTML = `${lineIcon("M4 6h16v12H4V6ZM4 7l8 6 8-6")}<span>Partager planning</span>`;
+    button.className = "btn active icon-only menu-icon has-tooltip";
+    button.title = "Partager planning / Share schedule";
+    button.setAttribute("aria-label", "Partager planning");
+    button.dataset.tooltip = "Partager planning / Share schedule";
+    button.dataset.action = "share-planning";
+    button.innerHTML = lineIcon("M4 6h16v12H4V6ZM4 7l8 6 8-6");
     button.addEventListener("click", async () => {
       try {
         const current = globalThis.__planningAvdCurrentState || null;

@@ -43,6 +43,24 @@ const ROTATION_OPTIONS = [
 ];
 const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
 const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
+const UI_TEXT = {
+  "action.print": { fr: "Imprimer", en: "Print" },
+  "action.report": { fr: "Rapport", en: "Report" },
+  "action.backup": { fr: "Sauvegarde", en: "Backup" },
+  "action.restore": { fr: "Restaurer", en: "Restore" },
+  "action.restoreCloud": { fr: "Secours cloud", en: "Cloud restore" },
+  "action.publish": { fr: "Sauvegarder cloud", en: "Save cloud" },
+  "action.login": { fr: "Connexion", en: "Sign in" },
+  "action.loginPending": { fr: "Connexion en cours", en: "Signing in" },
+  "action.logout": { fr: "Déconnexion", en: "Sign out" },
+  "month.previous": { fr: "Mois précédent", en: "Previous month" },
+  "month.next": { fr: "Mois suivant", en: "Next month" },
+  "view.month": { fr: "Mois", en: "Month" },
+  "view.week": { fr: "Semaine", en: "Week" },
+  "view.life": { fr: "Repas et tâches", en: "Meals and tasks" },
+  "view.hours": { fr: "Heures", en: "Hours" },
+  "view.settings": { fr: "Réglages", en: "Settings" },
+};
 const ICON_PATHS = {
   calendar: ["M7 3v4M17 3v4M4 9h16M6 5h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z"],
   week: ["M4 5h16M4 12h16M4 19h16M8 5v14M16 5v14"],
@@ -75,6 +93,41 @@ function Icon({ name }) {
 }
 function IconLabel({ icon, label }) {
   return h(React.Fragment, null, h(Icon, { name: icon }), h("span", null, label));
+}
+const uiLanguage = () => {
+  let saved = "";
+  try {
+    saved = localStorage.getItem("planning-avd-language") || "";
+  } catch {}
+  const lang = String(saved || document.documentElement.lang || navigator.language || "fr").toLowerCase();
+  return lang.startsWith("en") ? "en" : "fr";
+};
+const uiLabel = key => UI_TEXT[key]?.[uiLanguage()] || UI_TEXT[key]?.fr || key;
+const uiHint = key => {
+  const item = UI_TEXT[key] || {};
+  return [item.fr, item.en].filter(Boolean).join(" / ") || key;
+};
+const tooltipAttrs = (key, className = "", attrs = {}) => ({
+  ...attrs,
+  className: `${className} has-tooltip`.trim(),
+  title: uiHint(key),
+  "aria-label": uiLabel(key),
+  "data-tooltip": uiHint(key),
+  "data-ui-key": key,
+});
+function MenuIconButton({ icon, textKey, className = "", action, view, ...props }) {
+  const attrs = {
+    ...(action ? { "data-action": action } : {}),
+    ...(view ? { "data-view": view } : {}),
+  };
+  return h(Button, { ...tooltipAttrs(textKey, `icon-only menu-icon ${className}`, attrs), ...props }, h(Icon, { name: icon }));
+}
+function MenuTabButton({ icon, textKey, view, active, onClick }) {
+  return h(Button, {
+    ...tooltipAttrs(textKey, "tab icon-tab", { "data-view": view, "data-action": `view-${view}` }),
+    active,
+    onClick,
+  }, h(Icon, { name: icon }));
 }
 
 function DayActivityButton({ year, month, day, onOpen }) {
@@ -308,10 +361,10 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
           : "Auxiliaire";
 
   const tabs = [
-    ["week", "week", "Semaine"],
-    ["life", "meal", "Repas/Tâches"],
-    ["hours", "clock", "Heures"],
-    ["config", "settings", "Réglages"],
+    ["week", "week", "view.week"],
+    ["life", "meal", "view.life"],
+    ["hours", "clock", "view.hours"],
+    ["config", "settings", "view.settings"],
   ];
 
   return h("header", { className: "topbar" },
@@ -326,29 +379,31 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
         ),
       ),
       h("div", { className: "action-row" },
-        h(Button, { onClick: onCleanView }, h(IconLabel, { icon: "sparkles", label: "Vue propre" })),
-        h(Button, { onClick: onReport }, h(IconLabel, { icon: "file", label: "Rapport" })),
-        h(Button, { onClick: onShareBackup }, h(IconLabel, { icon: "save", label: "Sauvegarde" })),
-        h(Button, { onClick: onRestoreBackup }, h(IconLabel, { icon: "restore", label: "Restaurer" })),
-        authState.user && isAdmin ? h(Button, { onClick: onRestoreCloudBackup }, h(IconLabel, { icon: "restore", label: "Secours" })) : null,
-        authState.user && isAdmin ? h(Button, { active: true, onClick: onPublish }, h(IconLabel, { icon: "cloud", label: "Sauvegarder" })) : null,
+        h(MenuIconButton, { icon: "sparkles", textKey: "action.print", action: "print", onClick: onCleanView }),
+        h(MenuIconButton, { icon: "file", textKey: "action.report", action: "report", onClick: onReport }),
+        h(MenuIconButton, { icon: "save", textKey: "action.backup", action: "backup", onClick: onShareBackup }),
+        h(MenuIconButton, { icon: "restore", textKey: "action.restore", action: "restore", onClick: onRestoreBackup }),
+        authState.user && isAdmin ? h(MenuIconButton, { icon: "restore", textKey: "action.restoreCloud", action: "restore-cloud", onClick: onRestoreCloudBackup }) : null,
+        authState.user && isAdmin ? h(MenuIconButton, { icon: "cloud", textKey: "action.publish", action: "publish", active: true, onClick: onPublish }) : null,
         authState.user
-          ? h(Button, { active: true, onClick: onLogout }, h(IconLabel, { icon: "logout", label: "Connecté" }))
-          : h(Button, { onClick: onLogin, disabled: loginPending }, h(IconLabel, { icon: "login", label: loginPending ? "Connexion..." : "Connexion Google" })),
+          ? h(MenuIconButton, { icon: "logout", textKey: "action.logout", action: "logout", active: true, onClick: onLogout })
+          : h(MenuIconButton, { icon: "login", textKey: loginPending ? "action.loginPending" : "action.login", action: "login", onClick: onLogin, disabled: loginPending }),
       ),
     ),
     authState.error ? h("div", { className: "muted" }, authState.error) : null,
     h("div", { className: "month-row" },
-      h(Button, { className: "icon-only", onClick: () => moveMonth(-1), title: "Mois precedent" }, h(Icon, { name: "chevronLeft" })),
-      h("h2", { style: { margin: 0 } }, h(Button, { active: view === "month", className: "month-title-btn", onClick: () => setView("month"), title: "Vue mensuelle" }, h(IconLabel, { icon: "calendar", label: `${MONTHS[month]} ${year}` }))),
-      h(Button, { className: "icon-only", onClick: () => moveMonth(1), title: "Mois suivant" }, h(Icon, { name: "chevronRight" })),
+      h(MenuIconButton, { icon: "chevronLeft", textKey: "month.previous", className: "month-nav-btn", action: "month-previous", onClick: () => moveMonth(-1) }),
+      h("h2", { style: { margin: 0 } }, h(Button, { ...tooltipAttrs("view.month", "month-title-btn", { "data-view": "month", "data-action": "view-month" }), active: view === "month", onClick: () => setView("month") }, h(IconLabel, { icon: "calendar", label: `${MONTHS[month]} ${year}` }))),
+      h(MenuIconButton, { icon: "chevronRight", textKey: "month.next", className: "month-nav-btn", action: "month-next", onClick: () => moveMonth(1) }),
     ),
-    h("nav", { className: "tabs" }, tabs.map(tab => h(Button, {
+    h("nav", { className: "tabs" }, tabs.map(tab => h(MenuTabButton, {
       key: tab[0],
+      view: tab[0],
+      icon: tab[1],
+      textKey: tab[2],
       active: view === tab[0],
-      className: "tab",
       onClick: () => setView(tab[0]),
-    }, h(Icon, { name: tab[1] }), h("span", null, tab[2])))),
+    }))),
   );
 }
 
@@ -557,19 +612,19 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
           ),
         ),
         h("div", { className: "action-row" },
-          h(Button, { onClick: () => window.print() }, h(IconLabel, { icon: "print", label: "Imprimer" })),
-          h(Button, { onClick: logout, disabled: loggingOut }, h(IconLabel, { icon: "logout", label: loggingOut ? "Sortie..." : "Sortir" })),
+          h(MenuIconButton, { icon: "print", textKey: "action.print", action: "print", onClick: () => window.print() }),
+          h(MenuIconButton, { icon: "logout", textKey: "action.logout", action: "logout", active: true, onClick: logout, disabled: loggingOut }),
         ),
       ),
       h("div", { className: "month-row" },
-        h(Button, { className: "icon-only", onClick: () => moveMonth(-1), title: "Mois precedent" }, h(Icon, { name: "chevronLeft" })),
-        h("h2", { style: { margin: 0 } }, h(Button, { active: personalView === "month", className: "month-title-btn", onClick: () => setPersonalView("month"), title: "Vue mensuelle" }, h(IconLabel, { icon: "calendar", label: `${MONTHS[month]} ${year}` }))),
-        h(Button, { className: "icon-only", onClick: () => moveMonth(1), title: "Mois suivant" }, h(Icon, { name: "chevronRight" })),
+        h(MenuIconButton, { icon: "chevronLeft", textKey: "month.previous", className: "month-nav-btn", action: "month-previous", onClick: () => moveMonth(-1) }),
+        h("h2", { style: { margin: 0 } }, h(Button, { ...tooltipAttrs("view.month", "month-title-btn", { "data-view": "month", "data-action": "view-month" }), active: personalView === "month", onClick: () => setPersonalView("month") }, h(IconLabel, { icon: "calendar", label: `${MONTHS[month]} ${year}` }))),
+        h(MenuIconButton, { icon: "chevronRight", textKey: "month.next", className: "month-nav-btn", action: "month-next", onClick: () => moveMonth(1) }),
       ),
       h("nav", { className: "tabs personal-tabs" },
-        h(Button, { active: personalView === "week", className: "tab", onClick: () => setPersonalView("week") }, h(IconLabel, { icon: "week", label: "Semaines" })),
-        h(Button, { active: personalView === "month", className: "tab", onClick: () => setPersonalView("month") }, h(IconLabel, { icon: "calendar", label: "Mois" })),
-        h(Button, { active: personalView === "life", className: "tab", onClick: () => setPersonalView("life") }, h(IconLabel, { icon: "meal", label: "Repas/Tâches" })),
+        h(MenuTabButton, { active: personalView === "week", view: "week", icon: "week", textKey: "view.week", onClick: () => setPersonalView("week") }),
+        h(MenuTabButton, { active: personalView === "month", view: "month", icon: "calendar", textKey: "view.month", onClick: () => setPersonalView("month") }),
+        h(MenuTabButton, { active: personalView === "life", view: "life", icon: "meal", textKey: "view.life", onClick: () => setPersonalView("life") }),
       ),
     ),
     h("section", { className: "layout" },

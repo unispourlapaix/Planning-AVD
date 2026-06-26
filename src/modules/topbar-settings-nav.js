@@ -1,6 +1,11 @@
 const findAdminTopbar = () => document.querySelector(".app:not(.personal-app) .topbar");
-const findTab = label => [...document.querySelectorAll(".app:not(.personal-app) .topbar>.tabs .tab")]
-  .find(button => button.textContent.includes(label));
+const TAB_BY_LABEL = { Semaine: "week", Heures: "hours", Réglages: "config" };
+const findTab = labelOrView => {
+  const view = TAB_BY_LABEL[labelOrView] || labelOrView;
+  return document.querySelector(`.app:not(.personal-app) .topbar>.tabs .tab[data-view="${view}"]`)
+    || [...document.querySelectorAll(".app:not(.personal-app) .topbar>.tabs .tab")]
+      .find(button => button.textContent.includes(labelOrView));
+};
 const findMonthButton = topbar => topbar?.querySelector(".month-title-btn");
 
 const gearSvg = `
@@ -35,24 +40,27 @@ const ensureGearButton = topbar => {
   if (!button) {
     button = document.createElement("button");
     button.type = "button";
-    button.className = "btn icon-only settings-gear-btn";
-    button.title = "Réglages";
+    button.className = "btn icon-only settings-gear-btn has-tooltip";
+    button.title = "Réglages / Settings";
     button.setAttribute("aria-label", "Réglages");
+    button.dataset.tooltip = "Réglages / Settings";
+    button.dataset.action = "view-config";
+    button.dataset.view = "config";
     button.innerHTML = gearSvg;
-    button.addEventListener("click", () => findTab("Réglages")?.click());
+    button.addEventListener("click", () => findTab("config")?.click());
   }
   if (button.parentElement !== topbar) topbar.insertBefore(button, topbar.firstChild);
-  button.classList.toggle("active", !!findTab("Réglages")?.classList.contains("active"));
+  button.classList.toggle("active", !!findTab("config")?.classList.contains("active"));
 };
 
 const refreshTopbarSettingsNav = () => {
   const topbar = findAdminTopbar();
   if (!topbar) return;
   topbar.classList.add("topbar-gear-ready");
-  findTab("Semaine")?.classList.add("topbar-hidden-tab");
-  findTab("Heures")?.classList.add("topbar-hidden-tab");
-  findTab("Réglages")?.classList.add("topbar-hidden-tab");
-  if (findTab("Semaine")?.classList.contains("active")) findMonthButton(topbar)?.click();
+  findTab("week")?.classList.add("topbar-hidden-tab");
+  findTab("hours")?.classList.add("topbar-hidden-tab");
+  findTab("config")?.classList.add("topbar-hidden-tab");
+  if (findTab("week")?.classList.contains("active")) findMonthButton(topbar)?.click();
   refreshLabels(topbar);
   ensureGearButton(topbar);
 };
