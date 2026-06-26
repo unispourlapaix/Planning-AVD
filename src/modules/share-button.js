@@ -96,7 +96,7 @@ export async function initPlanningShareButton() {
         const planning = buildSchedule({ year, month, auxiliaries, rotationDays: source.rotationDays });
         const schedule = applyOverrides({ schedule: planning.schedule, overrides: source.overrides, year, month });
         const hours = calculatePerformedHours(schedule, auxiliaries, { year, month });
-        await sharePlanningByEmail({ db, user, year, month, beneficiaryName: source.beneficiaryName || "", auxiliaries, schedule, hours, dayOutings: source.dayOutings || {} });
+        await sharePlanningByEmail({ db, user, year, month, beneficiaryId: source.beneficiaryId || "", beneficiaryName: source.beneficiaryName || "", auxiliaries, schedule, hours, dayOutings: source.dayOutings || {} });
       } catch (error) {
         alert(`Partage impossible : ${error.message}`);
       }

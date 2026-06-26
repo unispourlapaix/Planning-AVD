@@ -5,12 +5,35 @@ const cleanEmail = email => String(email || "").trim();
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const encodedEmailKey = email => encodeURIComponent(cleanEmail(email));
 const shareEmailKey = email => cleanEmail(email).replaceAll("/", "%2F");
+const safeToken = value => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "")
+  .slice(0, 28);
+export const createBeneficiaryId = seed => {
+  const random = globalThis.crypto?.randomUUID?.().replace(/-/g, "").slice(0, 10)
+    || Math.random().toString(36).slice(2, 12);
+  return `ben-${safeToken(seed) || "beneficiaire"}-${Date.now().toString(36)}-${random}`;
+};
 const uniqueEmailKeys = email => {
   const raw = cleanEmail(email);
   const lower = normalizeEmail(email);
   return [...new Set([shareEmailKey(raw), shareEmailKey(lower), encodedEmailKey(raw), encodedEmailKey(lower)].filter(Boolean))];
 };
 const uniqueShareKeys = uniqueEmailKeys;
+const timestampScore = value => {
+  if (!value) return 0;
+  if (Number.isFinite(value.seconds)) return Number(value.seconds);
+  if (Number.isFinite(value._seconds)) return Number(value._seconds);
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed / 1000 : 0;
+};
+const sortPersonalPlans = plans => [...plans].sort((a, b) =>
+  timestampScore(b?.publishedAt || b?.updatedAt) - timestampScore(a?.publishedAt || a?.updatedAt)
+  || String(b?.beneficiaryId || "").localeCompare(String(a?.beneficiaryId || ""))
+  || String(a?.beneficiaryName || "").localeCompare(String(b?.beneficiaryName || "")));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const nearbyMonths = (year, month) => {
@@ -35,12 +58,19 @@ const readLocalState = () => {
     return null;
   }
 };
+export const ensureBeneficiaryIdentity = state => {
+  if (!state) return state;
+  const beneficiaryId = String(state.beneficiaryId || "").trim();
+  if (beneficiaryId) return state;
+  return { ...state, beneficiaryId: createBeneficiaryId(state.beneficiaryName || "beneficiaire") };
+};
 const stripStateMeta = state => Object.fromEntries(Object.entries(state || {}).filter(([key]) => !key.startsWith("__")));
 const withLoadMeta = (state, meta) => ({
   ...(state || {}),
   __cloud: meta,
 });
 const stateMonthKey = value => `${Number(value?.year) || new Date().getFullYear()}-${String((Number(value?.month) || 0) + 1).padStart(2, "0")}`;
+const stateRestoreKey = value => `${String(value?.beneficiaryId || "legacy")}-${stateMonthKey(value)}`;
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
@@ -61,6 +91,7 @@ export const defaultState = () => {
     month: now.getMonth(),
     view: "month",
     rotationDays: 1,
+    beneficiaryId: createBeneficiaryId("beneficiaire"),
     beneficiaryName: "",
     auxiliaries: null,
     dayOutings: {},
@@ -74,11 +105,12 @@ export async function loadState({ db, user }) {
   try {
     const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
     const cloud = snap.exists ? migrateState(snap.data().value) : null;
-    return withLoadMeta(snap.exists ? mergeSavedState(local, cloud) : local, {
+    const merged = ensureBeneficiaryIdentity(snap.exists ? mergeSavedState(local, cloud) : local);
+    return withLoadMeta(merged, {
       ready: true,
       exists: snap.exists,
       source: snap.exists ? "cloud" : local ? "local" : "empty",
-      updatedAt: cloud?.updatedAt || "",
+      updatedAt: merged?.updatedAt || cloud?.updatedAt || "",
     });
   } catch (error) {
     console.warn("Lecture cloud impossible, repli local.", error);
@@ -93,7 +125,7 @@ export async function loadState({ db, user }) {
 }
 
 export async function saveState({ db, user, state, expectedUpdatedAt, force = false }) {
-  const value = { ...stripStateMeta(state), rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
+  const value = { ...ensureBeneficiaryIdentity(stripStateMeta(state)), rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return { local: true, cloud: false, reason: "not-connected" };
   try {
@@ -114,7 +146,7 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
     }
     const currentValue = currentSnap.exists ? migrateState(currentSnap.data()?.value) : null;
     if (currentValue && hasAuxiliaries(currentValue)) {
-      const restoreMonth = stateMonthKey(currentValue);
+      const restoreMonth = stateRestoreKey(currentValue);
       const monthRestoreRef = userRef.collection("restore-months").doc(restoreMonth);
       const monthRestoreSnap = await monthRestoreRef.get();
       const restorePayload = {
@@ -247,6 +279,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
   const cleanBeneficiary = String(beneficiaryName || "").trim().slice(0, 120);
   if (!db || !user?.uid || !email) throw new Error("Connexion necessaire.");
   if (!cleanBeneficiary) throw new Error("Indiquez le nom du bénéficiaire.");
+  const beneficiaryId = createBeneficiaryId(cleanBeneficiary);
 
   await db.collection("planning-avd-admin-bootstraps").doc(email).set({
     email,
@@ -254,6 +287,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
     name: String(user.displayName || email).trim(),
     role: "admin",
     active: true,
+    beneficiaryId,
     beneficiaryName: cleanBeneficiary,
     createdByUid: user.uid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -262,6 +296,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
 
   const value = {
     ...defaultState(),
+    beneficiaryId,
     beneficiaryName: cleanBeneficiary,
     updatedAt: new Date().toISOString(),
   };
@@ -292,7 +327,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
     }, { merge: true }),
   ]);
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
-  return { email, beneficiaryName: cleanBeneficiary, role: "admin" };
+  return { email, beneficiaryId, beneficiaryName: cleanBeneficiary, role: "admin" };
 }
 
 function normalizeMemberDoc(doc, source) {
@@ -453,83 +488,187 @@ export async function grantAdminByEmail({ db, user, email }) {
 export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
   if (!db || !user?.email) return () => {};
   const rawEmail = cleanEmail(user.email);
+  const email = normalizeEmail(rawEmail);
   const monthId = monthKey(year, month);
   const shareKeys = uniqueShareKeys(rawEmail);
-  const refs = shareKeys.map(key => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId));
-  let directPending = refs.length;
+  const plans = new Map();
+  const monthUnsubscribers = new Map();
+  let directPending = shareKeys.length;
+  let beneficiaryPending = shareKeys.length;
+  let monthPending = 0;
   let active = true;
-  let hasDirectPlanning = false;
   let nearbySearchStarted = false;
+  const emitBestPlan = () => {
+    if (!active) return null;
+    const best = sortPersonalPlans([...plans.values()])[0] || null;
+    if (best) onChange?.(best);
+    return best;
+  };
+  const maybeStartFallback = () => {
+    if (!active || plans.size || directPending > 0 || beneficiaryPending > 0 || monthPending > 0) return;
+    startNearbyFallback();
+  };
+  const setPlan = (key, value) => {
+    if (!active) return;
+    if (value) plans.set(key, value);
+    else plans.delete(key);
+    if (!emitBestPlan()) maybeStartFallback();
+  };
   const queryByEmail = async (field, value) => {
     if (!value) return null;
     try {
       const snapshot = await db.collectionGroup("months").where(field, "==", value).limit(12).get();
-      return snapshot.docs
+      return sortPersonalPlans(snapshot.docs
         .map(doc => doc.data())
-        .find(item => Number.isInteger(item?.year) && Number.isInteger(item?.month)) || null;
+        .filter(item => Number.isInteger(item?.year) && Number.isInteger(item?.month)))[0] || null;
     } catch (error) {
       console.warn("Recherche planning auxiliaire impossible.", error);
       return null;
     }
   };
+  const readShareMonthPlans = async (key, candidateId) => {
+    const results = [];
+    try {
+      const legacy = await db.collection("planning-avd-shares").doc(key).collection("months").doc(candidateId).get();
+      if (legacy.exists) results.push(legacy.data());
+    } catch {}
+    try {
+      const beneficiaries = await db.collection("planning-avd-shares").doc(key).collection("beneficiaries").get();
+      const monthReads = beneficiaries.docs.map(doc => doc.ref.collection("months").doc(candidateId).get());
+      const monthSnaps = await Promise.all(monthReads);
+      monthSnaps.forEach(snap => { if (snap.exists) results.push(snap.data()); });
+    } catch {}
+    return sortPersonalPlans(results);
+  };
   const startNearbyFallback = async () => {
-    if (nearbySearchStarted || !active || hasDirectPlanning) return;
+    if (nearbySearchStarted || !active || plans.size) return;
     nearbySearchStarted = true;
     for (const candidate of nearbyMonths(year, month).filter(item => item.id !== monthId)) {
       for (const key of shareKeys) {
-        try {
-          const snap = await db.collection("planning-avd-shares").doc(key).collection("months").doc(candidate.id).get();
-          if (!active || hasDirectPlanning) return;
-          if (snap.exists) {
-            onChange?.(snap.data());
-            return;
-          }
-        } catch {}
+        const candidates = await readShareMonthPlans(key, candidate.id);
+        if (!active || plans.size) return;
+        if (candidates[0]) {
+          onChange?.(candidates[0]);
+          return;
+        }
       }
     }
-    const queried = await queryByEmail("email", normalizeEmail(rawEmail)) || await queryByEmail("emailOriginal", rawEmail);
+    const queried = await queryByEmail("email", email) || await queryByEmail("emailOriginal", rawEmail);
     if (active && queried) {
       onChange?.(queried);
       return;
     }
-    if (active && !hasDirectPlanning) onChange?.(null);
+    if (active && !plans.size) onChange?.(null);
   };
-  const directUnsubscribers = refs.map(ref => ref.onSnapshot(snap => {
+  const directUnsubscribers = shareKeys.map((key, index) => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId).onSnapshot(snap => {
       if (!active) return;
       directPending = Math.max(0, directPending - 1);
-      if (snap.exists) {
-        hasDirectPlanning = true;
-        onChange?.(snap.data());
-        return;
-      }
-      if (directPending === 0 && !hasDirectPlanning) startNearbyFallback();
+      setPlan(`legacy:${index}`, snap.exists ? snap.data() : null);
+      maybeStartFallback();
     }, error => {
       console.warn("Lecture planning auxiliaire directe impossible.", error);
       directPending = Math.max(0, directPending - 1);
-      if (directPending === 0 && !hasDirectPlanning) startNearbyFallback();
+      maybeStartFallback();
     }));
+  const beneficiaryUnsubscribers = shareKeys.map(key => {
+    let firstSnapshot = true;
+    return db.collection("planning-avd-shares").doc(key).collection("beneficiaries").onSnapshot(snapshot => {
+      if (!active) return;
+      if (firstSnapshot) {
+        firstSnapshot = false;
+        beneficiaryPending = Math.max(0, beneficiaryPending - 1);
+      }
+      const prefix = `${key}:`;
+      const currentKeys = new Set();
+      snapshot.docs.forEach(doc => {
+        const mapKey = `${prefix}${doc.id}:${monthId}`;
+        currentKeys.add(mapKey);
+        if (monthUnsubscribers.has(mapKey)) return;
+        const entry = { seen: false, planKey: `beneficiary:${mapKey}`, unsubscribe: null };
+        monthPending += 1;
+        entry.unsubscribe = doc.ref.collection("months").doc(monthId).onSnapshot(monthSnap => {
+          if (!active) return;
+          if (!entry.seen) {
+            entry.seen = true;
+            monthPending = Math.max(0, monthPending - 1);
+          }
+          setPlan(entry.planKey, monthSnap.exists ? monthSnap.data() : null);
+          maybeStartFallback();
+        }, error => {
+          console.warn("Lecture planning auxiliaire par bénéficiaire impossible.", error);
+          if (!entry.seen) {
+            entry.seen = true;
+            monthPending = Math.max(0, monthPending - 1);
+          }
+          onError?.(error);
+          maybeStartFallback();
+        });
+        monthUnsubscribers.set(mapKey, entry);
+      });
+      [...monthUnsubscribers.entries()]
+        .filter(([mapKey]) => mapKey.startsWith(prefix) && !currentKeys.has(mapKey))
+        .forEach(([mapKey, entry]) => {
+          entry.unsubscribe?.();
+          if (!entry.seen) monthPending = Math.max(0, monthPending - 1);
+          plans.delete(entry.planKey);
+          monthUnsubscribers.delete(mapKey);
+        });
+      if (!emitBestPlan()) maybeStartFallback();
+    }, error => {
+      console.warn("Lecture liste bénéficiaires auxiliaire impossible.", error);
+      if (firstSnapshot) {
+        firstSnapshot = false;
+        beneficiaryPending = Math.max(0, beneficiaryPending - 1);
+      }
+      onError?.(error);
+      maybeStartFallback();
+    });
+  });
   return () => {
     active = false;
     directUnsubscribers.forEach(unsubscribe => unsubscribe());
+    beneficiaryUnsubscribers.forEach(unsubscribe => unsubscribe());
+    monthUnsubscribers.forEach(entry => entry.unsubscribe?.());
   };
 }
 
-const changeRequestCollection = ({ db, email, year, month }) =>
-  db.collection("planning-avd-change-requests").doc(encodedEmailKey(normalizeEmail(email))).collection("months").doc(monthKey(year, month)).collection("items");
+const changeRequestCollection = ({ db, email, year, month, beneficiaryId = "" }) => {
+  const root = db.collection("planning-avd-change-requests").doc(encodedEmailKey(normalizeEmail(email)));
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  if (safeBeneficiaryId) {
+    return root.collection("beneficiaries").doc(safeBeneficiaryId).collection("months").doc(monthKey(year, month)).collection("items");
+  }
+  return root.collection("months").doc(monthKey(year, month)).collection("items");
+};
+
+const changeRequestCollections = ({ db, email, year, month, beneficiaryId = "" }) => [
+  ...(String(beneficiaryId || "").trim() ? [changeRequestCollection({ db, email, year, month, beneficiaryId })] : []),
+  changeRequestCollection({ db, email, year, month }),
+];
 
 const requestSnapshotList = snapshot => snapshot.docs
   .map(doc => ({ id: doc.id, ...doc.data() }))
   .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || a.day - b.day || String(a.shift).localeCompare(String(b.shift)));
 
-export function subscribePersonalChangeRequests({ db, user, year, month, onChange, onError }) {
+export function subscribePersonalChangeRequests({ db, user, year, month, beneficiaryId = "", onChange, onError }) {
   if (!db || !user?.email) return () => {};
   const email = cleanEmail(user.email);
-  return changeRequestCollection({ db, email: user.email, year, month })
-    .where("requesterEmail", "==", email)
-    .onSnapshot(snapshot => onChange?.(requestSnapshotList(snapshot)), error => onError?.(error));
+  const buckets = new Map();
+  const emit = () => onChange?.([...buckets.values()].flat().sort((a, b) =>
+    (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1)
+    || a.day - b.day
+    || String(a.shift).localeCompare(String(b.shift))));
+  const unsubscribers = changeRequestCollections({ db, email: user.email, year, month, beneficiaryId })
+    .map((collection, index) => collection
+      .where("requesterEmail", "==", email)
+      .onSnapshot(snapshot => {
+        buckets.set(index, requestSnapshotList(snapshot));
+        emit();
+      }, error => onError?.(error)));
+  return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
-export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, onChange, onError }) {
+export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, beneficiaryId = "", onChange, onError }) {
   if (!db) return () => {};
   const emails = [...new Set(auxiliaries.map(aux => String(aux.email || "").trim().toLowerCase()).filter(Boolean))];
   if (!emails.length) {
@@ -541,19 +680,22 @@ export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, onC
     (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1)
     || a.day - b.day
     || String(a.shift).localeCompare(String(b.shift))));
-  const unsubscribers = emails.map(email => changeRequestCollection({ db, email, year, month })
-    .onSnapshot(snapshot => {
-      buckets.set(email, requestSnapshotList(snapshot));
+  const unsubscribers = emails.flatMap(email => changeRequestCollections({ db, email, year, month, beneficiaryId })
+    .map((collection, index) => collection.onSnapshot(snapshot => {
+      buckets.set(`${email}:${index}`, requestSnapshotList(snapshot));
       emit();
-    }, error => onError?.(error)));
+    }, error => onError?.(error))));
   return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
 export async function createPlanningChangeRequest({ db, user, planning, year, month, day, shift, targetEmail, targetName, message }) {
   if (!db || !user?.email) throw new Error("Connexion necessaire.");
   const email = cleanEmail(user.email);
-  const ref = changeRequestCollection({ db, email, year, month }).doc();
+  const beneficiaryId = String(planning?.beneficiaryId || "").trim();
+  const ref = changeRequestCollection({ db, email, year, month, beneficiaryId }).doc();
   await ref.set({
+    beneficiaryId,
+    beneficiaryName: String(planning?.beneficiaryName || "").trim(),
     requesterEmail: email,
     requesterName: planning?.name || user.displayName || email,
     year,
@@ -573,7 +715,7 @@ export async function createPlanningChangeRequest({ db, user, planning, year, mo
 export async function resolvePlanningChangeRequest({ db, user, request, status, workerId, workerName }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!request?.requesterEmail || !request?.id) throw new Error("Demande introuvable.");
-  await changeRequestCollection({ db, email: request.requesterEmail, year: request.year, month: request.month }).doc(request.id).set({
+  await changeRequestCollection({ db, email: request.requesterEmail, year: request.year, month: request.month, beneficiaryId: request.beneficiaryId }).doc(request.id).set({
     status,
     resolvedWorkerId: workerId || "",
     resolvedWorkerName: workerName || "",
@@ -583,7 +725,8 @@ export async function resolvePlanningChangeRequest({ db, user, request, status, 
   }, { merge: true });
 }
 
-export function buildPersonalSharePayloads({ year, month, beneficiaryName = "", auxiliaries, schedule, dayOutings = {}, publishedAt = null, publishedBy = "" }) {
+export function buildPersonalSharePayloads({ year, month, beneficiaryId = "", beneficiaryName = "", auxiliaries, schedule, dayOutings = {}, publishedAt = null, publishedBy = "" }) {
+  const safeBeneficiaryId = String(beneficiaryId || createBeneficiaryId(beneficiaryName || "beneficiaire")).trim();
   const active = auxiliaries.filter(aux => aux.active !== false && String(aux.email || "").trim());
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
   const outingPrefix = `${year}-${month}-`;
@@ -614,9 +757,11 @@ export function buildPersonalSharePayloads({ year, month, beneficiaryName = "", 
       emailOriginal: rawEmail,
       readEmails,
       name: aux.name,
+      beneficiaryId: safeBeneficiaryId,
       beneficiaryName: String(beneficiaryName || "").trim(),
       year,
       month,
+      period: monthKey(year, month),
       entries,
       calendar,
       team,
@@ -628,11 +773,13 @@ export function buildPersonalSharePayloads({ year, month, beneficiaryName = "", 
   });
 }
 
-export async function publishPersonalPlannings({ db, user, year, month, beneficiaryName = "", auxiliaries, schedule, dayOutings = {} }) {
+export async function publishPersonalPlannings({ db, user, year, month, beneficiaryId = "", beneficiaryName = "", auxiliaries, schedule, dayOutings = {} }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  const safeBeneficiaryId = String(beneficiaryId || createBeneficiaryId(beneficiaryName || "beneficiaire")).trim();
   const payloads = buildPersonalSharePayloads({
     year,
     month,
+    beneficiaryId: safeBeneficiaryId,
     beneficiaryName,
     auxiliaries,
     schedule,
@@ -661,8 +808,18 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     });
   payloads.forEach(({ rawEmail, sharePayload }) => {
     uniqueShareKeys(rawEmail).forEach(key => {
-      const ref = db.collection("planning-avd-shares").doc(key).collection("months").doc(monthKey(year, month));
-      batch.set(ref, sharePayload);
+      const beneficiaryRef = db.collection("planning-avd-shares").doc(key).collection("beneficiaries").doc(safeBeneficiaryId);
+      batch.set(beneficiaryRef, {
+        beneficiaryId: safeBeneficiaryId,
+        beneficiaryName: sharePayload.beneficiaryName,
+        email: sharePayload.email,
+        emailOriginal: sharePayload.emailOriginal,
+        readEmails: sharePayload.readEmails,
+        latestPeriod: monthKey(year, month),
+        latestPublishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: user.email || "",
+      }, { merge: true });
+      batch.set(beneficiaryRef.collection("months").doc(monthKey(year, month)), sharePayload);
     });
   });
   await batch.commit();

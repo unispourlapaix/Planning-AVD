@@ -101,6 +101,7 @@ const issues = [];
     year,
     month,
     auxiliaries: team,
+    beneficiaryId: "ben-payet-emmanuel-test",
     beneficiaryName: "Payet Emmanuel",
     schedule,
     dayOutings: {
@@ -114,6 +115,7 @@ const issues = [];
     assert(payloads.length === team.length, `mode ${rotationDays}: tous les auxiliaires actifs doivent recevoir une sauvegarde`);
     payloads.forEach(({ aux, sharePayload }) => {
       checkPayload({ payload: sharePayload, aux, schedule, year, month });
+      assert(sharePayload.beneficiaryId === "ben-payet-emmanuel-test", `${aux.name}: identifiant bénéficiaire absent`);
       assert(sharePayload.dayOutings["2026-5-3"], `${aux.name}: sortie du mois absente`);
       assert(!sharePayload.dayOutings["2026-6-1"], `${aux.name}: sortie hors mois exposee`);
     });

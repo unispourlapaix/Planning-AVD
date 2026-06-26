@@ -17,7 +17,7 @@ const buildGmailUrl = ({ sender, recipients, subject, body }) => {
   return url.toString();
 };
 
-export async function sharePlanningByEmail({ db, user, year, month, beneficiaryName = "", auxiliaries, schedule, hours, dayOutings = {} }) {
+export async function sharePlanningByEmail({ db, user, year, month, beneficiaryId = "", beneficiaryName = "", auxiliaries, schedule, hours, dayOutings = {} }) {
   if (!user?.uid) throw new Error("Connexion admin necessaire.");
   const recipients = uniqueEmails(auxiliaries);
   if (!recipients.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
@@ -38,7 +38,7 @@ export async function sharePlanningByEmail({ db, user, year, month, beneficiaryN
   const gmailUrl = buildGmailUrl({ sender: user.email, recipients, subject, body });
   const gmailTab = window.open("about:blank", "_blank");
 
-  const count = await publishPersonalPlannings({ db, user, year, month, beneficiaryName, auxiliaries, schedule, hours, dayOutings });
+  const count = await publishPersonalPlannings({ db, user, year, month, beneficiaryId, beneficiaryName, auxiliaries, schedule, hours, dayOutings });
   if (gmailTab) gmailTab.location.href = gmailUrl;
   else window.location.href = gmailUrl;
   return count;

@@ -111,9 +111,40 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /planning-avd-shares/{email}/beneficiaries/{beneficiaryId} {
+      allow read: if signedIn()
+        && (authEmail() == email
+          || authEmail() == resource.data.email
+          || authEmail() == resource.data.emailOriginal
+          || (resource.data.readEmails is list
+            && authEmail() in resource.data.readEmails));
+      allow write: if isAdmin();
+
+      match /months/{month} {
+        allow read: if signedIn()
+          && (authEmail() == email
+            || authEmail() == resource.data.email
+            || authEmail() == resource.data.emailOriginal
+            || (resource.data.readEmails is list
+              && authEmail() in resource.data.readEmails));
+        allow write: if isAdmin();
+      }
+    }
+
     match /planning-avd-change-requests/{email}/months/{month}/items/{requestId} {
       allow create: if canContribute()
         && request.resource.data.requesterEmail == authEmail()
+        && request.resource.data.status == "pending";
+      allow read: if request.auth != null
+        && (resource.data.requesterEmail == authEmail() || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /planning-avd-change-requests/{email}/beneficiaries/{beneficiaryId}/months/{month}/items/{requestId} {
+      allow create: if canContribute()
+        && request.resource.data.requesterEmail == authEmail()
+        && request.resource.data.beneficiaryId == beneficiaryId
         && request.resource.data.status == "pending";
       allow read: if request.auth != null
         && (resource.data.requesterEmail == authEmail() || isAdmin());
