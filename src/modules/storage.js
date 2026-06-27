@@ -34,6 +34,10 @@ const sortPersonalPlans = plans => [...plans].sort((a, b) =>
   timestampScore(b?.publishedAt || b?.updatedAt) - timestampScore(a?.publishedAt || a?.updatedAt)
   || String(b?.beneficiaryId || "").localeCompare(String(a?.beneficiaryId || ""))
   || String(a?.beneficiaryName || "").localeCompare(String(b?.beneficiaryName || "")));
+const sortBeneficiaryAccess = items => [...items].sort((a, b) =>
+  roleRank(a.role) - roleRank(b.role)
+  || String(b.updatedAt?.seconds || b.updatedAt || "").localeCompare(String(a.updatedAt?.seconds || a.updatedAt || ""))
+  || String(a.beneficiaryName || "").localeCompare(String(b.beneficiaryName || "")));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primaryWorkerId = entry => shiftWorkerIds(entry)[0] || "";
 const nearbyMonths = (year, month) => {
@@ -770,14 +774,18 @@ export async function grantAdminByEmail({ db, user, email }) {
   return result.email;
 }
 
-export function subscribePersonalPlanning({ db, user, year, month, onChange, onError }) {
-  if (!db || !user?.email) return () => {};
+export function subscribePersonalPlanning({ db, user, year, month, onChange, onAccess, onError }) {
+  if (!db || !user?.email) {
+    onAccess?.([]);
+    return () => {};
+  }
   const rawEmail = cleanEmail(user.email);
   const email = normalizeEmail(rawEmail);
   const monthId = monthKey(year, month);
   const shareKeys = uniqueShareKeys(rawEmail);
   const plans = new Map();
   const monthUnsubscribers = new Map();
+  const accessByKey = new Map();
   let directPending = shareKeys.length;
   let beneficiaryPending = shareKeys.length;
   let monthPending = 0;
@@ -798,6 +806,16 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
     if (value) plans.set(key, value);
     else plans.delete(key);
     if (!emitBestPlan()) maybeStartFallback();
+  };
+  const emitAccess = () => {
+    if (!active) return;
+    const merged = new Map();
+    [...accessByKey.values()].flat().forEach(item => {
+      if (!item?.beneficiaryId || item.active === false) return;
+      const current = merged.get(item.beneficiaryId);
+      if (!current || roleRank(item.role) < roleRank(current.role)) merged.set(item.beneficiaryId, item);
+    });
+    onAccess?.(sortBeneficiaryAccess([...merged.values()]));
   };
   const queryByEmail = async (field, value) => {
     if (!value) return null;
@@ -863,6 +881,10 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
         firstSnapshot = false;
         beneficiaryPending = Math.max(0, beneficiaryPending - 1);
       }
+      accessByKey.set(key, snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data(), beneficiaryId: doc.data()?.beneficiaryId || doc.id }))
+        .filter(item => item.active !== false));
+      emitAccess();
       const prefix = `${key}:`;
       const currentKeys = new Set();
       snapshot.docs.forEach(doc => {
@@ -905,6 +927,8 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onE
         firstSnapshot = false;
         beneficiaryPending = Math.max(0, beneficiaryPending - 1);
       }
+      accessByKey.delete(key);
+      emitAccess();
       onError?.(error);
       maybeStartFallback();
     });
