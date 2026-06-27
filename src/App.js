@@ -29,7 +29,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260627-personal-access";
+} from "./modules/storage.js?v=20260627-personal-selector";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -510,7 +510,7 @@ function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal,
   );
 }
 
-function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, planning, access = [], error, onLogout }) {
+function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, planning, access = [], selectedBeneficiaryId = "", onSelectBeneficiary, error, onLogout }) {
   const [personalView, setPersonalView] = useState("week");
   const [mealDate, setMealDate] = useState(null);
   const [requestEdit, setRequestEdit] = useState(null);
@@ -521,16 +521,19 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   const canContribute = sessionRole?.canContribute !== false;
   const personalRoleText = sessionRole?.role === "viewer" ? ACCESS_ROLE_LABELS.viewer : "Auxiliaire";
   const activeAccess = access.filter(item => item.active !== false);
-  const primaryAccess = activeAccess[0] || null;
-  const accessBeneficiaryId = planning?.beneficiaryId || primaryAccess?.beneficiaryId || "";
-  const accessBeneficiaryName = planning?.beneficiaryName || primaryAccess?.beneficiaryName || "";
+  const selectedAccess = activeAccess.find(item => item.beneficiaryId === selectedBeneficiaryId) || null;
+  const selectedId = selectedBeneficiaryId || planning?.beneficiaryId || activeAccess[0]?.beneficiaryId || "";
+  const visiblePlanning = !selectedId || String(planning?.beneficiaryId || "") === selectedId ? planning : null;
+  const primaryAccess = selectedAccess || activeAccess.find(item => item.beneficiaryId === visiblePlanning?.beneficiaryId) || activeAccess[0] || null;
+  const accessBeneficiaryId = selectedId || visiblePlanning?.beneficiaryId || primaryAccess?.beneficiaryId || "";
+  const accessBeneficiaryName = primaryAccess?.beneficiaryName || visiblePlanning?.beneficiaryName || "";
   useEffect(() => {
     const openLife = () => setPersonalView("life");
     window.addEventListener("planning-avd-open-life", openLife);
     return () => window.removeEventListener("planning-avd-open-life", openLife);
   }, []);
   useEffect(() => {
-    if (!planning && !accessBeneficiaryId) return;
+    if (!visiblePlanning && !accessBeneficiaryId) return;
     window.__planningAvdCurrentState = {
       ...(window.__planningAvdCurrentState || {}),
       year,
@@ -539,7 +542,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
       beneficiaryName: accessBeneficiaryName,
       personal: true,
     };
-  }, [planning, year, month, accessBeneficiaryId, accessBeneficiaryName]);
+  }, [visiblePlanning, year, month, accessBeneficiaryId, accessBeneficiaryName]);
   useEffect(() => {
     const openMeal = event => setMealDate(event.detail);
     const requestChange = event => {
@@ -582,7 +585,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
     setMonth(date.getMonth());
   };
   const byDay = Object.fromEntries(Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => [index + 1, []]));
-  (planning?.entries || []).forEach(entry => { if (byDay[entry.day]) byDay[entry.day].push(entry); });
+  (visiblePlanning?.entries || []).forEach(entry => { if (byDay[entry.day]) byDay[entry.day].push(entry); });
   const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
@@ -614,7 +617,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
       await createPlanningChangeRequest({
         db: authState.db,
         user: authState.user,
-        planning,
+        planning: visiblePlanning,
         year: requestEdit.year,
         month: requestEdit.month,
         day: requestEdit.day,
@@ -637,7 +640,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
           h("h1", null, "Mon planning"),
           h("div", { className: "cloud-line" },
             h("span", { className: "role-pill local" }, personalRoleText),
-            h("span", { className: `cloud-status ${planning || activeAccess.length ? "saved" : "saving"}` }, planning ? "Planning reçu" : activeAccess.length ? "Accès actif" : "En attente"),
+            h("span", { className: `cloud-status ${visiblePlanning || activeAccess.length ? "saved" : "saving"}` }, visiblePlanning ? "Planning reçu" : activeAccess.length ? "Accès actif" : "En attente"),
             h("span", { className: "muted" }, authState.user?.email || ""),
           ),
         ),
@@ -659,13 +662,22 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
     ),
     h("section", { className: "layout" },
       error ? h("div", { className: "panel muted" }, error) : null,
-      personalView === "life" && accessBeneficiaryId ? h(TaskPanel, { authState, auxiliaries: planning?.team || [], year, month, beneficiaryId: accessBeneficiaryId, canContribute }) : null,
-      personalView !== "life" && planning
+      activeAccess.length > 1 ? h("div", { className: "panel personal-beneficiary-picker" },
+        h("div", null,
+          h("h3", null, "Bénéficiaire"),
+          h("div", { className: "muted" }, "Choisir le dossier à afficher."),
+        ),
+        h(Select, { value: accessBeneficiaryId, onChange: value => onSelectBeneficiary?.(value) },
+          activeAccess.map(item => h("option", { key: item.beneficiaryId, value: item.beneficiaryId }, item.beneficiaryName || "Bénéficiaire sans nom")),
+        ),
+      ) : null,
+      personalView === "life" && accessBeneficiaryId ? h(TaskPanel, { authState, auxiliaries: visiblePlanning?.team || [], year, month, beneficiaryId: accessBeneficiaryId, canContribute }) : null,
+      personalView !== "life" && visiblePlanning
         ? h("div", { className: "panel personal-summary" },
-            h("div", null, h("h3", null, planning.name || "Mon planning"), h("div", { className: "muted" }, beneficiaryLabel)),
+            h("div", null, h("h3", null, visiblePlanning.name || "Mon planning"), h("div", { className: "muted" }, beneficiaryLabel)),
           )
         : null,
-      personalView !== "life" && !planning
+      personalView !== "life" && !visiblePlanning
         ? h("div", { className: "panel personal-empty-panel" },
             h("h3", null, "Planning en attente"),
             h("div", { className: "muted" }, error || pendingMessage),
@@ -679,7 +691,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
           )
         : null,
       personalView !== "life" && canContribute ? h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }) : null,
-      planning && personalView === "week"
+      visiblePlanning && personalView === "week"
         ? h("div", { className: "week-grid" }, orderedWeekGroups.map(days => {
             const currentWeek = isCurrentMonth && days.includes(today.getDate());
             return h("section", { className: `panel personal-week-panel${currentWeek ? " current-week" : ""}`, key: days.join("-") },
@@ -688,12 +700,12 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
             );
           }))
         : null,
-      planning && personalView === "month"
+      visiblePlanning && personalView === "month"
         ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
         : null,
     ),
-    h(ChangeRequestModal, { edit: requestEdit, planning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
-    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null), dayOutings: planning?.dayOutings || {} }),
+    h(ChangeRequestModal, { edit: requestEdit, planning: visiblePlanning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
+    h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null), dayOutings: visiblePlanning?.dayOutings || {} }),
   );
 }
 
@@ -1428,6 +1440,7 @@ export default function App() {
   const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
   const [personalPlanning, setPersonalPlanning] = useState(null);
   const [personalAccess, setPersonalAccess] = useState([]);
+  const [personalBeneficiaryId, setPersonalBeneficiaryId] = useState("");
   const [personalError, setPersonalError] = useState("");
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
   const [adminChangeError, setAdminChangeError] = useState("");
@@ -1542,14 +1555,17 @@ export default function App() {
     if (!personalMode) {
       setPersonalPlanning(null);
       setPersonalAccess([]);
+      setPersonalBeneficiaryId("");
       return;
     }
     setPersonalError("");
+    setPersonalPlanning(null);
     return subscribePersonalPlanning({
       db: authState.db,
       user: authState.user,
       year,
       month,
+      beneficiaryId: personalBeneficiaryId,
       onAccess: setPersonalAccess,
       onChange: planning => {
         setPersonalPlanning(planning);
@@ -1560,7 +1576,16 @@ export default function App() {
       },
       onError: error => setPersonalError(`Lecture du planning impossible : ${error.message}`),
     });
-  }, [personalMode, authState.db, authState.user, year, month]);
+  }, [personalMode, authState.db, authState.user, year, month, personalBeneficiaryId]);
+
+  useEffect(() => {
+    if (!personalMode) return;
+    const ids = personalAccess
+      .filter(item => item.active !== false && item.beneficiaryId)
+      .map(item => item.beneficiaryId);
+    if (!ids.length) return;
+    setPersonalBeneficiaryId(current => ids.includes(current) ? current : ids[0]);
+  }, [personalMode, personalAccess]);
 
   useEffect(() => {
     if (!stateLoaded || !authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin || !beneficiaryId) {
@@ -1993,7 +2018,7 @@ export default function App() {
   };
 
   if (firstConnectionMode) return h(FirstConnectionPanel, { authState, onLogout: () => signOut(authState.auth) });
-  if (personalMode) return h(PersonalView, { authState, sessionRole, year, month, setYear, setMonth, planning: personalPlanning, access: personalAccess, error: personalError, onLogout: () => signOut(authState.auth) });
+  if (personalMode) return h(PersonalView, { authState, sessionRole, year, month, setYear, setMonth, planning: personalPlanning, access: personalAccess, selectedBeneficiaryId: personalBeneficiaryId, onSelectBeneficiary: setPersonalBeneficiaryId, error: personalError, onLogout: () => signOut(authState.auth) });
 
   return h("main", { className: `app${view === "life" ? " life-view" : ""}` },
     h(TopBar, {

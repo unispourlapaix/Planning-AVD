@@ -440,6 +440,8 @@ h2 { font-size: 16px; }
 .shopping-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .shopping-groups section { padding: 9px; border-radius: 7px; background: rgba(235,249,241,.74); }
 .personal-tabs { grid-template-columns: repeat(3, minmax(42px, 1fr)); }
+.personal-beneficiary-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, .45fr); gap: 10px; align-items: center; }
+.personal-beneficiary-picker h3 { margin: 0 0 3px; }
 .personal-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .personal-summary h3 { margin: 0 0 4px; }
 .personal-access-list { display: grid; gap: 7px; margin-top: 10px; }
@@ -499,6 +501,7 @@ h2 { font-size: 16px; }
   .first-role-grid { grid-template-columns: 1fr; }
   .first-role-choice { min-height: auto; }
   .new-beneficiary-admin-banner { align-items: stretch; flex-direction: column; }
+  .personal-beneficiary-picker { grid-template-columns: 1fr; }
   .access-member { grid-template-columns: minmax(0, 1fr) auto; }
   .access-member .btn { grid-column: 1 / -1; justify-self: start; }
   .access-member-list { max-height: min(330px, 44vh); }

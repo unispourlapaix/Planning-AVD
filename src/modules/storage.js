@@ -774,7 +774,7 @@ export async function grantAdminByEmail({ db, user, email }) {
   return result.email;
 }
 
-export function subscribePersonalPlanning({ db, user, year, month, onChange, onAccess, onError }) {
+export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId = "", onChange, onAccess, onError }) {
   if (!db || !user?.email) {
     onAccess?.([]);
     return () => {};
@@ -782,6 +782,7 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onA
   const rawEmail = cleanEmail(user.email);
   const email = normalizeEmail(rawEmail);
   const monthId = monthKey(year, month);
+  const selectedBeneficiaryId = String(beneficiaryId || "").trim();
   const shareKeys = uniqueShareKeys(rawEmail);
   const plans = new Map();
   const monthUnsubscribers = new Map();
@@ -791,14 +792,16 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onA
   let monthPending = 0;
   let active = true;
   let nearbySearchStarted = false;
+  const planMatchesSelection = plan => !selectedBeneficiaryId || String(plan?.beneficiaryId || "") === selectedBeneficiaryId;
+  const visiblePlans = () => sortPersonalPlans([...plans.values()].filter(planMatchesSelection));
   const emitBestPlan = () => {
     if (!active) return null;
-    const best = sortPersonalPlans([...plans.values()])[0] || null;
-    if (best) onChange?.(best);
+    const best = visiblePlans()[0] || null;
+    onChange?.(best);
     return best;
   };
   const maybeStartFallback = () => {
-    if (!active || plans.size || directPending > 0 || beneficiaryPending > 0 || monthPending > 0) return;
+    if (!active || visiblePlans().length || directPending > 0 || beneficiaryPending > 0 || monthPending > 0) return;
     startNearbyFallback();
   };
   const setPlan = (key, value) => {
@@ -823,7 +826,7 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onA
       const snapshot = await db.collectionGroup("months").where(field, "==", value).limit(12).get();
       return sortPersonalPlans(snapshot.docs
         .map(doc => doc.data())
-        .filter(item => Number.isInteger(item?.year) && Number.isInteger(item?.month)))[0] || null;
+        .filter(item => Number.isInteger(item?.year) && Number.isInteger(item?.month) && planMatchesSelection(item)))[0] || null;
     } catch (error) {
       console.warn("Recherche planning auxiliaire impossible.", error);
       return null;
@@ -841,15 +844,15 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onA
       const monthSnaps = await Promise.all(monthReads);
       monthSnaps.forEach(snap => { if (snap.exists) results.push(snap.data()); });
     } catch {}
-    return sortPersonalPlans(results);
+    return sortPersonalPlans(results.filter(planMatchesSelection));
   };
   const startNearbyFallback = async () => {
-    if (nearbySearchStarted || !active || plans.size) return;
+    if (nearbySearchStarted || !active || visiblePlans().length) return;
     nearbySearchStarted = true;
     for (const candidate of nearbyMonths(year, month).filter(item => item.id !== monthId)) {
       for (const key of shareKeys) {
         const candidates = await readShareMonthPlans(key, candidate.id);
-        if (!active || plans.size) return;
+        if (!active || visiblePlans().length) return;
         if (candidates[0]) {
           onChange?.(candidates[0]);
           return;
@@ -861,7 +864,7 @@ export function subscribePersonalPlanning({ db, user, year, month, onChange, onA
       onChange?.(queried);
       return;
     }
-    if (active && !plans.size) onChange?.(null);
+    if (active && !visiblePlans().length) onChange?.(null);
   };
   const directUnsubscribers = shareKeys.map((key, index) => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId).onSnapshot(snap => {
       if (!active) return;
