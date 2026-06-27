@@ -364,8 +364,12 @@ export async function isAdminUser({ db, user }) {
     if (!email) return false;
     const emailIdSnap = await db.collection("planning-avd-admins").doc(email).get();
     if (emailIdSnap.exists && emailIdSnap.data()?.active !== false) return true;
-    const legacySnap = await db.collection("planning-avd-admins").where("email", "==", email).limit(1).get();
-    if (!legacySnap.empty) return legacySnap.docs.some(doc => doc.data()?.active !== false);
+    try {
+      const legacySnap = await db.collection("planning-avd-admins").where("email", "==", email).limit(1).get();
+      if (!legacySnap.empty) return legacySnap.docs.some(doc => doc.data()?.active !== false);
+    } catch (error) {
+      console.warn("Recherche admin historique ignoree.", error);
+    }
     const emailSnap = await db.collection("planning-avd-admin-emails").doc(email).get();
     return emailSnap.exists && emailSnap.data()?.active !== false;
   } catch (error) {
@@ -379,6 +383,55 @@ const ACCESS_ROLES = ["admin", "auxiliary", "viewer"];
 const normalizeAccessRole = role => ACCESS_ROLES.includes(role) ? role : "auxiliary";
 
 const roleRank = role => ({ owner: 0, admin: 1, auxiliary: 2, viewer: 3 }[role] ?? 4);
+
+const accessFromSnapshots = ({ uidAdmin, emailAdmin, adminEmail, teamMember }) => {
+  const admin = [uidAdmin, emailAdmin, adminEmail].some(snapshot => snapshot?.exists && snapshot.data()?.active !== false);
+  if (admin) return { isAdmin: true, role: "admin", canContribute: true, isMember: true };
+  if (!teamMember?.exists || teamMember.data()?.active === false) {
+    return { isAdmin: false, role: "guest", canContribute: false, isMember: false };
+  }
+  const role = normalizeAccessRole(teamMember.data()?.role);
+  return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true };
+};
+
+export function subscribeUserAccess({ db, user, onChange, onError }) {
+  if (!db || !user?.uid) {
+    onChange?.({ isAdmin: false, role: "guest", canContribute: false, isMember: false });
+    return () => {};
+  }
+  const email = normalizeEmail(user.email);
+  const snapshots = { uidAdmin: null, emailAdmin: null, adminEmail: null, teamMember: null };
+  const expected = email ? 4 : 1;
+  let received = 0;
+  let active = true;
+  const emptySnapshot = { exists: false, data: () => ({}) };
+  const emit = () => {
+    if (!active || received < expected) return;
+    onChange?.(accessFromSnapshots(snapshots));
+  };
+  const listen = (key, ref) => ref.onSnapshot(snapshot => {
+    if (snapshots[key] === null) received += 1;
+    snapshots[key] = snapshot;
+    emit();
+  }, error => {
+    if (snapshots[key] === null) received += 1;
+    snapshots[key] = emptySnapshot;
+    onError?.(error);
+    emit();
+  });
+  const unsubscribers = [listen("uidAdmin", db.collection("planning-avd-admins").doc(user.uid))];
+  if (email) {
+    unsubscribers.push(
+      listen("emailAdmin", db.collection("planning-avd-admins").doc(email)),
+      listen("adminEmail", db.collection("planning-avd-admin-emails").doc(email)),
+      listen("teamMember", db.collection("planning-avd-team-members").doc(email)),
+    );
+  }
+  return () => {
+    active = false;
+    unsubscribers.forEach(unsubscribe => unsubscribe());
+  };
+}
 
 export async function getUserAccess({ db, user }) {
   if (!db || !user?.uid) return { isAdmin: false, role: "guest", canContribute: false, isMember: false };

@@ -10,7 +10,6 @@ import {
   defaultState,
   ensureBeneficiaryIdentity,
   ensureBeneficiaryGroup,
-  getUserAccess,
   loadBeneficiaryState,
   grantMemberRole,
   loadRestoreBackup,
@@ -27,9 +26,10 @@ import {
   subscribeAccessMembers,
   subscribeBeneficiaryDashboard,
   subscribeUserBeneficiaries,
+  subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260626-new-beneficiary-admin";
+} from "./modules/storage.js?v=20260627-live-access";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -332,13 +332,6 @@ const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && 
   .filter(([, items]) => items.length));
 const stateSignature = state => JSON.stringify(state);
 const ADMIN_ROLE_TIMEOUT_MS = 4500;
-const withTimeout = (promise, ms, fallback) => new Promise(resolve => {
-  const timer = setTimeout(() => resolve(fallback), ms);
-  promise
-    .then(value => resolve(value))
-    .catch(() => resolve(fallback))
-    .finally(() => clearTimeout(timer));
-});
 const openHtmlDocument = ({ html, fileName, blockedMessage }) => {
   const win = window.open("", "_blank");
   if (win) {
@@ -1476,12 +1469,25 @@ export default function App() {
       return;
     }
     let active = true;
+    let settled = false;
     setSessionRole({ ready: false, isAdmin: false, role: "guest", canContribute: false, isMember: false });
-    withTimeout(getUserAccess({ db: authState.db, user: authState.user }), ADMIN_ROLE_TIMEOUT_MS, { isAdmin: false, role: "guest", canContribute: false, isMember: false })
-      .then(access => {
+    const unsubscribe = subscribeUserAccess({
+      db: authState.db,
+      user: authState.user,
+      onChange: access => {
+        settled = true;
         if (active) setSessionRole({ ready: true, ...access });
-      });
-    return () => { active = false; };
+      },
+      onError: error => console.warn("Role utilisateur indisponible.", error),
+    });
+    const timeout = setTimeout(() => {
+      if (active && !settled) setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false });
+    }, ADMIN_ROLE_TIMEOUT_MS);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      unsubscribe?.();
+    };
   }, [authState.ready, authState.user, authState.db]);
 
   const firstConnectionMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin && !sessionRole.isMember;

@@ -5,8 +5,12 @@
 1. Connectez-vous une première fois dans l'application avec le compte Google admin.
 2. Dans Firebase Console, ouvrez Firestore Database.
 3. Créez la collection `planning-avd-admins`.
-4. Ajoutez un document dont l'identifiant est l'UID Firebase du compte admin.
-5. Ajoutez le champ `email` avec l'adresse email admin.
+4. Ajoutez un document dont l'identifiant est l'UID Firebase du compte admin ou son email en minuscules.
+5. Ajoutez les champs :
+   - `email` : adresse email admin, type `string`
+   - `emailLower` : même adresse en minuscules, type `string`
+   - `role` : `admin`, type `string`
+   - `active` : `true`, type `boolean`
 
 L'UID est visible dans Firebase Console, rubrique Authentication, liste des utilisateurs.
 
