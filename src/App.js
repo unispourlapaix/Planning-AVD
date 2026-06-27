@@ -1036,6 +1036,7 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
   const auxiliaryCount = activeMembers.filter(member => member.role === "auxiliary").length;
   const viewerCount = activeMembers.filter(member => member.role === "viewer").length;
   const beneficiary = dashboard?.beneficiary || {};
+  const activity = dashboard?.activity || [];
   const cards = [
     { label: "Admins", value: adminCount, detail: "gestion du dossier" },
     { label: "Auxiliaires", value: auxiliaryCount, detail: `${viewerCount} lecture seule` },
@@ -1064,6 +1065,26 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
         h("span", null, "Planning transmis"),
         h("b", null, beneficiary.latestPublishedAt ? `${formatDashboardDate(beneficiary.latestPublishedAt)} · ${beneficiary.latestPublishedPeriod || ""}` : "Pas encore"),
       ),
+    ),
+    h("div", { className: "group-activity" },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("h3", null, "Historique récent"),
+          h("div", { className: "muted" }, "Dernières actions visibles du dossier."),
+        ),
+      ),
+      activity.length
+        ? h("div", { className: "group-activity-list" }, activity.map(item => h("article", { key: item.id, className: `group-activity-item ${item.type || "info"}` },
+            h("div", null,
+              h("b", null, item.label || "Action"),
+              h("small", null, [
+                formatDashboardDate(item.createdAt),
+                item.actorName || item.actorEmail || "",
+                item.detail || "",
+              ].filter(Boolean).join(" · ")),
+            ),
+          )))
+        : h("div", { className: "muted" }, "L'historique se remplira aux prochaines sauvegardes et transmissions."),
     ),
   );
 }

@@ -236,6 +236,14 @@ service cloud.firestore {
           && request.resource.data.beneficiaryId == beneficiaryId;
         allow delete: if isBeneficiaryAdmin(beneficiaryId);
       }
+
+      match /activity/{activityId} {
+        allow read: if isBeneficiaryMember(beneficiaryId);
+        allow create: if isBeneficiaryAdmin(beneficiaryId)
+          && request.resource.data.beneficiaryId == beneficiaryId
+          && request.resource.data.actorEmail == authEmail();
+        allow update, delete: if false;
+      }
     }
 
     match /planning-avd-tasks/{taskId} {

@@ -75,6 +75,7 @@ const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxil
 const beneficiaryRoot = (db, beneficiaryId) => db.collection("planning-avd-beneficiaries").doc(String(beneficiaryId || "").trim());
 const userBeneficiaryRef = (db, user, beneficiaryId) =>
   db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries").doc(String(beneficiaryId || "").trim());
+const activityRef = (db, beneficiaryId) => beneficiaryRoot(db, beneficiaryId).collection("activity");
 const beneficiaryMemberKey = email => normalizeEmail(email);
 const buildBeneficiaryMember = ({ email, name = "", role = "auxiliary", active = true, updatedBy = "" }) => ({
   email: normalizeEmail(email),
@@ -231,6 +232,13 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       updatedBy: user.email || "",
     }, { merge: true });
     await ensureBeneficiaryGroup({ db, user, state: value });
+    await addBeneficiaryActivity({
+      db,
+      beneficiaryId: value.beneficiaryId,
+      type: "save",
+      user,
+      detail: `${stateMonthKey(value)} · ${value.auxiliaries?.filter?.(aux => aux.active !== false).length || 0} auxiliaire(s)`,
+    });
     return { local: true, cloud: true, updatedAt: value.updatedAt };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
@@ -271,9 +279,33 @@ export async function loadBeneficiaryState({ db, user, beneficiaryId }) {
 const emptyDashboard = () => ({
   beneficiary: null,
   members: [],
+  activity: [],
   openTasks: 0,
   totalTasks: 0,
 });
+
+const activityLabels = {
+  save: "Sauvegarde cloud",
+  publish: "Planning transmis",
+};
+
+async function addBeneficiaryActivity({ db, beneficiaryId, type, user, detail = "" }) {
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  if (!db || !safeBeneficiaryId || !user?.uid) return;
+  try {
+    await activityRef(db, safeBeneficiaryId).add({
+      beneficiaryId: safeBeneficiaryId,
+      type,
+      label: activityLabels[type] || "Action",
+      detail: String(detail || "").trim(),
+      actorEmail: normalizeEmail(user.email),
+      actorName: String(user.displayName || user.email || "").trim(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn("Historique cloud impossible.", error);
+  }
+}
 
 export function subscribeBeneficiaryDashboard({ db, user, beneficiaryId = "", onChange, onError }) {
   const safeBeneficiaryId = String(beneficiaryId || "").trim();
@@ -282,7 +314,7 @@ export function subscribeBeneficiaryDashboard({ db, user, beneficiaryId = "", on
     return () => {};
   }
   const dashboard = emptyDashboard();
-  const emit = () => onChange?.({ ...dashboard, members: [...dashboard.members] });
+  const emit = () => onChange?.({ ...dashboard, members: [...dashboard.members], activity: [...dashboard.activity] });
   const root = beneficiaryRoot(db, safeBeneficiaryId);
   const unsubscribers = [
     root.onSnapshot(snapshot => {
@@ -297,6 +329,10 @@ export function subscribeBeneficiaryDashboard({ db, user, beneficiaryId = "", on
       const tasks = snapshot.docs.map(doc => doc.data() || {});
       dashboard.totalTasks = tasks.length;
       dashboard.openTasks = tasks.filter(task => task.completed !== true).length;
+      emit();
+    }, error => onError?.(error)),
+    root.collection("activity").orderBy("createdAt", "desc").limit(6).onSnapshot(snapshot => {
+      dashboard.activity = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       emit();
     }, error => onError?.(error)),
   ];
@@ -1020,5 +1056,12 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     });
   });
   await batch.commit();
+  await addBeneficiaryActivity({
+    db,
+    beneficiaryId: safeBeneficiaryId,
+    type: "publish",
+    user,
+    detail: `${monthKey(year, month)} · ${payloads.length} auxiliaire(s)`,
+  });
   return payloads.length;
 }

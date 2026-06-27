@@ -114,6 +114,12 @@ h2 { font-size: 16px; }
 .group-dashboard-timeline div { padding: 9px 10px; border-radius: 8px; background: rgba(240,248,249,.8); border: 1px solid rgba(213,225,229,.78); }
 .group-dashboard-timeline span { display: block; color: #697981; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 .group-dashboard-timeline b { display: block; margin-top: 3px; color: #344753; font-size: 12px; overflow-wrap: anywhere; }
+.group-activity { display: grid; gap: 8px; padding-top: 2px; }
+.group-activity-list { display: grid; gap: 7px; }
+.group-activity-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; padding: 9px 10px; border: 1px solid rgba(213,225,229,.82); border-left: 4px solid #8bbce8; border-radius: 8px; background: rgba(255,255,255,.74); box-shadow: inset 0 1px 0 rgba(255,255,255,.96); }
+.group-activity-item.publish { border-left-color: #d990c3; }
+.group-activity-item b { display: block; color: #344753; font-size: 12px; }
+.group-activity-item small { display: block; color: #697981; font-size: 10px; font-weight: 800; overflow-wrap: anywhere; line-height: 1.35; }
 .btn {
   border: 1px solid rgba(255,255,255,.95);
   border-radius: 8px;
