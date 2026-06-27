@@ -41,7 +41,9 @@ Fichiers à garder identiques :
 
 Un utilisateur connecté peut créer son propre dossier bénéficiaire depuis l'application avec l'option `Devenir admin d'un nouveau bénéficiaire`.
 
-Firebase doit accepter cette création grâce à la collection `planning-avd-admin-bootstraps`. Si cette action affiche `Missing or insufficient permissions`, publiez à nouveau le fichier complet `firestore.rules`.
+L'application crée alors le dossier bénéficiaire, l'identifiant unique, le membre admin et la sauvegarde personnelle de départ. L'admin invite ensuite les auxiliaires depuis `Réglages > Membres et rôles`.
+
+Firebase accepte cette création grâce à la collection `planning-avd-admin-bootstraps`. Si cette action affiche `Missing or insufficient permissions`, publiez à nouveau le fichier complet `firestore.rules`.
 
 ## Utilisation
 

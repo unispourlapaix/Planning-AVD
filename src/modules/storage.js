@@ -384,24 +384,34 @@ const normalizeAccessRole = role => ACCESS_ROLES.includes(role) ? role : "auxili
 
 const roleRank = role => ({ owner: 0, admin: 1, auxiliary: 2, viewer: 3 }[role] ?? 4);
 
-const accessFromSnapshots = ({ uidAdmin, emailAdmin, adminEmail, teamMember }) => {
-  const admin = [uidAdmin, emailAdmin, adminEmail].some(snapshot => snapshot?.exists && snapshot.data()?.active !== false);
-  if (admin) return { isAdmin: true, role: "admin", canContribute: true, isMember: true };
+const accessFromSnapshots = ({ uidAdmin, emailAdmin, adminEmail, bootstrapAdmin, teamMember, beneficiaryShares }) => {
+  const globalAdmin = [uidAdmin, emailAdmin, adminEmail].some(snapshot => snapshot?.exists && snapshot.data()?.active !== false);
+  if (globalAdmin) return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: true };
+  const beneficiaryAdmin = bootstrapAdmin?.exists && bootstrapAdmin.data()?.active !== false;
+  if (beneficiaryAdmin) return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: false };
+  const shareRoles = (beneficiaryShares?.docs || [])
+    .map(doc => normalizeAccessRole(doc.data()?.role))
+    .filter((role, index) => (beneficiaryShares.docs[index].data()?.active !== false) && ACCESS_ROLES.includes(role));
+  if (shareRoles.includes("admin")) return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: false };
+  if (shareRoles.length) {
+    const role = shareRoles.sort((a, b) => roleRank(a) - roleRank(b))[0];
+    return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true, globalAdmin: false };
+  }
   if (!teamMember?.exists || teamMember.data()?.active === false) {
-    return { isAdmin: false, role: "guest", canContribute: false, isMember: false };
+    return { isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false };
   }
   const role = normalizeAccessRole(teamMember.data()?.role);
-  return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true };
+  return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true, globalAdmin: false };
 };
 
 export function subscribeUserAccess({ db, user, onChange, onError }) {
   if (!db || !user?.uid) {
-    onChange?.({ isAdmin: false, role: "guest", canContribute: false, isMember: false });
+    onChange?.({ isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
     return () => {};
   }
   const email = normalizeEmail(user.email);
-  const snapshots = { uidAdmin: null, emailAdmin: null, adminEmail: null, teamMember: null };
-  const expected = email ? 4 : 1;
+  const snapshots = { uidAdmin: null, emailAdmin: null, adminEmail: null, bootstrapAdmin: null, teamMember: null, beneficiaryShares: null };
+  const expected = email ? 6 : 1;
   let received = 0;
   let active = true;
   const emptySnapshot = { exists: false, data: () => ({}) };
@@ -424,7 +434,9 @@ export function subscribeUserAccess({ db, user, onChange, onError }) {
     unsubscribers.push(
       listen("emailAdmin", db.collection("planning-avd-admins").doc(email)),
       listen("adminEmail", db.collection("planning-avd-admin-emails").doc(email)),
+      listen("bootstrapAdmin", db.collection("planning-avd-admin-bootstraps").doc(email)),
       listen("teamMember", db.collection("planning-avd-team-members").doc(email)),
+      listen("beneficiaryShares", db.collection("planning-avd-shares").doc(email).collection("beneficiaries").limit(20)),
     );
   }
   return () => {
@@ -434,21 +446,34 @@ export function subscribeUserAccess({ db, user, onChange, onError }) {
 }
 
 export async function getUserAccess({ db, user }) {
-  if (!db || !user?.uid) return { isAdmin: false, role: "guest", canContribute: false, isMember: false };
+  if (!db || !user?.uid) return { isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false };
   const admin = await isAdminUser({ db, user });
-  if (admin) return { isAdmin: true, role: "admin", canContribute: true, isMember: true };
+  if (admin) return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: true };
   const email = normalizeEmail(user.email);
-  if (!email) return { isAdmin: false, role: "guest", canContribute: false, isMember: false };
+  if (!email) return { isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false };
   try {
+    const bootstrapSnap = await db.collection("planning-avd-admin-bootstraps").doc(email).get();
+    if (bootstrapSnap.exists && bootstrapSnap.data()?.active !== false) {
+      return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: false };
+    }
+    const shareSnap = await db.collection("planning-avd-shares").doc(email).collection("beneficiaries").limit(20).get().catch(() => null);
+    const shareRoles = (shareSnap?.docs || [])
+      .map(doc => normalizeAccessRole(doc.data()?.role))
+      .filter((role, index) => (shareSnap.docs[index].data()?.active !== false) && ACCESS_ROLES.includes(role));
+    if (shareRoles.includes("admin")) return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: false };
+    if (shareRoles.length) {
+      const role = shareRoles.sort((a, b) => roleRank(a) - roleRank(b))[0];
+      return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true, globalAdmin: false };
+    }
     const snap = await db.collection("planning-avd-team-members").doc(email).get();
     if (!snap.exists || snap.data()?.active === false) {
-      return { isAdmin: false, role: "guest", canContribute: false, isMember: false };
+      return { isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false };
     }
     const role = normalizeAccessRole(snap.data()?.role);
-    return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true };
+    return { isAdmin: false, role, canContribute: role !== "viewer", isMember: true, globalAdmin: false };
   } catch (error) {
     console.warn("Verification role utilisateur impossible.", error);
-    return { isAdmin: false, role: "guest", canContribute: false, isMember: false };
+    return { isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false };
   }
 }
 
@@ -517,40 +542,35 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
     beneficiaryName: cleanBeneficiary,
     updatedAt: new Date().toISOString(),
   };
-  await Promise.all([
-    db.collection("planning-avd-team-members").doc(email).set({
-      email,
-      emailLower: email,
-      name: String(user.displayName || email).trim(),
-      role: "admin",
-      active: true,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: email,
-    }, { merge: true }),
-    db.collection("planning-avd-access-requests").doc(email).set({
-      email,
-      name: String(user.displayName || email).trim(),
-      role: "admin",
-      beneficiaryName: cleanBeneficiary,
-      status: "approved",
-      resolvedBy: email,
-      resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true }),
-    db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").set({
-      value,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: email,
-    }, { merge: true }),
-    userBeneficiaryRef(db, user, beneficiaryId).set({
-      beneficiaryId,
-      beneficiaryName: cleanBeneficiary,
-      value,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: email,
-    }, { merge: true }),
-  ]);
-  await ensureBeneficiaryGroup({ db, user, state: value });
+  const batch = db.batch();
+  const root = beneficiaryRoot(db, beneficiaryId);
+  batch.set(root, {
+    beneficiaryId,
+    beneficiaryName: cleanBeneficiary,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: email,
+  }, { merge: true });
+  batch.set(root.collection("members").doc(beneficiaryMemberKey(email)), buildBeneficiaryMember({
+    email,
+    name: String(user.displayName || email).trim(),
+    role: "admin",
+    active: true,
+    updatedBy: email,
+  }), { merge: true });
+  batch.set(db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state"), {
+    value,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: email,
+  }, { merge: true });
+  batch.set(userBeneficiaryRef(db, user, beneficiaryId), {
+    beneficiaryId,
+    beneficiaryName: cleanBeneficiary,
+    value,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: email,
+  }, { merge: true });
+  await batch.commit();
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   return { email, beneficiaryId, beneficiaryName: cleanBeneficiary, role: "admin" };
 }
@@ -617,7 +637,8 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!clean || !clean.includes("@")) throw new Error("Email invalide.");
   if (clean === adminEmail && cleanRole !== "admin") throw new Error("Votre propre acces administrateur reste protege.");
-  const existingAdmin = cleanRole === "admin"
+  const canWriteGlobalAccess = await isAdminUser({ db, user });
+  const existingAdmin = cleanRole === "admin" || !canWriteGlobalAccess
     ? null
     : await db.collection("planning-avd-admins").doc(clean).get().catch(() => null);
   const targetIsActiveAdmin = !!existingAdmin?.exists && existingAdmin.data()?.active !== false;
@@ -631,13 +652,14 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: adminEmail,
   };
-  const writes = [
-    db.collection("planning-avd-team-members").doc(clean).set({
+  const writes = [];
+  if (canWriteGlobalAccess) {
+    writes.push(db.collection("planning-avd-team-members").doc(clean).set({
       ...common,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: adminEmail,
-    }, { merge: true }),
-  ];
+    }, { merge: true }));
+  }
   if (safeBeneficiaryId) {
     writes.push(
       beneficiaryRoot(db, safeBeneficiaryId).set({
@@ -653,24 +675,38 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
         active: true,
         updatedBy: adminEmail,
       }), { merge: true }),
+      db.collection("planning-avd-shares").doc(clean).collection("beneficiaries").doc(safeBeneficiaryId).set({
+        beneficiaryId: safeBeneficiaryId,
+        beneficiaryName: String(beneficiaryName || "").trim(),
+        email: clean,
+        emailOriginal: clean,
+        readEmails: [clean],
+        role: effectiveRole,
+        active: true,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminEmail,
+      }, { merge: true }),
     );
   }
-  if (effectiveRole === "admin") {
-    writes.push(db.collection("planning-avd-admins").doc(clean).set({
-      ...common,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: adminEmail,
-    }, { merge: true }));
-  } else {
-    writes.push(db.collection("planning-avd-admins").doc(clean).set({
-      email: clean,
-      emailLower: clean,
-      active: false,
-      role: "admin",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: adminEmail,
-    }, { merge: true }));
+  if (canWriteGlobalAccess) {
+    if (effectiveRole === "admin") {
+      writes.push(db.collection("planning-avd-admins").doc(clean).set({
+        ...common,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: adminEmail,
+      }, { merge: true }));
+    } else {
+      writes.push(db.collection("planning-avd-admins").doc(clean).set({
+        email: clean,
+        emailLower: clean,
+        active: false,
+        role: "admin",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminEmail,
+      }, { merge: true }));
+    }
   }
+  if (!writes.length) throw new Error("Aucun bénéficiaire actif pour ajouter ce membre.");
   await Promise.all(writes);
   return { email: clean, role: effectiveRole, requestedRole: cleanRole };
 }

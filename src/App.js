@@ -29,7 +29,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260627-live-access";
+} from "./modules/storage.js?v=20260627-beneficiary-create";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -916,6 +916,7 @@ function FirstConnectionPanel({ authState, onLogout }) {
   const [creatingAdmin, setCreatingAdmin] = useState(false);
   const [error, setError] = useState("");
   const selected = FIRST_ROLE_CHOICES.find(choice => choice.role === role) || FIRST_ROLE_CHOICES[0];
+  const adminMode = role === "admin";
 
   useEffect(() => {
     if (!authState.db || !authState.user) {
@@ -932,6 +933,7 @@ function FirstConnectionPanel({ authState, onLogout }) {
   }, [authState.db, authState.user]);
 
   const submit = async () => {
+    if (adminMode) return becomeNewBeneficiaryAdmin();
     if (saving) return;
     setSaving(true);
     try {
@@ -972,7 +974,9 @@ function FirstConnectionPanel({ authState, onLogout }) {
       ? "Demande refusée : vous pouvez corriger le rôle ou le message puis renvoyer."
       : request?.status === "pending"
         ? "Demande envoyée : un administrateur doit valider l'accès."
-        : "Choisissez votre rôle de connexion.";
+        : adminMode
+          ? "Indiquez le bénéficiaire pour créer immédiatement votre espace administrateur."
+          : "Choisissez votre rôle de connexion.";
 
   return h("main", { className: "app first-role-app" },
     h("section", { className: "panel first-role-panel" },
@@ -1000,7 +1004,7 @@ function FirstConnectionPanel({ authState, onLogout }) {
           onChange: setBeneficiaryName,
           placeholder: "Ex : Payet Emmanuel",
         })),
-        h(Field, { label: "Message pour l'administrateur" }, h(TextInput, {
+        adminMode ? null : h(Field, { label: "Message pour l'administrateur" }, h(TextInput, {
           value: message,
           onChange: setMessage,
           placeholder: "Ex : nouvelle auxiliaire, famille, second admin...",
@@ -1008,10 +1012,10 @@ function FirstConnectionPanel({ authState, onLogout }) {
       ),
       error ? h("div", { className: "task-error" }, error) : null,
       h("div", { className: "request-actions" },
-        h(Button, { active: true, disabled: saving, onClick: submit }, saving ? "Envoi..." : "Envoyer la demande"),
+        h(Button, { active: true, disabled: saving || creatingAdmin, onClick: submit }, adminMode ? creatingAdmin ? "Création..." : "Créer l'espace admin" : saving ? "Envoi..." : "Envoyer la demande"),
         request?.status === "approved" ? h(Button, { onClick: () => window.location.reload() }, "Recharger") : null,
       ),
-      h("div", { className: "new-beneficiary-admin-banner" },
+      adminMode ? null : h("div", { className: "new-beneficiary-admin-banner" },
         h("div", null,
           h("b", null, "Nouveau bénéficiaire ?"),
           h("small", null, "Créez un nouvel accompagnement et devenez son administrateur."),
@@ -1082,7 +1086,7 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
   );
 }
 
-function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
+function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
   const [members, setMembers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
   const [email, setEmail] = useState("");
@@ -1109,7 +1113,7 @@ function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, 
   }, [authState.db, authState.user, isAdmin, beneficiaryId]);
 
   useEffect(() => {
-    if (!authState.db || !authState.user || !isAdmin) {
+    if (!authState.db || !authState.user || !isAdmin || !globalAdmin) {
       setAccessRequests([]);
       return;
     }
@@ -1119,7 +1123,7 @@ function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, 
       onChange: setAccessRequests,
       onError: error => setAccessError(`Demandes de connexion indisponibles : ${error.message}`),
     });
-  }, [authState.db, authState.user, isAdmin]);
+  }, [authState.db, authState.user, isAdmin, globalAdmin]);
 
   const submit = async () => {
     if (saving) return;
@@ -1242,7 +1246,7 @@ function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, 
                 h("div", { className: "muted" }, `${visibleAccessRequests.filter(item => item.status === "pending").length} en attente pour ce groupe.`),
               ),
             ),
-            visibleAccessRequests.length
+            globalAdmin && visibleAccessRequests.length
               ? visibleAccessRequests.slice(0, 12).map(request => {
                   const pending = request.status === "pending";
                   return h("article", { key: request.id || request.email, className: `access-request ${request.status || "pending"}` },
@@ -1262,7 +1266,7 @@ function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, 
                     ) : null,
                   );
                 })
-              : h("div", { className: "muted" }, "Aucune demande de première connexion."),
+              : h("div", { className: "muted" }, globalAdmin ? "Aucune demande de première connexion." : "Invitez directement les membres de ce bénéficiaire avec leur email."),
           ),
         )
       : h("div", { className: "muted" }, "Mode auxiliaire : accès au planning personnel, demandes d'échange, tâches et courses. Demandez à un administrateur d'ajouter votre email pour gérer l'app."),
@@ -1410,7 +1414,7 @@ export default function App() {
   const [dayOutings, setDayOutings] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
   const [mealDate, setMealDate] = useState(null);
-  const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false });
+  const [sessionRole, setSessionRole] = useState({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
   const [personalPlanning, setPersonalPlanning] = useState(null);
   const [personalError, setPersonalError] = useState("");
   const [adminChangeRequests, setAdminChangeRequests] = useState([]);
@@ -1465,12 +1469,12 @@ export default function App() {
   useEffect(() => {
     if (!authState.ready) return;
     if (!authState.user) {
-      setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false });
+      setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
       return;
     }
     let active = true;
     let settled = false;
-    setSessionRole({ ready: false, isAdmin: false, role: "guest", canContribute: false, isMember: false });
+    setSessionRole({ ready: false, isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
     const unsubscribe = subscribeUserAccess({
       db: authState.db,
       user: authState.user,
@@ -1481,7 +1485,7 @@ export default function App() {
       onError: error => console.warn("Role utilisateur indisponible.", error),
     });
     const timeout = setTimeout(() => {
-      if (active && !settled) setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false });
+      if (active && !settled) setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
     }, ADMIN_ROLE_TIMEOUT_MS);
     return () => {
       active = false;
@@ -2008,7 +2012,7 @@ export default function App() {
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
-      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
       view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {
