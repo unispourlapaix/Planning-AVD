@@ -104,6 +104,16 @@ h2 { font-size: 16px; }
 .new-beneficiary-admin-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding: 12px; border-radius: 10px; border: 1px solid rgba(123,175,212,.38); background: linear-gradient(135deg, rgba(237,247,255,.86), rgba(255,248,252,.9)); }
 .new-beneficiary-admin-banner b { display: block; color: #344753; font-size: 13px; }
 .new-beneficiary-admin-banner small { display: block; color: #697981; font-size: 11px; font-weight: 800; }
+.group-dashboard { display: grid; gap: 10px; border-color: rgba(123,175,212,.34); background: rgba(252,254,255,.88); }
+.group-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.group-dashboard-card { min-width: 0; padding: 10px; border: 1px solid rgba(213,225,229,.86); border-radius: 8px; background: rgba(255,255,255,.74); box-shadow: inset 0 1px 0 rgba(255,255,255,.96); }
+.group-dashboard-card strong { display: block; color: #5689c9; font-size: 24px; line-height: 1; font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif; }
+.group-dashboard-card span { display: block; margin-top: 5px; color: #344753; font-size: 12px; font-weight: 900; }
+.group-dashboard-card small { display: block; margin-top: 2px; color: #697981; font-size: 10px; font-weight: 800; }
+.group-dashboard-timeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.group-dashboard-timeline div { padding: 9px 10px; border-radius: 8px; background: rgba(240,248,249,.8); border: 1px solid rgba(213,225,229,.78); }
+.group-dashboard-timeline span { display: block; color: #697981; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.group-dashboard-timeline b { display: block; margin-top: 3px; color: #344753; font-size: 12px; overflow-wrap: anywhere; }
 .btn {
   border: 1px solid rgba(255,255,255,.95);
   border-radius: 8px;

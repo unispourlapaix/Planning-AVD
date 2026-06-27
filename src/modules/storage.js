@@ -223,6 +223,13 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
+    await beneficiaryRoot(db, value.beneficiaryId).set({
+      beneficiaryId: value.beneficiaryId,
+      beneficiaryName: String(value.beneficiaryName || "").trim(),
+      latestSavedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: user.email || "",
+    }, { merge: true });
     await ensureBeneficiaryGroup({ db, user, state: value });
     return { local: true, cloud: true, updatedAt: value.updatedAt };
   } catch (error) {
@@ -259,6 +266,41 @@ export async function loadBeneficiaryState({ db, user, beneficiaryId }) {
   const snap = await userBeneficiaryRef(db, user, safeBeneficiaryId).get();
   if (!snap.exists || !snap.data()?.value) throw new Error("Sauvegarde bénéficiaire introuvable.");
   return ensureBeneficiaryIdentity(migrateState(snap.data().value));
+}
+
+const emptyDashboard = () => ({
+  beneficiary: null,
+  members: [],
+  openTasks: 0,
+  totalTasks: 0,
+});
+
+export function subscribeBeneficiaryDashboard({ db, user, beneficiaryId = "", onChange, onError }) {
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  if (!db || !user?.uid || !safeBeneficiaryId) {
+    onChange?.(emptyDashboard());
+    return () => {};
+  }
+  const dashboard = emptyDashboard();
+  const emit = () => onChange?.({ ...dashboard, members: [...dashboard.members] });
+  const root = beneficiaryRoot(db, safeBeneficiaryId);
+  const unsubscribers = [
+    root.onSnapshot(snapshot => {
+      dashboard.beneficiary = snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : null;
+      emit();
+    }, error => onError?.(error)),
+    root.collection("members").onSnapshot(snapshot => {
+      dashboard.members = mergeAccessMembers([], snapshot.docs.map(doc => normalizeMemberDoc(doc, "team")).filter(Boolean));
+      emit();
+    }, error => onError?.(error)),
+    root.collection("tasks").limit(200).onSnapshot(snapshot => {
+      const tasks = snapshot.docs.map(doc => doc.data() || {});
+      dashboard.totalTasks = tasks.length;
+      dashboard.openTasks = tasks.filter(task => task.completed !== true).length;
+      emit();
+    }, error => onError?.(error)),
+  ];
+  return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
 export async function loadRestoreBackup({ db, user }) {
@@ -923,6 +965,8 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
   batch.set(beneficiaryRef, {
     beneficiaryId: safeBeneficiaryId,
     beneficiaryName: String(beneficiaryName || "").trim(),
+    latestPublishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    latestPublishedPeriod: monthKey(year, month),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: adminEmail,
   }, { merge: true });

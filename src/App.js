@@ -25,6 +25,7 @@ import {
   subscribeAccessRequests,
   subscribeOwnAccessRequest,
   subscribeAccessMembers,
+  subscribeBeneficiaryDashboard,
   subscribeUserBeneficiaries,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
@@ -306,6 +307,18 @@ const extractBackupJson = text => {
   return (match ? match[1] : raw).trim();
 };
 const formatCloudTime = () => new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const timestampToDate = value => {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (Number.isFinite(value.seconds)) return new Date(value.seconds * 1000);
+  if (Number.isFinite(value._seconds)) return new Date(value._seconds * 1000);
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+const formatDashboardDate = value => {
+  const date = timestampToDate(value);
+  return date ? date.toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Pas encore";
+};
 const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
   .map(([key, items]) => [key, (Array.isArray(items) ? items : [])
     .map((item, index) => {
@@ -1016,6 +1029,45 @@ function FirstConnectionPanel({ authState, onLogout }) {
   );
 }
 
+function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }) {
+  const members = dashboard?.members || [];
+  const activeMembers = members.filter(member => member.active !== false);
+  const adminCount = activeMembers.filter(member => ["admin", "owner"].includes(member.role)).length;
+  const auxiliaryCount = activeMembers.filter(member => member.role === "auxiliary").length;
+  const viewerCount = activeMembers.filter(member => member.role === "viewer").length;
+  const beneficiary = dashboard?.beneficiary || {};
+  const cards = [
+    { label: "Admins", value: adminCount, detail: "gestion du dossier" },
+    { label: "Auxiliaires", value: auxiliaryCount, detail: `${viewerCount} lecture seule` },
+    { label: "Tâches ouvertes", value: dashboard?.openTasks || 0, detail: `${dashboard?.totalTasks || 0} au total` },
+    { label: "Échanges", value: pendingExchangeCount, detail: "demandes en attente" },
+  ];
+  return h("section", { className: "panel group-dashboard" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Tableau du groupe"),
+        h("div", { className: "muted" }, beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "Vue du dossier bénéficiaire actif."),
+      ),
+      h("span", { className: "role-pill saved" }, `${activeMembers.length} actif(s)`),
+    ),
+    h("div", { className: "group-dashboard-grid" }, cards.map(card => h("article", { key: card.label, className: "group-dashboard-card" },
+      h("strong", null, card.value),
+      h("span", null, card.label),
+      h("small", null, card.detail),
+    ))),
+    h("div", { className: "group-dashboard-timeline" },
+      h("div", null,
+        h("span", null, "Dernière sauvegarde"),
+        h("b", null, formatDashboardDate(beneficiary.latestSavedAt || beneficiary.updatedAt)),
+      ),
+      h("div", null,
+        h("span", null, "Planning transmis"),
+        h("b", null, beneficiary.latestPublishedAt ? `${formatDashboardDate(beneficiary.latestPublishedAt)} · ${beneficiary.latestPublishedPeriod || ""}` : "Pas encore"),
+      ),
+    ),
+  );
+}
+
 function AdminAccessPanel({ authState, isAdmin, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
   const [members, setMembers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
@@ -1352,6 +1404,7 @@ export default function App() {
   const [beneficiaryGroupReady, setBeneficiaryGroupReady] = useState(true);
   const [beneficiaryOptions, setBeneficiaryOptions] = useState([]);
   const [beneficiarySwitching, setBeneficiarySwitching] = useState(false);
+  const [groupDashboard, setGroupDashboard] = useState(null);
   const [cloudStatus, setCloudStatus] = useState({ kind: "local", text: "Local uniquement" });
   const [accountingNow, setAccountingNow] = useState(() => new Date());
   const cloudBaseUpdatedAtRef = useRef(undefined);
@@ -1427,6 +1480,20 @@ export default function App() {
       onError: error => console.warn("Liste des bénéficiaires indisponible.", error),
     });
   }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin]);
+
+  useEffect(() => {
+    if (!authState.db || !authState.user || !sessionRole.ready || !sessionRole.isAdmin || !beneficiaryGroupReady || !beneficiaryId) {
+      setGroupDashboard(null);
+      return;
+    }
+    return subscribeBeneficiaryDashboard({
+      db: authState.db,
+      user: authState.user,
+      beneficiaryId,
+      onChange: setGroupDashboard,
+      onError: error => console.warn("Tableau de bord groupe indisponible.", error),
+    });
+  }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, beneficiaryGroupReady, beneficiaryId]);
 
   useEffect(() => {
     if (!personalMode) return;
@@ -1913,6 +1980,7 @@ export default function App() {
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
+      view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
       view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
       view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
