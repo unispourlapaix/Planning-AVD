@@ -21,6 +21,24 @@ Depuis Firebase Console :
 3. Remplacez le contenu par celui du fichier `firestore.rules`.
 4. Cliquez sur Publier.
 
+Important :
+
+- Le premier texte collé doit être exactement `rules_version = '2';`.
+- Ne collez jamais seulement un bloc qui commence par `match /...`.
+- Si Firebase affiche `Line 1: mismatched input 'match'`, le contenu collé est incomplet : remplacez tout l'onglet Règles par le fichier complet.
+- Le fichier complet finit par deux accolades seules : `}` puis `}`.
+
+Fichiers à garder identiques :
+
+- `firestore.rules` à la racine du dossier local.
+- `.publish-current/firestore.rules` dans le dossier publié.
+
+## Nouveau bénéficiaire / nouvel admin
+
+Un utilisateur connecté peut créer son propre dossier bénéficiaire depuis l'application avec l'option `Devenir admin d'un nouveau bénéficiaire`.
+
+Firebase doit accepter cette création grâce à la collection `planning-avd-admin-bootstraps`. Si cette action affiche `Missing or insufficient permissions`, publiez à nouveau le fichier complet `firestore.rules`.
+
 ## Utilisation
 
 1. L'admin renseigne l'email Google de chaque auxiliaire dans Réglages.
