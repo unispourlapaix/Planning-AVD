@@ -160,7 +160,7 @@ export function initPwaInstall() {
       installPrompt = null;
       if (isStandalone()) button.remove();
     });
-    actionRow.appendChild(button);
+    actionRow.prepend(button);
   };
 
   setTimeout(addButton, 0);
