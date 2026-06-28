@@ -1,6 +1,9 @@
 const CDN = "https://www.gstatic.com/firebasejs/10.14.1";
 const REDIRECT_ERROR_KEY = "planning-avd-google-redirect-error";
-const POPUP_TIMEOUT_MS = 9000;
+const REDIRECT_PENDING_KEY = "planning-avd-google-redirect-pending";
+const DESKTOP_POPUP_TIMEOUT_MS = 12000;
+const MOBILE_POPUP_TIMEOUT_MS = 60000;
+const REDIRECT_RESULT_TIMEOUT_MS = 5000;
 
 const isStandaloneApp = () =>
   window.matchMedia?.("(display-mode: standalone)")?.matches
@@ -24,8 +27,9 @@ const popupTimeout = () => new Promise((_, reject) => {
     const error = new Error("La fenêtre Google semble bloquée. Passage en redirection.");
     error.code = "auth/popup-timeout";
     reject(error);
-  }, POPUP_TIMEOUT_MS);
+  }, isStandaloneApp() || isMobileLike() ? MOBILE_POPUP_TIMEOUT_MS : DESKTOP_POPUP_TIMEOUT_MS);
 });
+const redirectResultTimeout = () => new Promise(resolve => window.setTimeout(resolve, REDIRECT_RESULT_TIMEOUT_MS));
 const readRedirectError = () => {
   try {
     return sessionStorage.getItem(REDIRECT_ERROR_KEY) || "";
@@ -41,6 +45,16 @@ const writeRedirectError = message => {
 const clearRedirectError = () => {
   try {
     sessionStorage.removeItem(REDIRECT_ERROR_KEY);
+  } catch {}
+};
+const markRedirectPending = () => {
+  try {
+    sessionStorage.setItem(REDIRECT_PENDING_KEY, "1");
+  } catch {}
+};
+const clearRedirectPending = () => {
+  try {
+    sessionStorage.removeItem(REDIRECT_PENDING_KEY);
   } catch {}
 };
 
@@ -79,23 +93,39 @@ export async function initGoogleAuth(onChange) {
     } catch {}
   }
 
-  let redirectError = "";
-  try {
-    await auth.getRedirectResult();
-  } catch (error) {
-    redirectError = error.message || "Connexion Google interrompue.";
-    writeRedirectError(redirectError);
-  }
-
-  auth.onAuthStateChanged(user => {
-    const storedRedirectError = readRedirectError() || redirectError;
-    if (storedRedirectError) clearRedirectError();
+  let redirectError = readRedirectError();
+  let lastUser = null;
+  const emitAuthState = user => {
+    lastUser = user || null;
+    if (user) {
+      redirectError = "";
+      clearRedirectError();
+      clearRedirectPending();
+    }
     const email = String(user?.email || "").toLowerCase();
     const allowed = Array.isArray(cfg.allowedEmails) ? cfg.allowedEmails.map(item => String(item).toLowerCase()) : [];
     const blocked = cfg.restrictSignIn === true && !!email && allowed.length > 0 && !allowed.includes(email);
-    onChange?.({ user: blocked ? null : user, auth, db, ready: true, error: blocked ? "Email non autorise" : user ? "" : storedRedirectError });
+    onChange?.({ user: blocked ? null : user, auth, db, ready: true, error: blocked ? "Email non autorise" : user ? "" : redirectError });
     if (blocked) auth.signOut();
-  });
+  };
+
+  Promise.race([auth.getRedirectResult(), redirectResultTimeout()])
+    .then(result => {
+      if (result?.user) {
+        redirectError = "";
+        clearRedirectError();
+      }
+      clearRedirectPending();
+      emitAuthState(auth.currentUser || result?.user || lastUser);
+    })
+    .catch(error => {
+      redirectError = error?.message || "Connexion Google interrompue.";
+      writeRedirectError(redirectError);
+      clearRedirectPending();
+      emitAuthState(lastUser);
+    });
+
+  auth.onAuthStateChanged(emitAuthState);
 
   return { auth, db };
 }
@@ -104,15 +134,12 @@ export async function signInWithGoogle(auth) {
   if (!auth || !window.firebase) throw new Error("Connexion non disponible");
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  if (isStandaloneApp() || isMobileLike()) {
-    await auth.signInWithRedirect(provider);
-    return;
-  }
   try {
     await Promise.race([auth.signInWithPopup(provider), popupTimeout()]);
   } catch (error) {
     if (!shouldFallbackToRedirect(error)) throw error;
-    writeRedirectError("Connexion relancée par redirection, car la fenêtre Google a été bloquée ou fermée.");
+    clearRedirectError();
+    markRedirectPending();
     await auth.signInWithRedirect(provider);
   }
 }
