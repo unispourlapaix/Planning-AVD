@@ -110,6 +110,22 @@ const assertMondayRest = ({ issues, schedule, year, month, day }) => {
   }
 };
 
+const canPickDifferentNightWorker = ({ year, month, day, dayWorker }) =>
+  team.some(aux => aux.id !== dayWorker && canWorkShift(aux, "night", year, month, day));
+
+const assertSplitDay = ({ issues, schedule, year, month, day }) => {
+  const weekday = new Date(year, month, day).getDay();
+  if (weekday === 0 || weekday === 6) return;
+  const plan = schedule[day];
+  const dayWorker = plan.morning?.worker;
+  if (dayWorker && plan.afternoon?.worker && dayWorker !== plan.afternoon.worker) {
+    issues.push(`${monthLabel(year, month)} ${day}: matin et apres-midi separes en mode journee + soir`);
+  }
+  if (dayWorker && plan.night?.worker === dayWorker && canPickDifferentNightWorker({ year, month, day, dayWorker })) {
+    issues.push(`${monthLabel(year, month)} ${day}: soir garde par la personne de jour malgre une alternative`);
+  }
+};
+
 const checkMonth = ({ year, month, rotationDays }) => {
   const { schedule } = buildSchedule({ year, month, auxiliaries: team, rotationDays });
   const issues = [];
@@ -133,6 +149,9 @@ const checkMonth = ({ year, month, rotationDays }) => {
     if (weekday === 0) {
       assertMondayRest({ issues, schedule, year, month, day });
     }
+    if (rotationDays === "split-day") {
+      assertSplitDay({ issues, schedule, year, month, day });
+    }
 
     const nightWorkers = Array.isArray(schedule[day].night?.workers)
       ? schedule[day].night.workers
@@ -154,7 +173,7 @@ const periods = [
 ];
 
 const issues = periods.flatMap(period =>
-  [1, 2, 3, 4].flatMap(rotationDays => checkMonth({ ...period, rotationDays })),
+  [1, "split-day", 2, 3, 4].flatMap(rotationDays => checkMonth({ ...period, rotationDays })),
 );
 
 if (issues.length) {
@@ -163,4 +182,4 @@ if (issues.length) {
   process.exit(1);
 }
 
-console.log(`Controle roulement OK: ${periods.map(period => monthLabel(period.year, period.month)).join(", ")} / modes 1, 2, 3, 4`);
+console.log(`Controle roulement OK: ${periods.map(period => monthLabel(period.year, period.month)).join(", ")} / modes 1, journée + soir, 2, 3, 4`);

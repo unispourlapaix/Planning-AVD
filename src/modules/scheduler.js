@@ -393,6 +393,124 @@ function buildDailySchedule({ year, month, auxiliaries, initialWeekendRest = [] 
   return { schedule, blocks, load };
 }
 
+function pickFullDayWorker({ team, pointers, load, year, month, day, previous = null, weekend = false }) {
+  const candidates = team
+    .filter(aux => aux.shift !== "night")
+    .filter(aux => canWorkShift(aux, "morning", year, month, day) && canWorkShift(aux, "afternoon", year, month, day));
+  const owner = pickWeekdayOwner({ team: candidates, pointers, shift: "morning", year, month, day, previous })
+    || pickWorker({
+      team: candidates.length ? candidates : team,
+      pointers,
+      load,
+      shift: "morning",
+      year,
+      month,
+      day,
+      previous,
+      preferLeader: !weekend,
+      preferWeekendOnly: weekend,
+    });
+  return owner;
+}
+
+function pickEveningWorker({ team, pointers, load, year, month, day, dayWorker, weekend = false }) {
+  const canCoverNight = team.filter(aux => canWorkShift(aux, "night", year, month, day));
+  const picked = pickWorker({
+    team: canCoverNight.length ? canCoverNight : team,
+    pointers,
+    load,
+    shift: "night",
+    year,
+    month,
+    day,
+    previous: dayWorker,
+    exclude: [dayWorker],
+    preferLeader: false,
+    preferWeekendOnly: weekend,
+  });
+  if (picked) return picked;
+  const dayAux = team.find(aux => aux.id === dayWorker);
+  return canWorkShift(dayAux, "night", year, month, day) ? dayWorker : null;
+}
+
+function buildSplitDaySchedule({ year, month, auxiliaries }) {
+  const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
+  const schedule = {};
+  const blocks = [];
+  const load = Object.fromEntries(team.map(aux => [aux.id, 0]));
+  const primaryLoad = Object.fromEntries(team.map(aux => [aux.id, 0]));
+  const pointers = { morning: 0, afternoon: 0, night: 0, "weekday-owner": 0, "weekend-owner": 0, "leader-double": 0, "night-double": 0, "weekend-night-double": 0 };
+  const leaderDoubles = {};
+  let previousDayWorker = null;
+
+  for (let day = 1; day <= daysInMonth(year, month); day += 1) {
+    const weekend = isWeekendDay(year, month, day);
+    const plan = { day, weekend };
+    const dayDoubles = leaderDoubles;
+    const dayWorker = pickFullDayWorker({
+      team,
+      pointers,
+      load: primaryLoad,
+      year,
+      month,
+      day,
+      previous: previousDayWorker,
+      weekend,
+    });
+    const morningWorker = pickPreferredOrNext({
+      preferred: dayWorker,
+      team,
+      pointers,
+      load: primaryLoad,
+      shift: "morning",
+      year,
+      month,
+      day,
+      previous: null,
+      preferLeader: !weekend,
+      preferWeekendOnly: weekend,
+    });
+    addShift(plan, "morning", morningWorker, load, dayExtras({ primary: morningWorker, team, pointers, load, shift: "morning", year, month, day, weekend, dayDoubles }), primaryLoad);
+
+    const afternoonWorker = pickPreferredOrNext({
+      preferred: dayWorker || morningWorker,
+      team,
+      pointers,
+      load: primaryLoad,
+      shift: "afternoon",
+      year,
+      month,
+      day,
+      previous: null,
+      preferLeader: !weekend,
+      preferWeekendOnly: weekend,
+    });
+    addShift(plan, "afternoon", afternoonWorker, load, dayExtras({ primary: afternoonWorker, team, pointers, load, shift: "afternoon", year, month, day, weekend, dayDoubles }), primaryLoad);
+
+    const eveningWorker = pickEveningWorker({
+      team,
+      pointers,
+      load: primaryLoad,
+      year,
+      month,
+      day,
+      dayWorker: afternoonWorker || morningWorker,
+      weekend,
+    });
+    addShift(plan, "night", eveningWorker, load, nightExtras({ primary: eveningWorker, team, pointers, load, year, month, day, weekend, dayDoubles }), primaryLoad);
+
+    previousDayWorker = afternoonWorker || morningWorker || previousDayWorker;
+    schedule[day] = plan;
+    SHIFT_DEFS.forEach(shift => {
+      shiftWorkers(plan[shift.id]).forEach(worker => {
+        blocks.push({ day, shift: shift.id, worker, hours: shift.hours });
+      });
+    });
+  }
+
+  return { schedule, blocks, load };
+}
+
 function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWeekendRest = [] }) {
   const team = auxiliaries.map(normalizeAuxiliary).filter(aux => aux.active);
   const schedule = {};
@@ -538,6 +656,7 @@ function buildBlockSchedule({ year, month, auxiliaries, rotationDays, initialWee
 }
 
 export function buildSchedule({ year, month, auxiliaries, rotationDays = 1 }) {
+  if (rotationDays === "split-day") return buildSplitDaySchedule({ year, month, auxiliaries });
   const days = Number(rotationDays) || 1;
   if (days >= 2) return buildBlockSchedule({ year, month, auxiliaries, rotationDays: days });
   return buildDailySchedule({ year, month, auxiliaries });

@@ -1,7 +1,7 @@
 import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260607-weekend-one";
+import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260628-split-day";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260628-mobile-google";
 import {
   createPlanningChangeRequest,
@@ -43,10 +43,16 @@ const { useEffect, useMemo, useRef, useState } = React;
 
 const ROTATION_OPTIONS = [
   { value: 1, label: "Jour par jour", detail: "Matin, apres-midi et nuit recalcules chaque jour." },
+  { value: "split-day", label: "Journée + soir", detail: "Même auxiliaire matin/apres-midi, puis un autre le soir." },
   { value: 2, label: "Roulement 2 jours", detail: "La personne finit le matin, la suivante commence l'apres-midi." },
   { value: 3, label: "Roulement 3 jours", detail: "Bloc plus stable, toujours termine au matin." },
   { value: 4, label: "Roulement 4 jours", detail: "Longue presence, passage au suivant apres le matin." },
 ];
+const normalizeRotationMode = value => {
+  if (value === "split-day") return "split-day";
+  const number = Number(value);
+  return [1, 2, 3, 4].includes(number) ? number : 1;
+};
 const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
 const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
 const UI_TEXT = {
@@ -1356,16 +1362,16 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
       })),
       h("div", { className: "muted beneficiary-id" }, `Identifiant unique : ${beneficiaryId || "création en cours"}`),
     ),
-    h("div", { className: "panel" },
+      h("div", { className: "panel" },
       h("div", { className: "title-row" },
         h("div", null,
           h("h3", null, "Roulement"),
-          h("div", { className: "muted" }, "Choisir la duree du tour. En 2, 3 ou 4 jours, le tour se termine toujours le matin."),
+          h("div", { className: "muted" }, "Choisir la logique de tour. En journée + soir, matin et apres-midi restent ensemble."),
         ),
       ),
       h("div", { className: "rotation-options" }, ROTATION_OPTIONS.map(option => h(Button, {
         key: option.value,
-        active: Number(rotationDays) === option.value,
+        active: normalizeRotationMode(rotationDays) === option.value,
         onClick: () => setRotationDays(option.value),
       }, h("span", null, option.label), h("small", null, option.detail)))),
     ),
@@ -1672,7 +1678,7 @@ export default function App() {
         year: identifiedSaved?.year || year,
         month: Number.isInteger(identifiedSaved?.month) ? identifiedSaved.month : month,
         view: identifiedSaved?.view || view,
-        rotationDays: [1, 2, 3, 4].includes(Number(identifiedSaved?.rotationDays)) ? Number(identifiedSaved.rotationDays) : rotationDays,
+        rotationDays: normalizeRotationMode(identifiedSaved?.rotationDays ?? rotationDays),
         beneficiaryId: String(identifiedSaved?.beneficiaryId || beneficiaryId).trim(),
         beneficiaryName: String(identifiedSaved?.beneficiaryName || "").trim(),
         auxiliaries: identifiedSaved?.auxiliaries || identifiedSaved?.names ? normalizeAuxiliaries(identifiedSaved) : auxiliaries,
@@ -1897,7 +1903,7 @@ export default function App() {
     });
     const nextYear = Number(next.year);
     const nextMonth = Number(next.month);
-    const nextRotation = Number(next.rotationDays);
+    const nextRotation = normalizeRotationMode(next.rotationDays);
     if (!Number.isInteger(nextYear) || !Number.isInteger(nextMonth) || nextMonth < 0 || nextMonth > 11) {
       throw new Error("Mois ou annee invalide.");
     }
@@ -1905,7 +1911,7 @@ export default function App() {
       year: nextYear,
       month: nextMonth,
       view: ["month", "week", "hours", "config"].includes(next.view) ? next.view : "month",
-      rotationDays: [1, 2, 3, 4].includes(nextRotation) ? nextRotation : 1,
+      rotationDays: nextRotation,
       beneficiaryId: identifiedNext.beneficiaryId,
       beneficiaryName: String(identifiedNext.beneficiaryName || "").trim(),
       auxiliaries: normalizeAuxiliaries({ auxiliaries: next.auxiliaries }),

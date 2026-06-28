@@ -95,7 +95,7 @@ const year = 2026;
 const month = 5;
 const issues = [];
 
-[1, 2, 3, 4].forEach(rotationDays => {
+[1, "split-day", 2, 3, 4].forEach(rotationDays => {
   const { schedule } = buildSchedule({ year, month, auxiliaries: team, rotationDays });
   const payloads = buildPersonalSharePayloads({
     year,

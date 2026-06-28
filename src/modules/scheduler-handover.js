@@ -1,6 +1,6 @@
-import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260614-hour-quota";
+import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260628-split-day";
 
-export * from "./scheduler.js?base=20260614-hour-quota";
+export * from "./scheduler.js?base=20260628-split-day";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const withPrimary = (entry, worker) => ({
@@ -108,6 +108,60 @@ const protectMondayAfterWeekend = ({ schedule, days, available, weekdayCycle, ye
   });
 };
 
+const protectMondaySplitDay = ({ schedule, days, available, weekdayCycle, year, month }) => {
+  days.forEach(day => {
+    const sunday = schedule[day];
+    const monday = schedule[day + 1];
+    if (!sunday || !monday || new Date(year, month, day).getDay() !== 0) return;
+    const weekendWorker = sunday.night?.worker || sunday.afternoon?.worker || sunday.morning?.worker;
+    if (!weekendWorker) return;
+
+    const mondayDay = day + 1;
+    const currentDayWorker = monday.afternoon?.worker || monday.morning?.worker;
+    const currentAux = available.find(aux => aux.id === currentDayWorker);
+    const keepCurrent = currentDayWorker
+      && currentDayWorker !== weekendWorker
+      && canWorkShift(currentAux, "morning", year, month, mondayDay)
+      && canWorkShift(currentAux, "afternoon", year, month, mondayDay);
+    const dayWorker = keepCurrent ? currentDayWorker : pickCycleWorker({
+      cycle: weekdayCycle,
+      available,
+      offset: days.indexOf(mondayDay) + 1,
+      avoid: [weekendWorker],
+      predicate: aux => aux.id !== weekendWorker
+        && canWorkShift(aux, "morning", year, month, mondayDay)
+        && canWorkShift(aux, "afternoon", year, month, mondayDay),
+    });
+    if (dayWorker) {
+      monday.morning = withPrimary(monday.morning, dayWorker);
+      monday.afternoon = withPrimary(monday.afternoon, dayWorker);
+    }
+
+    const currentNight = monday.night?.worker;
+    const currentNightAux = available.find(aux => aux.id === currentNight);
+    const nightAllowed = currentNight
+      && currentNight !== weekendWorker
+      && currentNight !== dayWorker
+      && canWorkShift(currentNightAux, "night", year, month, mondayDay);
+    if (nightAllowed) return;
+    const nightCycle = available.map(aux => aux.id);
+    const nightWorker = pickCycleWorker({
+      cycle: nightCycle,
+      available,
+      offset: days.indexOf(mondayDay) + 2,
+      avoid: [weekendWorker, dayWorker],
+      predicate: aux => aux.id !== weekendWorker && aux.id !== dayWorker && canWorkShift(aux, "night", year, month, mondayDay),
+    }) || pickCycleWorker({
+      cycle: nightCycle,
+      available,
+      offset: days.indexOf(mondayDay) + 2,
+      avoid: [weekendWorker],
+      predicate: aux => aux.id !== weekendWorker && canWorkShift(aux, "night", year, month, mondayDay),
+    });
+    if (nightWorker) monday.night = withPrimary(monday.night, nightWorker);
+  });
+};
+
 const pickWeekdayRelief = ({ available, weekdayCycle, year, month, day, shift, avoid = [], offset = 0 }) =>
   pickCycleWorker({
     cycle: weekdayCycle,
@@ -165,6 +219,7 @@ const balanceThursdayBeforeWeekend = ({ schedule, saturday, weekendWorker, avail
 
 export function buildSchedule(options) {
   const result = buildBaseSchedule(options);
+  const splitDayMode = options.rotationDays === "split-day";
   const schedule = result.schedule;
   const days = Object.keys(schedule).map(Number);
   const available = options.auxiliaries.filter(aux => aux.active !== false && aux.status !== "absent");
@@ -220,16 +275,40 @@ export function buildSchedule(options) {
     }
     setAfternoonAndNight({ plan: saturday, worker: weekendWorker, available, year: options.year, month: options.month, day });
     sunday.morning = withPrimary(sunday.morning, weekendWorker);
-    balanceThursdayBeforeWeekend({
-      schedule,
-      saturday: day,
-      weekendWorker,
-      available,
-      weekdayCycle,
-      year: options.year,
-      month: options.month,
-      offset: index + 1,
-    });
+    if (splitDayMode) {
+      const friday = schedule[day - 1];
+      const weekendAux = available.find(aux => aux.id === weekendWorker);
+      if (friday && canOpenWeekendNight(weekendAux, options.year, options.month, day)) {
+        if (friday.morning?.worker === weekendWorker || friday.afternoon?.worker === weekendWorker) {
+          const fridayDayWorker = pickCycleWorker({
+            cycle: weekdayCycle,
+            available,
+            offset: index + 1,
+            avoid: [weekendWorker],
+            predicate: aux => aux.id !== weekendWorker
+              && canWorkShift(aux, "morning", options.year, options.month, day - 1)
+              && canWorkShift(aux, "afternoon", options.year, options.month, day - 1),
+          });
+          if (fridayDayWorker) {
+            friday.morning = withPrimary(friday.morning, fridayDayWorker);
+            friday.afternoon = withPrimary(friday.afternoon, fridayDayWorker);
+          }
+        }
+        friday.night = withPrimary(friday.night, weekendWorker);
+      }
+    }
+    if (!splitDayMode) {
+      balanceThursdayBeforeWeekend({
+        schedule,
+        saturday: day,
+        weekendWorker,
+        available,
+        weekdayCycle,
+        year: options.year,
+        month: options.month,
+        offset: index + 1,
+      });
+    }
   });
 
   days.forEach(day => {
@@ -256,7 +335,11 @@ export function buildSchedule(options) {
     if (!closingWorker || !canWorkShift(closingAux, "afternoon", options.year, options.month, day)) return;
     setAfternoonAndNight({ plan: sunday, worker: closingWorker, available, year: options.year, month: options.month, day });
   });
-  protectMondayAfterWeekend({ schedule, days, available, weekdayCycle, year: options.year, month: options.month });
-  applyNightToNextMorning({ schedule, days, available, year: options.year, month: options.month });
+  if (splitDayMode) {
+    protectMondaySplitDay({ schedule, days, available, weekdayCycle, year: options.year, month: options.month });
+  } else {
+    protectMondayAfterWeekend({ schedule, days, available, weekdayCycle, year: options.year, month: options.month });
+  }
+  if (!splitDayMode) applyNightToNextMorning({ schedule, days, available, year: options.year, month: options.month });
   return result;
 }
