@@ -367,6 +367,7 @@ const openHtmlDocument = ({ html, fileName, blockedMessage }) => {
 };
 
 function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view, setView, year, month, setYear, setMonth, beneficiaryName, loginPending = false, onLogin, onLogout, onCleanView, onReport, onShareBackup, onRestoreBackup, onRestoreCloudBackup, onPublish }) {
+  const disconnected = !authState.user;
   const moveMonth = delta => {
     const date = new Date(year, month + delta, 1);
     setYear(date.getFullYear());
@@ -392,7 +393,7 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
     ["config", "settings", "view.settings"],
   ];
 
-  return h("header", { className: "topbar" },
+  return h("header", { className: `topbar${disconnected ? " disconnected" : ""}` },
     h("div", { className: "title-row" },
       h("div", null,
         h("h1", null, "Planning-AVD"),
@@ -415,6 +416,10 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
           : h(MenuIconButton, { icon: "login", textKey: loginPending ? "action.loginPending" : "action.login", action: "login", onClick: onLogin, disabled: loginPending }),
       ),
     ),
+    disconnected ? h("div", { className: "offline-notice" },
+      h(Icon, { name: "login" }),
+      h("span", null, loginPending ? "Connexion Google en cours..." : "Vous êtes déconnecté : les données cloud et les partages sont grisés jusqu'à la connexion."),
+    ) : null,
     authState.error ? h("div", { className: "muted" }, authState.error) : null,
     h("div", { className: "month-row" },
       h(MenuIconButton, { icon: "chevronLeft", textKey: "month.previous", className: "month-nav-btn", action: "month-previous", onClick: () => moveMonth(-1) }),
@@ -2055,7 +2060,7 @@ export default function App() {
   if (firstConnectionMode) return h(FirstConnectionPanel, { authState, onLogout: () => signOut(authState.auth) });
   if (personalMode) return h(PersonalView, { authState, sessionRole, year, month, setYear, setMonth, planning: personalPlanning, access: personalAccess, selectedBeneficiaryId: personalBeneficiaryId, onSelectBeneficiary: setPersonalBeneficiaryId, error: personalError, onLogout: () => signOut(authState.auth) });
 
-  return h("main", { className: `app${view === "life" ? " life-view" : ""}` },
+  return h("main", { className: `app${view === "life" ? " life-view" : ""}${!authState.user ? " disconnected-app" : ""}` },
     h(TopBar, {
       authState,
       sessionRole,
