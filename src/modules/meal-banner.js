@@ -1,6 +1,6 @@
 import { MONTHS } from "./constants.js";
 import { mealWeekForDate } from "./meal-planning.js";
-import { addShoppingItem, setShoppingChecked, shoppingItems, shoppingListText, subscribeShopping } from "./meal-shopping.js";
+import { addShoppingItem, setShoppingChecked, shoppingItems, shoppingListText, subscribeShopping } from "./meal-shopping.js?v=20260628-shopping-author";
 
 const STYLE_ID = "planning-avd-meal-banner-style";
 const BAR_ID = "planning-avd-meal-banner";
@@ -37,7 +37,10 @@ const addStyle = () => {
     #${MODAL_ID} .shopping-group{padding:8px;border-radius:7px;background:#f3faf6}
     #${MODAL_ID} .shopping-check{display:grid;grid-template-columns:18px minmax(0,1fr);gap:7px;align-items:start;margin:5px 0;color:#465b51;font-size:12px;font-weight:700;cursor:pointer}
     #${MODAL_ID} .shopping-check input{width:17px;height:17px;margin:0;accent-color:#68a887}
-    #${MODAL_ID} .shopping-check.checked span{text-decoration:line-through;color:#8b9791}
+    #${MODAL_ID} .shopping-item-text{display:grid;gap:1px;min-width:0}
+    #${MODAL_ID} .shopping-item-label{overflow-wrap:anywhere}
+    #${MODAL_ID} .shopping-check.checked .shopping-item-label{text-decoration:line-through;color:#8b9791}
+    #${MODAL_ID} .shopping-checked-by{color:#6f8590;font-size:10px;font-weight:800;text-decoration:none}
     #${MODAL_ID} .shopping-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-top:10px}
     #${MODAL_ID} .shopping-add input{min-width:0;padding:8px;border:1px solid #cfe2d8;border-radius:7px}
     #${MODAL_ID} .shopping-add button{padding:8px 10px;border:1px solid #68a887;border-radius:7px;background:#68a887;color:#fff;font-weight:900}
@@ -83,6 +86,7 @@ const beneficiaryContext = () => {
 const openMealModal = (week, initialIndex) => {
   document.getElementById(MODAL_ID)?.remove();
   const beneficiary = beneficiaryContext();
+  const hasBeneficiary = !!beneficiary.beneficiaryId;
   let selectedIndex = initialIndex;
   let shoppingState = { checked: {}, customItems: [] };
   let unsubscribe = () => {};
@@ -168,7 +172,9 @@ const openMealModal = (week, initialIndex) => {
     shoppingHead.append(shoppingTitle, copy);
     const progress = document.createElement("div");
     progress.className = "shopping-progress";
-    progress.textContent = `${checkedCount} article(s) deja pris sur ${items.length}`;
+    progress.textContent = hasBeneficiary
+      ? `${checkedCount} article(s) deja pris sur ${items.length}`
+      : "Courses verrouillees tant qu'aucun bénéficiaire n'est sélectionné.";
     shopping.append(shoppingHead, progress);
 
     const groups = document.createElement("div");
@@ -185,21 +191,30 @@ const openMealModal = (week, initialIndex) => {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = item.checked;
+        checkbox.disabled = !hasBeneficiary;
         checkbox.addEventListener("change", async () => {
-          shoppingState = {
-            ...shoppingState,
-            checked: { ...shoppingState.checked, [item.id]: checkbox.checked },
-          };
-          render();
+          if (!hasBeneficiary) return;
           const { db, user } = firebaseContext();
           try {
-            await setShoppingChecked({ db, user, beneficiaryId: beneficiary.beneficiaryId, week, itemId: item.id, checked: checkbox.checked });
+            shoppingState = await setShoppingChecked({ db, user, beneficiaryId: beneficiary.beneficiaryId, week, itemId: item.id, checked: checkbox.checked });
+            render();
           } catch (error) {
             alert(`Mise a jour impossible : ${error.message}`);
+            render();
           }
         });
         const text = document.createElement("span");
-        text.textContent = item.text;
+        text.className = "shopping-item-text";
+        const itemLabel = document.createElement("span");
+        itemLabel.className = "shopping-item-label";
+        itemLabel.textContent = item.text;
+        text.appendChild(itemLabel);
+        if (item.checkedBy) {
+          const meta = document.createElement("small");
+          meta.className = "shopping-checked-by";
+          meta.textContent = `Coché par ${item.checkedBy}`;
+          text.appendChild(meta);
+        }
         label.append(checkbox, text);
         section.appendChild(label);
       });
@@ -212,12 +227,15 @@ const openMealModal = (week, initialIndex) => {
     const input = document.createElement("input");
     input.maxLength = 120;
     input.placeholder = "Ajouter un article...";
+    input.disabled = !hasBeneficiary;
     const addButton = document.createElement("button");
     addButton.type = "submit";
     addButton.textContent = "Ajouter";
+    addButton.disabled = !hasBeneficiary;
     addForm.append(input, addButton);
     addForm.addEventListener("submit", async event => {
       event.preventDefault();
+      if (!hasBeneficiary) return;
       const { db, user } = firebaseContext();
       try {
         shoppingState = await addShoppingItem({ db, user, beneficiaryId: beneficiary.beneficiaryId, week, text: input.value });

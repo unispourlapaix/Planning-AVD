@@ -95,6 +95,8 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
 
   if (!authState.user) return null;
 
+  const hasBeneficiary = !!String(beneficiaryId || "").trim();
+  const canEditTasks = canContribute && hasBeneficiary;
   const workerOptions = normalizeWorkers({ auxiliaries, user: authState.user, isAdmin });
   const selectedWorker = workerOptions.find(worker => worker.key === assignedKey) || null;
   const showDate = ["day", "datetime", "range"].includes(scheduleMode);
@@ -130,7 +132,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
   };
 
   const toggleTask = async task => {
-    if (!canContribute) return;
+    if (!canEditTasks) return;
     try {
       await setTaskCompleted({ db: authState.db, user: authState.user, task, completed: !task.completed });
     } catch (nextError) {
@@ -151,12 +153,14 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
     h("div", { className: "title-row" },
       h("div", null,
         h("h3", null, "Taches a faire"),
-        h("div", { className: "muted" }, canContribute
-          ? `${tasks.filter(task => !task.completed).length} restante(s) · attribution, creneau et export Google Agenda.`
+      h("div", { className: "muted" }, canContribute
+          ? hasBeneficiary
+            ? `${tasks.filter(task => !task.completed).length} restante(s) · attribution, creneau et export Google Agenda.`
+            : "Sélectionnez un bénéficiaire pour afficher ses tâches."
           : `${tasks.filter(task => !task.completed).length} restante(s) · consultation seule.`),
       ),
     ),
-    canContribute ? h("div", { className: "task-form" },
+    canEditTasks ? h("div", { className: "task-form" },
       h(TextInput, {
         value: title,
         maxLength: 160,
@@ -218,7 +222,7 @@ export function TaskPanel({ authState, isAdmin = false, auxiliaries = [], year, 
             className: `task-item priority-${task.priority || "normal"}${task.completed ? " completed" : ""}`,
           },
           h("label", { className: "task-check" },
-            h("input", { type: "checkbox", checked: !!task.completed, disabled: !canContribute, onChange: () => toggleTask(task) }),
+            h("input", { type: "checkbox", checked: !!task.completed, disabled: !canEditTasks, onChange: () => toggleTask(task) }),
             h("span", { className: "task-main" },
               h("b", null, task.title),
               h("small", null, meta),

@@ -787,7 +787,6 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
   const plans = new Map();
   const monthUnsubscribers = new Map();
   const accessByKey = new Map();
-  let directPending = shareKeys.length;
   let beneficiaryPending = shareKeys.length;
   let monthPending = 0;
   let active = true;
@@ -801,7 +800,7 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
     return best;
   };
   const maybeStartFallback = () => {
-    if (!active || visiblePlans().length || directPending > 0 || beneficiaryPending > 0 || monthPending > 0) return;
+    if (!active || visiblePlans().length || beneficiaryPending > 0 || monthPending > 0) return;
     startNearbyFallback();
   };
   const setPlan = (key, value) => {
@@ -835,10 +834,6 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
   const readShareMonthPlans = async (key, candidateId) => {
     const results = [];
     try {
-      const legacy = await db.collection("planning-avd-shares").doc(key).collection("months").doc(candidateId).get();
-      if (legacy.exists) results.push(legacy.data());
-    } catch {}
-    try {
       const beneficiaries = await db.collection("planning-avd-shares").doc(key).collection("beneficiaries").get();
       const monthReads = beneficiaries.docs.map(doc => doc.ref.collection("months").doc(candidateId).get());
       const monthSnaps = await Promise.all(monthReads);
@@ -866,16 +861,6 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
     }
     if (active && !visiblePlans().length) onChange?.(null);
   };
-  const directUnsubscribers = shareKeys.map((key, index) => db.collection("planning-avd-shares").doc(key).collection("months").doc(monthId).onSnapshot(snap => {
-      if (!active) return;
-      directPending = Math.max(0, directPending - 1);
-      setPlan(`legacy:${index}`, snap.exists ? snap.data() : null);
-      maybeStartFallback();
-    }, error => {
-      console.warn("Lecture planning auxiliaire directe impossible.", error);
-      directPending = Math.max(0, directPending - 1);
-      maybeStartFallback();
-    }));
   const beneficiaryUnsubscribers = shareKeys.map(key => {
     let firstSnapshot = true;
     return db.collection("planning-avd-shares").doc(key).collection("beneficiaries").onSnapshot(snapshot => {
@@ -938,7 +923,6 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
   });
   return () => {
     active = false;
-    directUnsubscribers.forEach(unsubscribe => unsubscribe());
     beneficiaryUnsubscribers.forEach(unsubscribe => unsubscribe());
     monthUnsubscribers.forEach(entry => entry.unsubscribe?.());
   };
@@ -950,21 +934,35 @@ const changeRequestCollection = ({ db, email, year, month, beneficiaryId = "" })
   if (safeBeneficiaryId) {
     return root.collection("beneficiaries").doc(safeBeneficiaryId).collection("months").doc(monthKey(year, month)).collection("items");
   }
-  return root.collection("months").doc(monthKey(year, month)).collection("items");
+  return null;
 };
 
 const changeRequestCollections = ({ db, email, year, month, beneficiaryId = "" }) => [
-  ...(String(beneficiaryId || "").trim() ? [changeRequestCollection({ db, email, year, month, beneficiaryId })] : []),
-  changeRequestCollection({ db, email, year, month }),
-];
+  changeRequestCollection({ db, email, year, month, beneficiaryId }),
+].filter(Boolean);
 
 const requestSnapshotList = snapshot => snapshot.docs
   .map(doc => ({ id: doc.id, ...doc.data() }))
   .sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || a.day - b.day || String(a.shift).localeCompare(String(b.shift)));
-const isPermissionError = error => error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission");
+const isPermissionError = error => {
+  const text = [
+    error?.code,
+    error?.name,
+    error?.message,
+    error?.toString?.(),
+  ].filter(Boolean).join(" ").toLowerCase();
+  return text.includes("permission")
+    || text.includes("permission-denied")
+    || text.includes("insufficient")
+    || text.includes("missing or insufficient");
+};
 
 export function subscribePersonalChangeRequests({ db, user, year, month, beneficiaryId = "", onChange, onError }) {
   if (!db || !user?.email) return () => {};
+  if (!String(beneficiaryId || "").trim()) {
+    onChange?.([]);
+    return () => {};
+  }
   const email = cleanEmail(user.email);
   const buckets = new Map();
   const emit = () => onChange?.([...buckets.values()].flat().sort((a, b) =>
@@ -978,16 +976,22 @@ export function subscribePersonalChangeRequests({ db, user, year, month, benefic
         buckets.set(index, requestSnapshotList(snapshot));
         emit();
       }, error => {
-        console.warn("Lecture demande d'échange auxiliaire ignorée.", error);
         buckets.delete(index);
         emit();
-        if (!isPermissionError(error)) onError?.(error);
+        if (!isPermissionError(error)) {
+          console.warn("Lecture demande d'échange auxiliaire ignorée.", error);
+          onError?.(error);
+        }
       }));
   return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
 export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, beneficiaryId = "", onChange, onError }) {
   if (!db) return () => {};
+  if (!String(beneficiaryId || "").trim()) {
+    onChange?.([]);
+    return () => {};
+  }
   const emails = [...new Set(auxiliaries.map(aux => String(aux.email || "").trim().toLowerCase()).filter(Boolean))];
   if (!emails.length) {
     onChange?.([]);
@@ -1003,10 +1007,12 @@ export function subscribeAdminChangeRequests({ db, auxiliaries, year, month, ben
       buckets.set(`${email}:${index}`, requestSnapshotList(snapshot));
       emit();
     }, error => {
-      console.warn("Lecture demande d'échange admin ignorée.", error);
       buckets.delete(`${email}:${index}`);
       emit();
-      if (!isPermissionError(error)) onError?.(error);
+      if (!isPermissionError(error)) {
+        console.warn("Lecture demande d'échange admin ignorée.", error);
+        onError?.(error);
+      }
     })));
   return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
@@ -1015,8 +1021,9 @@ export async function createPlanningChangeRequest({ db, user, planning, year, mo
   if (!db || !user?.email) throw new Error("Connexion necessaire.");
   const email = cleanEmail(user.email);
   const beneficiaryId = String(planning?.beneficiaryId || "").trim();
-  const ref = changeRequestCollection({ db, email, year, month, beneficiaryId }).doc();
-  await ref.set({
+  const collection = changeRequestCollection({ db, email, year, month, beneficiaryId });
+  if (!collection) throw new Error("Bénéficiaire non identifié.");
+  await collection.doc().set({
     beneficiaryId,
     beneficiaryName: String(planning?.beneficiaryName || "").trim(),
     requesterEmail: email,
@@ -1038,7 +1045,9 @@ export async function createPlanningChangeRequest({ db, user, planning, year, mo
 export async function resolvePlanningChangeRequest({ db, user, request, status, workerId, workerName }) {
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!request?.requesterEmail || !request?.id) throw new Error("Demande introuvable.");
-  await changeRequestCollection({ db, email: request.requesterEmail, year: request.year, month: request.month, beneficiaryId: request.beneficiaryId }).doc(request.id).set({
+  const ref = changeRequestCollection({ db, email: request.requesterEmail, year: request.year, month: request.month, beneficiaryId: request.beneficiaryId });
+  if (!ref) throw new Error("Bénéficiaire non identifié.");
+  await ref.doc(request.id).set({
     status,
     resolvedWorkerId: workerId || "",
     resolvedWorkerName: workerName || "",

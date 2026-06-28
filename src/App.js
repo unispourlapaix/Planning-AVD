@@ -29,14 +29,14 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260627-personal-selector";
+} from "./modules/storage.js?v=20260628-shopping-author";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { TaskPanel } from "./modules/task-panel.js?v=20260626-popup-fallback";
+import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
 
 const { useEffect, useMemo, useRef, useState } = React;
@@ -1640,8 +1640,29 @@ export default function App() {
   }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, beneficiaryGroupReady, activeAux, beneficiaryId, year, month]);
 
   useEffect(() => {
-    window.__planningAvdCurrentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
-  }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings]);
+    const personalAccessItem = personalAccess.find(item => item.beneficiaryId === personalBeneficiaryId)
+      || personalAccess.find(item => item.beneficiaryId === personalPlanning?.beneficiaryId)
+      || personalAccess[0]
+      || null;
+    const activeBeneficiaryId = personalMode
+      ? String(personalBeneficiaryId || personalPlanning?.beneficiaryId || personalAccessItem?.beneficiaryId || "").trim()
+      : beneficiaryId;
+    const activeBeneficiaryName = personalMode
+      ? String(personalAccessItem?.beneficiaryName || personalPlanning?.beneficiaryName || "").trim()
+      : beneficiaryName;
+    window.__planningAvdCurrentState = {
+      year,
+      month,
+      view,
+      rotationDays,
+      beneficiaryId: activeBeneficiaryId,
+      beneficiaryName: activeBeneficiaryName,
+      auxiliaries,
+      overrides,
+      dayOutings: personalMode ? personalPlanning?.dayOutings || {} : dayOutings,
+      personal: personalMode,
+    };
+  }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings, personalMode, personalBeneficiaryId, personalPlanning, personalAccess]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;

@@ -6,13 +6,27 @@ const cleanBeneficiaryId = value => String(value || "").trim();
 const cacheKey = (week, beneficiaryId = "") => `${cleanBeneficiaryId(beneficiaryId) || "local"}-${weekKey(week)}`;
 const localKey = (week, beneficiaryId = "") => `planning-avd-shopping-${cacheKey(week, beneficiaryId)}`;
 
-const emptyState = () => ({ checked: {}, customItems: [] });
+const emptyState = () => ({ checked: {}, checkedMeta: {}, customItems: [] });
 const normalizeState = value => ({
   checked: value?.checked && typeof value.checked === "object" ? value.checked : {},
+  checkedMeta: value?.checkedMeta && typeof value.checkedMeta === "object" ? value.checkedMeta : {},
   customItems: Array.isArray(value?.customItems) ? value.customItems.filter(item => item?.id && item?.text) : [],
 });
+const actorName = user => String(user?.displayName || user?.email || "Equipe").trim();
+const actorEmail = user => String(user?.email || "").trim().toLowerCase();
+const checkedMetaFor = user => ({
+  name: actorName(user),
+  email: actorEmail(user),
+  at: new Date().toISOString(),
+});
+const removeKey = (source, key) => {
+  const next = { ...(source || {}) };
+  delete next[key];
+  return next;
+};
 
 const readLocal = (week, beneficiaryId = "") => {
+  if (!cleanBeneficiaryId(beneficiaryId)) return emptyState();
   try {
     return normalizeState(JSON.parse(localStorage.getItem(localKey(week, beneficiaryId)) || "null"));
   } catch {
@@ -22,12 +36,16 @@ const readLocal = (week, beneficiaryId = "") => {
 
 const saveLocal = (week, state, beneficiaryId = "") => {
   const normalized = normalizeState(state);
+  if (!cleanBeneficiaryId(beneficiaryId)) return normalized;
   cache.set(cacheKey(week, beneficiaryId), normalized);
   localStorage.setItem(localKey(week, beneficiaryId), JSON.stringify(normalized));
   return normalized;
 };
 
-const currentState = (week, beneficiaryId = "") => cache.get(cacheKey(week, beneficiaryId)) || saveLocal(week, readLocal(week, beneficiaryId), beneficiaryId);
+const currentState = (week, beneficiaryId = "") => {
+  if (!cleanBeneficiaryId(beneficiaryId)) return emptyState();
+  return cache.get(cacheKey(week, beneficiaryId)) || saveLocal(week, readLocal(week, beneficiaryId), beneficiaryId);
+};
 const cloudRef = (db, beneficiaryId, week) => {
   const safeBeneficiaryId = cleanBeneficiaryId(beneficiaryId);
   if (!safeBeneficiaryId) return null;
@@ -42,10 +60,24 @@ export function shoppingItems(week, state = currentState(week)) {
     custom: false,
   })));
   return [...base, ...state.customItems.map(item => ({ ...item, category: item.category || "Ajouts", custom: true }))]
-    .map(item => ({ ...item, checked: !!state.checked[item.id] }));
+    .map(item => {
+      const meta = state.checkedMeta?.[item.id] || {};
+      const checked = !!state.checked[item.id];
+      return {
+        ...item,
+        checked,
+        checkedBy: checked ? String(meta.name || meta.email || "").trim() : "",
+        checkedByEmail: checked ? String(meta.email || "").trim() : "",
+        checkedAt: checked ? String(meta.at || "").trim() : "",
+      };
+    });
 }
 
 export function subscribeShopping({ db, user, beneficiaryId = "", week, onChange, onError }) {
+  if (!cleanBeneficiaryId(beneficiaryId)) {
+    onChange?.(emptyState());
+    return () => {};
+  }
   const local = currentState(week, beneficiaryId);
   onChange?.(local);
   const ref = cloudRef(db, beneficiaryId, week);
@@ -57,17 +89,21 @@ export function subscribeShopping({ db, user, beneficiaryId = "", week, onChange
 }
 
 export async function setShoppingChecked({ db, user, beneficiaryId = "", week, itemId, checked }) {
+  if (!cleanBeneficiaryId(beneficiaryId)) throw new Error("Bénéficiaire non identifié.");
   const local = currentState(week, beneficiaryId);
-  const next = saveLocal(week, { ...local, checked: { ...local.checked, [itemId]: !!checked } }, beneficiaryId);
+  const localMeta = checked ? { ...local.checkedMeta, [itemId]: checkedMetaFor(user) } : removeKey(local.checkedMeta, itemId);
+  const next = saveLocal(week, { ...local, checked: { ...local.checked, [itemId]: !!checked }, checkedMeta: localMeta }, beneficiaryId);
   const ref = cloudRef(db, beneficiaryId, week);
   if (!db || !user?.uid || !ref) return next;
   await db.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const remote = normalizeState(snapshot.exists ? snapshot.data() : next);
+    const remoteMeta = checked ? { ...remote.checkedMeta, [itemId]: checkedMetaFor(user) } : removeKey(remote.checkedMeta, itemId);
     transaction.set(ref, {
       beneficiaryId: cleanBeneficiaryId(beneficiaryId),
       weekId: weekKey(week),
       checked: { ...remote.checked, [itemId]: !!checked },
+      checkedMeta: remoteMeta,
       customItems: remote.customItems,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
@@ -78,6 +114,7 @@ export async function setShoppingChecked({ db, user, beneficiaryId = "", week, i
 
 export async function addShoppingItem({ db, user, beneficiaryId = "", week, text }) {
   const cleanText = String(text || "").trim().slice(0, 120);
+  if (!cleanBeneficiaryId(beneficiaryId)) throw new Error("Bénéficiaire non identifié.");
   if (!cleanText) throw new Error("Ecrivez un article.");
   const item = {
     id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -96,6 +133,7 @@ export async function addShoppingItem({ db, user, beneficiaryId = "", week, text
       beneficiaryId: cleanBeneficiaryId(beneficiaryId),
       weekId: weekKey(week),
       checked: remote.checked,
+      checkedMeta: remote.checkedMeta,
       customItems: [...remote.customItems, item],
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
@@ -112,7 +150,7 @@ export function shoppingListText(week, state = currentState(week)) {
     "",
     ...categories.flatMap(category => [
       category,
-      ...items.filter(item => item.category === category).map(item => `${item.checked ? "[x]" : "[ ]"} ${item.text}`),
+      ...items.filter(item => item.category === category).map(item => `${item.checked ? "[x]" : "[ ]"} ${item.text}${item.checkedBy ? ` - coché par ${item.checkedBy}` : ""}`),
       "",
     ]),
   ].join("\n");

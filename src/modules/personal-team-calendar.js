@@ -267,7 +267,9 @@ export async function initPersonalTeamCalendar() {
   const subscribe = user => {
     const visible = readVisibleMonth();
     if (!user?.email || !visible || !document.querySelector(".personal-app")) return;
-    const key = `${user.email}-${visible.year}-${visible.month}`;
+    const appState = globalThis.__planningAvdCurrentState || {};
+    const beneficiaryId = String(appState.beneficiaryId || "").trim();
+    const key = `${user.email}-${beneficiaryId}-${visible.year}-${visible.month}`;
     const view = activePersonalView();
     if (key === activeKey) {
       if (lastPayload && view !== lastRenderedView) {
@@ -280,10 +282,16 @@ export async function initPersonalTeamCalendar() {
     activeKey = key;
     lastPayload = null;
     lastRenderedView = "";
+    if (!beneficiaryId) {
+      lastPayload = { calendar: [], ...visible };
+      render(lastPayload);
+      return;
+    }
     const email = normalizeEmail(user.email);
     const rawEmail = cleanEmail(user.email);
     const monthId = monthKey(visible.year, visible.month);
-    const refs = uniqueShareKeys(rawEmail).map(emailId => db.collection("planning-avd-shares").doc(emailId).collection("months").doc(monthId));
+    const refs = uniqueShareKeys(rawEmail).map(emailId =>
+      db.collection("planning-avd-shares").doc(emailId).collection("beneficiaries").doc(beneficiaryId).collection("months").doc(monthId));
     let active = true;
     let directPending = refs.length;
     let queryUnsubscribe = null;
@@ -313,6 +321,7 @@ export async function initPersonalTeamCalendar() {
       if (queryUnsubscribe || !active || hasDirectPlanning) return;
       queryUnsubscribe = db.collectionGroup("months")
         .where("email", "==", email)
+        .where("beneficiaryId", "==", beneficiaryId)
         .where("year", "==", visible.year)
         .where("month", "==", visible.month)
         .limit(1)
