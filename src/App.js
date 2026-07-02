@@ -29,7 +29,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260628-shopping-author";
+} from "./modules/storage.js?v=20260702-member-email";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -925,6 +925,7 @@ const ACCESS_MEMBER_FILTERS = [
   { id: "viewer", label: "Lecture" },
   { id: "inactive", label: "Inactifs" },
 ];
+const MEMBER_EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const normalizeBeneficiaryLabel = value => String(value || "")
   .trim()
   .toLocaleLowerCase("fr")
@@ -1184,12 +1185,17 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
   };
 
   const toggleAccess = async member => {
+    const memberEmail = String(member.email || "").trim().toLowerCase();
+    if (!MEMBER_EMAIL_PATTERN.test(memberEmail)) {
+      alert("Cet acces n'a pas d'email valide. Réinvitez la personne avec son adresse complete.");
+      return;
+    }
     const nextActive = !member.active;
     const label = nextActive ? "reactiver" : "desactiver";
     if (!nextActive && !window.confirm(`Desactiver l'acces de ${member.name || member.email} ?`)) return;
     try {
       await onSetMemberAccess({
-        email: member.email,
+        email: memberEmail,
         role: member.role === "owner" ? "admin" : member.role,
         active: nextActive,
       });

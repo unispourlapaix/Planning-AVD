@@ -3,6 +3,14 @@ const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const cleanEmail = email => String(email || "").trim();
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
+const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+const normalizeEmailCandidate = value => {
+  const raw = cleanEmail(value);
+  const match = raw.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+  return normalizeEmail(match ? match[0] : raw);
+};
+const firstValidEmail = (...values) =>
+  values.map(normalizeEmailCandidate).find(value => EMAIL_PATTERN.test(value)) || "";
 const encodedEmailKey = email => encodeURIComponent(cleanEmail(email));
 const shareEmailKey = email => cleanEmail(email).replaceAll("/", "%2F");
 const safeToken = value => String(value || "")
@@ -123,9 +131,9 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
     updatedBy: adminEmail,
   }), { merge: true });
   (Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
-    .filter(aux => String(aux.email || "").trim())
+    .filter(aux => firstValidEmail(aux.email))
     .forEach(aux => {
-      const email = beneficiaryMemberKey(aux.email);
+      const email = beneficiaryMemberKey(firstValidEmail(aux.email));
       batch.set(root.collection("members").doc(email), buildBeneficiaryMember({
         email,
         name: aux.name || email,
@@ -581,15 +589,16 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
 
 function normalizeMemberDoc(doc, source) {
   const data = doc.data() || {};
-  const email = normalizeEmail(data.emailLower || data.email || doc.id);
+  const email = firstValidEmail(data.emailLower, data.email, doc.id);
   if (!email) return null;
   const role = source === "admin"
     ? (data.role === "owner" ? "owner" : "admin")
     : normalizeAccessRole(data.role);
+  const displayName = String(data.name || data.displayName || "").trim();
   return {
     id: doc.id,
     email,
-    name: String(data.name || data.displayName || data.email || email).trim(),
+    name: displayName || email,
     role,
     active: data.active !== false,
     source,
@@ -633,13 +642,13 @@ export function subscribeAccessMembers({ db, user, beneficiaryId = "", onChange,
 }
 
 export async function grantMemberRole({ db, user, email, role = "auxiliary", name = "", beneficiaryId = "", beneficiaryName = "" }) {
-  const clean = normalizeEmail(email);
+  const clean = firstValidEmail(email);
   const cleanRole = normalizeAccessRole(role);
   const cleanName = String(name || "").trim().slice(0, 80);
   const safeBeneficiaryId = String(beneficiaryId || "").trim();
   const adminEmail = normalizeEmail(user?.email);
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
-  if (!clean || !clean.includes("@")) throw new Error("Email invalide.");
+  if (!clean) throw new Error("Email invalide.");
   if (clean === adminEmail && cleanRole !== "admin") throw new Error("Votre propre acces administrateur reste protege.");
   const canWriteGlobalAccess = await isAdminUser({ db, user });
   const existingAdmin = cleanRole === "admin" || !canWriteGlobalAccess
@@ -716,11 +725,11 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
 }
 
 export async function setMemberAccess({ db, user, email, role = "auxiliary", active = true, beneficiaryId = "", beneficiaryName = "" }) {
-  const clean = normalizeEmail(email);
+  const clean = firstValidEmail(email);
   const cleanRole = normalizeAccessRole(role);
   const safeBeneficiaryId = String(beneficiaryId || "").trim();
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
-  if (!clean || !clean.includes("@")) throw new Error("Email invalide.");
+  if (!clean) throw new Error("Email invalide.");
   if (!active && clean === normalizeEmail(user.email)) throw new Error("Vous ne pouvez pas desactiver votre propre acces.");
   if (active) return grantMemberRole({ db, user, email: clean, role: cleanRole, beneficiaryId: safeBeneficiaryId, beneficiaryName });
   const payload = {
@@ -745,7 +754,7 @@ export async function setMemberAccess({ db, user, email, role = "auxiliary", act
 }
 
 export async function resolveAccessRequest({ db, user, request, status, beneficiaryId = "", beneficiaryName = "" }) {
-  const email = normalizeEmail(request?.email || request?.id);
+  const email = firstValidEmail(request?.email, request?.id);
   const cleanStatus = status === "approved" ? "approved" : "rejected";
   if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
   if (!email) throw new Error("Demande introuvable.");
@@ -1059,7 +1068,9 @@ export async function resolvePlanningChangeRequest({ db, user, request, status, 
 
 export function buildPersonalSharePayloads({ year, month, beneficiaryId = "", beneficiaryName = "", auxiliaries, schedule, dayOutings = {}, publishedAt = null, publishedBy = "" }) {
   const safeBeneficiaryId = String(beneficiaryId || createBeneficiaryId(beneficiaryName || "beneficiaire")).trim();
-  const active = auxiliaries.filter(aux => aux.active !== false && String(aux.email || "").trim());
+  const active = auxiliaries
+    .map(aux => ({ ...aux, email: firstValidEmail(aux.email) }))
+    .filter(aux => aux.active !== false && aux.email);
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
   const outingPrefix = `${year}-${month}-`;
   const sharedDayOutings = Object.fromEntries(Object.entries(dayOutings && typeof dayOutings === "object" ? dayOutings : {})
@@ -1082,7 +1093,7 @@ export function buildPersonalSharePayloads({ year, month, beneficiaryId = "", be
       });
     });
     const rawEmail = cleanEmail(aux.email);
-    const email = normalizeEmail(rawEmail);
+    const email = firstValidEmail(rawEmail);
     const readEmails = [...new Set([rawEmail, email].filter(Boolean))];
     const sharePayload = {
       email,
@@ -1141,10 +1152,10 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     }), { merge: true });
   }
   auxiliaries
-    .filter(aux => String(aux.email || "").trim())
+    .filter(aux => firstValidEmail(aux.email))
     .forEach(aux => {
-      const rawEmail = cleanEmail(aux.email);
-      const email = normalizeEmail(rawEmail);
+      const rawEmail = firstValidEmail(aux.email);
+      const email = rawEmail;
       batch.set(beneficiaryRef.collection("members").doc(beneficiaryMemberKey(email)), buildBeneficiaryMember({
         email,
         name: aux.name || email,
