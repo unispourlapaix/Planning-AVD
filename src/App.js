@@ -31,14 +31,14 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-scroll-lists";
+} from "./modules/storage.js?v=20260702-personal-permission";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260702-share-reminder";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260702-personal-permission";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
@@ -741,7 +741,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
       ),
     ),
     h("section", { className: "layout" },
-      error ? h("div", { className: "panel muted" }, error) : null,
+      error && !visiblePlanning ? h("div", { className: "panel muted" }, error) : null,
       activeAccess.length > 1 ? h("div", { className: "panel personal-beneficiary-picker" },
         h("div", null,
           h("h3", null, "Bénéficiaire"),
@@ -1736,9 +1736,13 @@ export default function App() {
       year,
       month,
       beneficiaryId: personalBeneficiaryId,
-      onAccess: setPersonalAccess,
+      onAccess: access => {
+        setPersonalAccess(access);
+        if (access?.length) setPersonalError("");
+      },
       onChange: planning => {
         setPersonalPlanning(planning);
+        if (planning) setPersonalError("");
         if (planning && Number.isInteger(planning.year) && Number.isInteger(planning.month) && (planning.year !== year || planning.month !== month)) {
           setYear(planning.year);
           setMonth(planning.month);

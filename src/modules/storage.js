@@ -1155,7 +1155,7 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
             entry.seen = true;
             monthPending = Math.max(0, monthPending - 1);
           }
-          onError?.(error);
+          if (!isPermissionError(error) && !visiblePlans().length) onError?.(error);
           maybeStartFallback();
         });
         monthUnsubscribers.set(mapKey, entry);
@@ -1177,7 +1177,7 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
       }
       accessByKey.delete(key);
       emitAccess();
-      onError?.(error);
+      if (!isPermissionError(error) && !visiblePlans().length) onError?.(error);
       maybeStartFallback();
     });
   });
