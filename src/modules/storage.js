@@ -430,7 +430,7 @@ export function subscribeBeneficiaryDashboard({ db, user, beneficiaryId = "", on
       dashboard.openTasks = tasks.filter(task => task.completed !== true).length;
       emit();
     }, error => onError?.(error)),
-    root.collection("activity").orderBy("createdAt", "desc").limit(6).onSnapshot(snapshot => {
+    root.collection("activity").orderBy("createdAt", "desc").limit(30).onSnapshot(snapshot => {
       dashboard.activity = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       emit();
     }, error => onError?.(error)),

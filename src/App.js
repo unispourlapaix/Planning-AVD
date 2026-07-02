@@ -31,14 +31,16 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-shared-beneficiaries";
+} from "./modules/storage.js?v=20260702-scroll-lists";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260702-share-reminder";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
+import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
 
 const { useEffect, useMemo, useRef, useState } = React;
@@ -57,6 +59,7 @@ const normalizeRotationMode = value => {
 };
 const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
 const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
+const TASK_PRIORITY_LABELS = { normal: "Normale", important: "Importante", urgent: "Urgente" };
 const UI_TEXT = {
   "action.print": { fr: "Imprimer", en: "Print" },
   "action.report": { fr: "Rapport", en: "Report" },
@@ -96,6 +99,7 @@ const ICON_PATHS = {
     "M16 7a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM10 21a6 6 0 0 1 10-4.5",
   ],
   print: ["M7 8V3h10v5M7 17H5a3 3 0 0 1 0-6h14a3 3 0 0 1 0 6h-2M7 14h10v7H7v-7Z"],
+  mail: ["M4 6h16v12H4V6ZM4 7l8 6 8-6"],
   meal: ["M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M15 3v18M15 3c4 2 5 8 0 11"],
   copy: ["M9 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2M5 7h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"],
   chevronLeft: ["M15 6l-6 6 6 6"],
@@ -335,6 +339,7 @@ const formatDashboardDate = value => {
   const date = timestampToDate(value);
   return date ? date.toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Pas encore";
 };
+const periodKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
   .map(([key, items]) => [key, (Array.isArray(items) ? items : [])
     .map((item, index) => {
@@ -503,6 +508,55 @@ function PersonalChangeRequestsPanel({ requests, error }) {
         h("small", null, `${requestStatusLabel(request.status)}${request.targetName ? ` · ${request.targetName}` : ""}`),
       ),
     ))),
+  );
+}
+
+function PersonalTaskOverview({ authState, beneficiaryId, year, month, onOpenTasks }) {
+  const [tasks, setTasks] = useState([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!authState.db || !authState.user || !beneficiaryId) {
+      setTasks([]);
+      return;
+    }
+    setError("");
+    return subscribeTasks({
+      db: authState.db,
+      user: authState.user,
+      beneficiaryId,
+      onChange: setTasks,
+      onError: nextError => setError(`Tâches indisponibles : ${nextError.message}`),
+    });
+  }, [authState.db, authState.user, beneficiaryId]);
+
+  if (!authState.user || !beneficiaryId) return null;
+  const openTasks = tasks.filter(task => task.completed !== true);
+  const visibleTasks = openTasks.slice(0, 8);
+  return h("section", { className: "panel personal-task-overview" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Tâches à voir"),
+        h("div", { className: "muted" }, error || `${openTasks.length} ouverte(s) pour ce dossier.`),
+      ),
+      h(Button, { onClick: onOpenTasks }, h(IconLabel, { icon: "meal", label: "Tout voir" })),
+    ),
+    visibleTasks.length
+      ? h("div", { className: "personal-task-scroll" }, visibleTasks.map(task => {
+          const schedule = taskScheduleLabel(task, { year, month });
+          const meta = [
+            task.assignedName ? `Pour ${task.assignedName}` : "",
+            schedule,
+            TASK_PRIORITY_LABELS[task.priority] || TASK_PRIORITY_LABELS.normal,
+          ].filter(Boolean).join(" · ");
+          return h("article", { key: task.id, className: `personal-task-item priority-${task.priority || "normal"}` },
+            h("span", { className: "task-dot" }),
+            h("span", { className: "task-main" },
+              h("b", null, task.title || "Tâche"),
+              h("small", null, meta || "Sans créneau"),
+            ),
+          );
+        }))
+      : h("div", { className: "task-empty" }, error ? "Impossible de charger les tâches pour le moment." : "Aucune tâche ouverte."),
   );
 }
 
@@ -698,6 +752,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
         ),
       ) : null,
       personalView === "life" && accessBeneficiaryId ? h(TaskPanel, { authState, auxiliaries: visiblePlanning?.team || [], year, month, beneficiaryId: accessBeneficiaryId, canContribute }) : null,
+      personalView !== "life" && accessBeneficiaryId ? h(PersonalTaskOverview, { authState, beneficiaryId: accessBeneficiaryId, year, month, onOpenTasks: () => setPersonalView("life") }) : null,
       personalView !== "life" && visiblePlanning
         ? h("div", { className: "panel personal-summary" },
             h("div", null, h("h3", null, visiblePlanning.name || "Mon planning"), h("div", { className: "muted" }, beneficiaryLabel)),
@@ -718,7 +773,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
         : null,
       personalView !== "life" && canContribute ? h(PersonalChangeRequestsPanel, { requests: changeRequests, error: changeRequestError }) : null,
       visiblePlanning && personalView === "week"
-        ? h("div", { className: "week-grid" }, orderedWeekGroups.map(days => {
+        ? h("div", { className: "week-grid personal-planning-scroll" }, orderedWeekGroups.map(days => {
             const currentWeek = isCurrentMonth && days.includes(today.getDate());
             return h("section", { className: `panel personal-week-panel${currentWeek ? " current-week" : ""}`, key: days.join("-") },
               h("h3", null, currentWeek ? `Semaine actuelle · ${days[0]} ${MONTHS[month]}` : `Semaine du ${days[0]} ${MONTHS[month]}`),
@@ -727,7 +782,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
           }))
         : null,
       visiblePlanning && personalView === "month"
-        ? h("div", { className: "personal-month" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
+        ? h("div", { className: "personal-month-list personal-planning-scroll" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
         : null,
     ),
     h(ChangeRequestModal, { edit: requestEdit, planning: visiblePlanning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
@@ -1133,6 +1188,21 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
           )))
         : h("div", { className: "muted" }, "L'historique se remplira aux prochaines sauvegardes et transmissions."),
     ),
+  );
+}
+
+function ShareReminder({ dashboard, year, month, onSharePlanning }) {
+  const today = new Date();
+  const currentPeriod = periodKey(year, month);
+  const isFirstDayOfSelectedMonth = today.getFullYear() === year && today.getMonth() === month && today.getDate() === 1;
+  const latestPeriod = dashboard?.beneficiary?.latestPublishedPeriod || "";
+  if (!isFirstDayOfSelectedMonth || latestPeriod === currentPeriod) return null;
+  return h("section", { className: "panel share-reminder" },
+    h("div", null,
+      h("h3", null, "Rappel du 1er"),
+      h("div", { className: "muted" }, `Pensez à partager le planning de ${MONTHS[month]} ${year} aux auxiliaires.`),
+    ),
+    h(Button, { active: true, onClick: onSharePlanning }, h(IconLabel, { icon: "mail", label: "Partager par email" })),
   );
 }
 
@@ -1948,6 +2018,41 @@ export default function App() {
     }
   };
 
+  const sharePlanningEmail = async () => {
+    if (!requireSafeCloudWrite()) return;
+    if (!activeAux.some(aux => String(aux.email || "").trim())) {
+      alert("Partage bloqué : ajoutez au moins un email auxiliaire avant d'envoyer le planning.");
+      return;
+    }
+    const incompleteEmailAux = firstIncompleteAuxEmail(activeAux);
+    if (incompleteEmailAux) {
+      alert(`Partage bloqué : terminez l'email de ${incompleteEmailAux.name || "cet auxiliaire"} avant d'envoyer le planning.`);
+      return;
+    }
+    try {
+      setCloudStatus({ kind: "saving", text: "Préparation partage..." });
+      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
+      const signature = stateSignature(currentState);
+      const cloudResult = await saveStateWithOverwriteOption(currentState);
+      setCloudResult(cloudResult);
+      if (!cloudResult?.cloud) {
+        alert(cloudResult?.reason === "overwrite-cancelled"
+          ? "Partage annulé : la version cloud a été conservée."
+          : cloudResult?.reason === "conflict"
+          ? "Partage bloqué : une version cloud plus récente existe. Rechargez l'app avant d'envoyer."
+          : `Partage impossible : ${cloudResult?.error || "réessayez plus tard."}`);
+        return;
+      }
+      cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
+      lastSavedSignatureRef.current = signature;
+      const count = await sharePlanningByEmail({ db: authState.db, user: authState.user, year, month, beneficiaryId, beneficiaryName, auxiliaries: activeAux, schedule, hours, dayOutings });
+      setCloudStatus({ kind: "saved", text: `Email prêt · ${count} auxiliaire(s)` });
+    } catch (error) {
+      alert(`Partage impossible : ${error.message}`);
+      setCloudStatus({ kind: "error", text: "Partage impossible" });
+    }
+  };
+
   const saveAccessMember = async ({ email, name, role }) => {
     return grantMemberRole({ db: authState.db, user: authState.user, email, name, role, beneficiaryId, beneficiaryName });
   };
@@ -2194,6 +2299,7 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
+      sessionRole.isAdmin ? h(ShareReminder, { dashboard: groupDashboard, year, month, onSharePlanning: sharePlanningEmail }) : null,
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,

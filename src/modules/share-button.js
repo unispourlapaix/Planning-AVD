@@ -1,8 +1,8 @@
 import { SHIFT_DEFS } from "./constants.js";
 import { buildSchedule } from "./scheduler-handover.js?v=20260628-split-day";
 import { calculatePerformedHours } from "./hour-accounting.js";
-import { isAdminUser, loadState } from "./storage.js?v=20260626-beneficiary";
-import { sharePlanningByEmail } from "./planning-share.js?v=20260626-beneficiary";
+import { isAdminUser, loadState } from "./storage.js?v=20260702-share-reminder";
+import { sharePlanningByEmail } from "./planning-share.js?v=20260702-share-reminder";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
