@@ -342,8 +342,9 @@ const mergeBeneficiaryOptions = items => {
 
 export function subscribeUserBeneficiaries({ db, user, onChange, onError }) {
   if (!db || !user?.uid) return () => {};
-  const buckets = { user: [], shared: [] };
-  const emit = () => onChange?.(mergeBeneficiaryOptions([...buckets.user, ...buckets.shared]));
+  const sharedBuckets = new Map();
+  const buckets = { user: [] };
+  const emit = () => onChange?.(mergeBeneficiaryOptions([...buckets.user, ...[...sharedBuckets.values()].flat()]));
   const unsubscribers = [
     db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries")
       .orderBy("updatedAt", "desc")
@@ -353,15 +354,15 @@ export function subscribeUserBeneficiaries({ db, user, onChange, onError }) {
         emit();
       }, error => onError?.(error)),
   ];
-  const email = normalizeEmail(user.email);
-  if (email) {
-    unsubscribers.push(db.collection("planning-avd-shares").doc(email).collection("beneficiaries")
+  const shareKeys = uniqueShareKeys(user.email);
+  shareKeys.forEach(key => {
+    unsubscribers.push(db.collection("planning-avd-shares").doc(key).collection("beneficiaries")
       .limit(80)
       .onSnapshot(snapshot => {
-        buckets.shared = snapshot.docs.map(beneficiaryOptionFromDoc);
+        sharedBuckets.set(key, snapshot.docs.map(beneficiaryOptionFromDoc));
         emit();
       }, error => onError?.(error)));
-  }
+  });
   return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
@@ -509,8 +510,10 @@ export function subscribeUserAccess({ db, user, onChange, onError }) {
     return () => {};
   }
   const email = normalizeEmail(user.email);
-  const snapshots = { uidAdmin: null, emailAdmin: null, adminEmail: null, bootstrapAdmin: null, teamMember: null, beneficiaryShares: null };
-  const expected = email ? 6 : 1;
+  const shareKeys = uniqueShareKeys(user.email);
+  const shareDocsByKey = new Map();
+  const snapshots = { uidAdmin: null, emailAdmin: null, adminEmail: null, bootstrapAdmin: null, teamMember: null, beneficiaryShares: { docs: [] } };
+  const expected = email ? 5 + shareKeys.length : 1;
   let received = 0;
   let active = true;
   const emptySnapshot = { exists: false, data: () => ({}) };
@@ -518,16 +521,33 @@ export function subscribeUserAccess({ db, user, onChange, onError }) {
     if (!active || received < expected) return;
     onChange?.(accessFromSnapshots(snapshots));
   };
-  const listen = (key, ref) => ref.onSnapshot(snapshot => {
-    if (snapshots[key] === null) received += 1;
-    snapshots[key] = snapshot;
-    emit();
-  }, error => {
-    if (snapshots[key] === null) received += 1;
-    snapshots[key] = emptySnapshot;
-    onError?.(error);
-    emit();
-  });
+  const mergeShareDocs = () => {
+    snapshots.beneficiaryShares = { docs: [...shareDocsByKey.values()].flat() };
+  };
+  const listen = (key, ref, applySnapshot = snapshot => { snapshots[key] = snapshot; }) => {
+    let seen = false;
+    return ref.onSnapshot(snapshot => {
+      if (!seen) {
+        seen = true;
+        received += 1;
+      }
+      applySnapshot(snapshot);
+      emit();
+    }, error => {
+      if (!seen) {
+        seen = true;
+        received += 1;
+      }
+      if (key.startsWith("beneficiaryShares:")) {
+        shareDocsByKey.set(key, []);
+        mergeShareDocs();
+      } else {
+        snapshots[key] = emptySnapshot;
+      }
+      onError?.(error);
+      emit();
+    });
+  };
   const unsubscribers = [listen("uidAdmin", db.collection("planning-avd-admins").doc(user.uid))];
   if (email) {
     unsubscribers.push(
@@ -535,7 +555,10 @@ export function subscribeUserAccess({ db, user, onChange, onError }) {
       listen("adminEmail", db.collection("planning-avd-admin-emails").doc(email)),
       listen("bootstrapAdmin", db.collection("planning-avd-admin-bootstraps").doc(email)),
       listen("teamMember", db.collection("planning-avd-team-members").doc(email)),
-      listen("beneficiaryShares", db.collection("planning-avd-shares").doc(email).collection("beneficiaries").limit(20)),
+      ...shareKeys.map(key => listen(`beneficiaryShares:${key}`, db.collection("planning-avd-shares").doc(key).collection("beneficiaries").limit(20), snapshot => {
+        shareDocsByKey.set(`beneficiaryShares:${key}`, snapshot.docs);
+        mergeShareDocs();
+      })),
     );
   }
   return () => {
@@ -555,10 +578,12 @@ export async function getUserAccess({ db, user }) {
     if (bootstrapSnap.exists && bootstrapSnap.data()?.active !== false) {
       return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: false };
     }
-    const shareSnap = await db.collection("planning-avd-shares").doc(email).collection("beneficiaries").limit(20).get().catch(() => null);
-    const shareRoles = (shareSnap?.docs || [])
+    const shareSnaps = await Promise.all(uniqueShareKeys(user.email)
+      .map(key => db.collection("planning-avd-shares").doc(key).collection("beneficiaries").limit(20).get().catch(() => null)));
+    const shareDocs = shareSnaps.flatMap(snapshot => snapshot?.docs || []);
+    const shareRoles = shareDocs
       .map(doc => normalizeAccessRole(doc.data()?.role))
-      .filter((role, index) => (shareSnap.docs[index].data()?.active !== false) && ACCESS_ROLES.includes(role));
+      .filter((role, index) => (shareDocs[index].data()?.active !== false) && ACCESS_ROLES.includes(role));
     if (shareRoles.includes("admin")) return { isAdmin: true, role: "admin", canContribute: true, isMember: true, globalAdmin: false };
     if (shareRoles.length) {
       const role = shareRoles.sort((a, b) => roleRank(a) - roleRank(b))[0];

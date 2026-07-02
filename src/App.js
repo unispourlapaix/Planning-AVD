@@ -2,7 +2,7 @@ import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260628-split-day";
-import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260628-mobile-google";
+import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260702-login-refresh";
 import {
   createPlanningChangeRequest,
   createNewBeneficiaryAdmin,
@@ -11,6 +11,7 @@ import {
   deleteMemberAccess,
   ensureBeneficiaryIdentity,
   ensureBeneficiaryGroup,
+  getUserAccess,
   loadBeneficiaryState,
   grantMemberRole,
   loadRestoreBackup,
@@ -31,7 +32,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-personal-permission";
+} from "./modules/storage.js?v=20260702-login-refresh";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -1679,8 +1680,14 @@ export default function App() {
       },
       onError: error => console.warn("Role utilisateur indisponible.", error),
     });
-    const timeout = setTimeout(() => {
-      if (active && !settled) setSessionRole({ ready: true, isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false });
+    const timeout = setTimeout(async () => {
+      if (!active || settled) return;
+      const access = await getUserAccess({ db: authState.db, user: authState.user })
+        .catch(error => {
+          console.warn("Role utilisateur direct indisponible.", error);
+          return { isAdmin: false, role: "guest", canContribute: false, isMember: false, globalAdmin: false };
+        });
+      if (active && !settled) setSessionRole({ ready: true, ...access });
     }, ADMIN_ROLE_TIMEOUT_MS);
     return () => {
       active = false;

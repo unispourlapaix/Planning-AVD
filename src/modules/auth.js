@@ -109,7 +109,10 @@ export async function initGoogleAuth(onChange) {
     if (blocked) auth.signOut();
   };
 
-  Promise.race([auth.getRedirectResult(), redirectResultTimeout()])
+  auth.onAuthStateChanged(emitAuthState);
+
+  const redirectResult = auth.getRedirectResult();
+  redirectResult
     .then(result => {
       if (result?.user) {
         redirectError = "";
@@ -124,8 +127,9 @@ export async function initGoogleAuth(onChange) {
       clearRedirectPending();
       emitAuthState(lastUser);
     });
-
-  auth.onAuthStateChanged(emitAuthState);
+  Promise.race([redirectResult.catch(() => null), redirectResultTimeout()])
+    .then(() => emitAuthState(auth.currentUser || lastUser))
+    .catch(() => {});
 
   return { auth, db };
 }

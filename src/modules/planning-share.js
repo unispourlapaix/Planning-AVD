@@ -1,6 +1,6 @@
 import { MONTHS } from "./constants.js";
 import { dayName } from "./dates.js";
-import { publishPersonalPlannings } from "./storage.js?v=20260702-personal-permission";
+import { publishPersonalPlannings } from "./storage.js?v=20260702-login-refresh";
 
 const SHARE_SHIFT_LABELS = {
   morning: "Matin",
