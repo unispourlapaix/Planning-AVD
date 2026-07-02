@@ -137,6 +137,10 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
   const adminEmail = normalizeEmail(user?.email);
   if (!db || !beneficiaryId || !adminEmail) return;
   const root = beneficiaryRoot(db, beneficiaryId);
+  const activeAuxiliaries = (Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
+    .map(aux => ({ ...aux, email: firstValidEmail(aux.email) }))
+    .filter(aux => aux.email);
+  const roleByEmail = await readBeneficiaryRoleMap({ db, beneficiaryId, emails: activeAuxiliaries.map(aux => aux.email) });
   const batch = db.batch();
   batch.set(root, {
     beneficiaryId,
@@ -151,14 +155,14 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
     active: true,
     updatedBy: adminEmail,
   }), { merge: true });
-  (Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
-    .filter(aux => firstValidEmail(aux.email))
+  activeAuxiliaries
     .forEach(aux => {
-      const email = beneficiaryMemberKey(firstValidEmail(aux.email));
+      const email = beneficiaryMemberKey(aux.email);
+      const accessRole = email === adminEmail ? "admin" : roleByEmail.get(email) || "auxiliary";
       batch.set(root.collection("members").doc(email), buildBeneficiaryMember({
         email,
         name: aux.name || email,
-        role: "auxiliary",
+        role: accessRole,
         active: aux.active !== false,
         updatedBy: adminEmail,
       }), { merge: true });
@@ -168,7 +172,7 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
         email,
         emailOriginal: email,
         readEmails: [email],
-        role: "auxiliary",
+        role: accessRole,
         active: aux.active !== false,
         deleted: false,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -431,6 +435,29 @@ const ACCESS_ROLES = ["admin", "auxiliary", "viewer"];
 const normalizeAccessRole = role => ACCESS_ROLES.includes(role) ? role : "auxiliary";
 
 const roleRank = role => ({ owner: 0, admin: 1, auxiliary: 2, viewer: 3 }[role] ?? 4);
+
+const privilegedAccessRole = data => {
+  if (!data || data.active === false || data.deleted === true) return "";
+  const role = data.role === "owner" ? "owner" : normalizeAccessRole(data.role);
+  return role === "owner" || role === "admin" ? role : "";
+};
+
+async function readBeneficiaryRoleMap({ db, beneficiaryId, emails }) {
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  const cleanEmails = [...new Set((emails || []).map(firstValidEmail).filter(Boolean))];
+  if (!db || !safeBeneficiaryId || !cleanEmails.length) return new Map();
+  const entries = await Promise.all(cleanEmails.map(async email => {
+    const [memberSnap, shareSnap] = await Promise.all([
+      beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(email)).get().catch(() => null),
+      db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(safeBeneficiaryId).get().catch(() => null),
+    ]);
+    const role = privilegedAccessRole(memberSnap?.data?.())
+      || privilegedAccessRole(shareSnap?.data?.())
+      || "auxiliary";
+    return [email, role];
+  }));
+  return new Map(entries);
+}
 
 const accessFromSnapshots = ({ uidAdmin, emailAdmin, adminEmail, bootstrapAdmin, teamMember, beneficiaryShares }) => {
   const globalAdmin = [uidAdmin, emailAdmin, adminEmail].some(snapshot => snapshot?.exists && snapshot.data()?.active !== false);
@@ -1330,8 +1357,13 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     publishedBy: user.email || "",
   });
   if (!payloads.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
-  const batch = db.batch();
   const adminEmail = normalizeEmail(user.email);
+  const roleByEmail = await readBeneficiaryRoleMap({
+    db,
+    beneficiaryId: safeBeneficiaryId,
+    emails: payloads.map(item => item.email),
+  });
+  const batch = db.batch();
   const beneficiaryRef = beneficiaryRoot(db, safeBeneficiaryId);
   batch.set(beneficiaryRef, {
     beneficiaryId: safeBeneficiaryId,
@@ -1355,10 +1387,11 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     .forEach(aux => {
       const rawEmail = firstValidEmail(aux.email);
       const email = rawEmail;
+      const accessRole = email === adminEmail ? "admin" : roleByEmail.get(email) || "auxiliary";
       batch.set(beneficiaryRef.collection("members").doc(beneficiaryMemberKey(email)), buildBeneficiaryMember({
         email,
         name: aux.name || email,
-        role: "auxiliary",
+        role: accessRole,
         active: aux.active !== false,
         updatedBy: adminEmail,
       }), { merge: true });
@@ -1377,13 +1410,14 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
   payloads.forEach(({ rawEmail, sharePayload }) => {
     uniqueShareKeys(rawEmail).forEach(key => {
       const beneficiaryRef = db.collection("planning-avd-shares").doc(key).collection("beneficiaries").doc(safeBeneficiaryId);
+      const accessRole = sharePayload.email === adminEmail ? "admin" : roleByEmail.get(sharePayload.email) || "auxiliary";
       batch.set(beneficiaryRef, {
         beneficiaryId: safeBeneficiaryId,
         beneficiaryName: sharePayload.beneficiaryName,
         email: sharePayload.email,
         emailOriginal: sharePayload.emailOriginal,
         readEmails: sharePayload.readEmails,
-        role: "auxiliary",
+        role: accessRole,
         active: true,
         deleted: false,
         latestPeriod: monthKey(year, month),

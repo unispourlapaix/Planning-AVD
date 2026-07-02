@@ -31,7 +31,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-member-actions";
+} from "./modules/storage.js?v=20260702-admin-role";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
