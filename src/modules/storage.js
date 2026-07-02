@@ -6,11 +6,29 @@ const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const normalizeEmailCandidate = value => {
   const raw = cleanEmail(value);
-  const match = raw.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
-  return normalizeEmail(match ? match[0] : raw);
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  })();
+  const match = [raw, decoded]
+    .map(candidate => candidate.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i)?.[0])
+    .find(Boolean);
+  return normalizeEmail(match || decoded || raw);
 };
 const firstValidEmail = (...values) =>
   values.map(normalizeEmailCandidate).find(value => EMAIL_PATTERN.test(value)) || "";
+const emailProfileKey = value => {
+  const email = firstValidEmail(value);
+  if (!email) return "";
+  const [local = "", domain = ""] = email.split("@");
+  if (["gmail.com", "googlemail.com"].includes(domain)) {
+    return `${local.split("+")[0].replaceAll(".", "")}@gmail.com`;
+  }
+  return email;
+};
 const encodedEmailKey = email => encodeURIComponent(cleanEmail(email));
 const shareEmailKey = email => cleanEmail(email).replaceAll("/", "%2F");
 const safeToken = value => String(value || "")
@@ -84,6 +102,8 @@ const withLoadMeta = (state, meta) => ({
 const stateMonthKey = value => `${Number(value?.year) || new Date().getFullYear()}-${String((Number(value?.month) || 0) + 1).padStart(2, "0")}`;
 const stateRestoreKey = value => `${String(value?.beneficiaryId || "legacy")}-${stateMonthKey(value)}`;
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
+const hasIncompleteAuxiliaryEmail = state => Array.isArray(state?.auxiliaries)
+  && state.auxiliaries.some(aux => aux?.active !== false && cleanEmail(aux.email) && !firstValidEmail(aux.email));
 const beneficiaryRoot = (db, beneficiaryId) => db.collection("planning-avd-beneficiaries").doc(String(beneficiaryId || "").trim());
 const userBeneficiaryRef = (db, user, beneficiaryId) =>
   db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries").doc(String(beneficiaryId || "").trim());
@@ -189,6 +209,9 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
   const value = { ...ensureBeneficiaryIdentity(stripStateMeta(state)), rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return { local: true, cloud: false, reason: "not-connected" };
+  if (hasIncompleteAuxiliaryEmail(value)) {
+    return { local: true, cloud: false, reason: "pending-email", error: "Un email auxiliaire est en cours de saisie." };
+  }
   try {
     const userRef = db.collection("planning-avd-users").doc(user.uid);
     const appRef = userRef.collection("app");
@@ -591,6 +614,8 @@ function normalizeMemberDoc(doc, source) {
   const data = doc.data() || {};
   const email = firstValidEmail(data.emailLower, data.email, doc.id);
   if (!email) return null;
+  const profileKey = emailProfileKey(email);
+  if (!profileKey) return null;
   const role = source === "admin"
     ? (data.role === "owner" ? "owner" : "admin")
     : normalizeAccessRole(data.role);
@@ -598,6 +623,7 @@ function normalizeMemberDoc(doc, source) {
   return {
     id: doc.id,
     email,
+    profileKey,
     name: displayName || email,
     role,
     active: data.active !== false,
@@ -610,23 +636,133 @@ function mergeAccessMembers(adminDocs, teamDocs) {
   const members = new Map();
   [...teamDocs, ...adminDocs].forEach(member => {
     if (!member?.email) return;
-    const current = members.get(member.email);
+    const profileKey = member.profileKey || emailProfileKey(member.email);
+    if (!profileKey) return;
+    const current = members.get(profileKey);
     if (!current
       || (member.active && !current.active)
       || (member.active === current.active && roleRank(member.role) < roleRank(current.role))) {
-      members.set(member.email, { ...current, ...member });
+      members.set(profileKey, { ...current, ...member, profileKey });
       return;
     }
-    members.set(member.email, {
+    members.set(profileKey, {
       ...current,
       active: current.active || member.active,
       name: current.name || member.name,
+      profileKey,
     });
   });
   return [...members.values()].sort((a, b) =>
     Number(b.active) - Number(a.active)
     || roleRank(a.role) - roleRank(b.role)
     || a.name.localeCompare(b.name));
+}
+
+const emailQualityScore = email => {
+  const clean = firstValidEmail(email);
+  if (!clean) return 0;
+  const [local = "", domain = ""] = clean.split("@");
+  return (local.includes("+") ? 0 : 2)
+    + (domain === "gmail.com" ? 2 : 0)
+    + (clean.includes("%40") ? 0 : 1);
+};
+
+function memberRecordFromDoc(doc) {
+  const data = doc.data() || {};
+  const email = firstValidEmail(data.emailLower, data.email, doc.id);
+  const profileKey = emailProfileKey(email || doc.id);
+  if (!email || !profileKey) return null;
+  const role = data.role === "owner" ? "owner" : normalizeAccessRole(data.role);
+  const name = String(data.name || data.displayName || "").trim();
+  return {
+    ref: doc.ref,
+    id: doc.id,
+    data,
+    email,
+    profileKey,
+    name,
+    role,
+    active: data.active !== false,
+    score: timestampScore(data.updatedAt || data.createdAt),
+  };
+}
+
+function choosePreferredMember(records) {
+  return [...records].sort((a, b) =>
+    Number(b.active) - Number(a.active)
+    || roleRank(a.role) - roleRank(b.role)
+    || emailQualityScore(b.email) - emailQualityScore(a.email)
+    || Number(b.id === b.email) - Number(a.id === a.email)
+    || b.score - a.score
+    || String(a.email).localeCompare(String(b.email)))[0];
+}
+
+function mergedMemberPayload(records, preferred, updatedBy) {
+  const activeRecords = records.filter(record => record.active);
+  const roleSource = activeRecords.length ? activeRecords : records;
+  const role = [...roleSource].sort((a, b) => roleRank(a.role) - roleRank(b.role))[0]?.role || preferred.role;
+  const name = [...records]
+    .map(record => record.name)
+    .filter(value => value && !EMAIL_PATTERN.test(normalizeEmailCandidate(value)))
+    .sort((a, b) => b.length - a.length)[0] || preferred.name || preferred.email;
+  const payload = buildBeneficiaryMember({
+    email: preferred.email,
+    name,
+    role: role === "owner" ? "admin" : role,
+    active: records.some(record => record.active),
+    updatedBy,
+  });
+  if (role === "owner") payload.role = "owner";
+  return payload;
+}
+
+export async function repairBeneficiaryMembers({ db, user, beneficiaryId = "" }) {
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  const updatedBy = normalizeEmail(user?.email);
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  if (!safeBeneficiaryId) throw new Error("Bénéficiaire non identifié.");
+  const collection = beneficiaryRoot(db, safeBeneficiaryId).collection("members");
+  const snapshot = await collection.get();
+  const groups = new Map();
+  snapshot.docs
+    .map(memberRecordFromDoc)
+    .filter(Boolean)
+    .forEach(record => {
+      const items = groups.get(record.profileKey) || [];
+      items.push(record);
+      groups.set(record.profileKey, items);
+    });
+
+  const operations = [];
+  let merged = 0;
+  let removed = 0;
+  groups.forEach(records => {
+    const preferred = records.find(record => record.email === updatedBy) || choosePreferredMember(records);
+    const canonicalId = beneficiaryMemberKey(preferred.email);
+    const canonicalRecord = records.find(record => record.id === canonicalId);
+    const duplicateRecords = records.filter(record => record.id !== canonicalId
+      && (!EMAIL_PATTERN.test(normalizeEmailCandidate(record.id))
+        || firstValidEmail(record.data.emailLower, record.data.email) === preferred.email));
+    const canonicalDirty = !canonicalRecord
+      || firstValidEmail(canonicalRecord.data.emailLower) !== preferred.email
+      || firstValidEmail(canonicalRecord.data.email) !== preferred.email
+      || canonicalRecord.profileKey !== preferred.profileKey;
+    if (!canonicalDirty && !duplicateRecords.length) return;
+    const payload = mergedMemberPayload(records, preferred, updatedBy);
+    operations.push(batch => batch.set(collection.doc(canonicalId), payload, { merge: true }));
+    duplicateRecords.forEach(record => {
+      operations.push(batch => batch.delete(record.ref));
+      removed += 1;
+    });
+    merged += 1;
+  });
+
+  for (let index = 0; index < operations.length; index += 450) {
+    const batch = db.batch();
+    operations.slice(index, index + 450).forEach(operation => operation(batch));
+    await batch.commit();
+  }
+  return { scanned: snapshot.size, merged, removed };
 }
 
 export function subscribeAccessMembers({ db, user, beneficiaryId = "", onChange, onError }) {
@@ -721,6 +857,10 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
   }
   if (!writes.length) throw new Error("Aucun bénéficiaire actif pour ajouter ce membre.");
   await Promise.all(writes);
+  if (safeBeneficiaryId) {
+    await repairBeneficiaryMembers({ db, user, beneficiaryId: safeBeneficiaryId })
+      .catch(error => console.warn("Fusion des membres ignoree.", error));
+  }
   return { email: clean, role: effectiveRole, requestedRole: cleanRole };
 }
 
@@ -1192,6 +1332,8 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     });
   });
   await batch.commit();
+  await repairBeneficiaryMembers({ db, user, beneficiaryId: safeBeneficiaryId })
+    .catch(error => console.warn("Fusion des membres ignoree.", error));
   await addBeneficiaryActivity({
     db,
     beneficiaryId: safeBeneficiaryId,

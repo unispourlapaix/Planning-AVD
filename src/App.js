@@ -16,6 +16,7 @@ import {
   loadState,
   publishPersonalPlannings,
   requestAccessRole,
+  repairBeneficiaryMembers,
   resolveAccessRequest,
   resolvePlanningChangeRequest,
   saveState,
@@ -29,7 +30,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-member-email";
+} from "./modules/storage.js?v=20260702-email-draft";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -346,6 +347,11 @@ const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && 
   .filter(([, items]) => items.length));
 const stateSignature = state => JSON.stringify(state);
 const ADMIN_ROLE_TIMEOUT_MS = 4500;
+const normalizeTypedEmail = value => String(value || "").trim().toLowerCase();
+const hasIncompleteAuxEmail = auxiliaries => (Array.isArray(auxiliaries) ? auxiliaries : [])
+  .some(aux => aux?.active !== false && normalizeTypedEmail(aux.email) && !MEMBER_EMAIL_PATTERN.test(normalizeTypedEmail(aux.email)));
+const firstIncompleteAuxEmail = auxiliaries => (Array.isArray(auxiliaries) ? auxiliaries : [])
+  .find(aux => aux?.active !== false && normalizeTypedEmail(aux.email) && !MEMBER_EMAIL_PATTERN.test(normalizeTypedEmail(aux.email)));
 const openHtmlDocument = ({ html, fileName, blockedMessage }) => {
   const win = window.open("", "_blank");
   if (win) {
@@ -1129,13 +1135,14 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
   );
 }
 
-function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onResolveAccessRequest }) {
+function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onRepairMembers, onResolveAccessRequest }) {
   const [members, setMembers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("auxiliary");
   const [saving, setSaving] = useState(false);
+  const [repairingMembers, setRepairingMembers] = useState(false);
   const [accessError, setAccessError] = useState("");
   const [memberFilter, setMemberFilter] = useState("all");
   const connectedEmail = authState.user?.email || "";
@@ -1212,6 +1219,20 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
       alert(`Réponse impossible : ${error.message}`);
     }
   };
+  const repairMembers = async () => {
+    if (repairingMembers || !onRepairMembers) return;
+    setRepairingMembers(true);
+    try {
+      const result = await onRepairMembers();
+      alert(result.removed
+        ? `Doublons fusionnés : ${result.removed} fiche(s) retirée(s).`
+        : "Aucun doublon trouvé dans ce groupe.");
+    } catch (error) {
+      alert(`Fusion impossible : ${error.message}`);
+    } finally {
+      setRepairingMembers(false);
+    }
+  };
   const memberCounts = {
     all: members.length,
     admin: members.filter(member => ["admin", "owner"].includes(member.role) && member.active !== false).length,
@@ -1268,7 +1289,8 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
             active: memberFilter === filter.id,
             disabled: memberCounts[filter.id] === 0 && memberFilter !== filter.id,
             onClick: () => setMemberFilter(filter.id),
-          }, `${filter.label} ${memberCounts[filter.id]}`))),
+          }, `${filter.label} ${memberCounts[filter.id]}`)),
+          h(Button, { disabled: repairingMembers, onClick: repairMembers }, repairingMembers ? "Fusion..." : "Fusionner doublons")),
           h("div", { className: "access-member-list" }, filteredMembers.length
             ? filteredMembers.map(member => {
                 const isSelf = String(member.email || "").toLowerCase() === String(connectedEmail || "").toLowerCase();
@@ -1328,11 +1350,22 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
       ? [{ beneficiaryId, beneficiaryName: beneficiaryName || "Bénéficiaire actuel" }]
       : []),
   ];
+  const [emailDrafts, setEmailDrafts] = useState(() =>
+    Object.fromEntries(auxiliaries.map(aux => [aux.id, String(aux.email || "")])));
+  const emailStateKey = auxiliaries.map(aux => `${aux.id}:${aux.email || ""}`).join("|");
+  useEffect(() => {
+    setEmailDrafts(Object.fromEntries(auxiliaries.map(aux => [aux.id, String(aux.email || "")])));
+  }, [emailStateKey]);
   const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => ({
     ...aux,
     ...(patch.lead === true && aux.id !== id ? { lead: false } : {}),
     ...(aux.id === id ? patch : {}),
   })));
+  const commitAuxEmail = id => {
+    const value = String(emailDrafts[id] ?? "").trim();
+    patchAux(id, { email: value });
+    setEmailDrafts(current => ({ ...current, [id]: value }));
+  };
   const addAux = () => setAuxiliaries(list => {
     if (list.length >= MAX_AUXILIARIES) return list;
     const id = `P${list.length + 1}`;
@@ -1408,7 +1441,15 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
       ),
       h("div", { className: "form-grid" },
         h(Field, { label: "Prenom complet" }, h(TextInput, { value: aux.name, onChange: value => patchAux(aux.id, { name: value }) })),
-        h(Field, { label: "Email" }, h(TextInput, { type: "email", value: aux.email, onChange: value => patchAux(aux.id, { email: value }) })),
+        h(Field, { label: "Email" }, h(TextInput, {
+          type: "email",
+          value: emailDrafts[aux.id] ?? aux.email,
+          onChange: value => setEmailDrafts(current => ({ ...current, [aux.id]: value })),
+          onBlur: () => commitAuxEmail(aux.id),
+          onKeyDown: event => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          },
+        })),
         h(Field, { label: "Telephone" }, h(TextInput, { value: aux.phone, onChange: value => patchAux(aux.id, { phone: value }) })),
         h(Field, { label: "Quota mensuel" }, h(TextInput, { type: "number", value: aux.quota, onChange: value => patchAux(aux.id, { quota: Number(value) || 0 }) })),
       ),
@@ -1490,6 +1531,10 @@ export default function App() {
     }
     if (result?.reason === "not-connected") {
       setCloudStatus({ kind: "local", text: "Local enregistré" });
+      return;
+    }
+    if (result?.reason === "pending-email") {
+      setCloudStatus({ kind: "local", text: "Email à terminer" });
       return;
     }
     setCloudStatus({ kind: "error", text: "Cloud non sauvegardé" });
@@ -1617,6 +1662,10 @@ export default function App() {
       setBeneficiaryGroupReady(true);
       return;
     }
+    if (hasIncompleteAuxEmail(activeAux)) {
+      setBeneficiaryGroupReady(true);
+      return;
+    }
     const signature = stateSignature({
       beneficiaryId,
       beneficiaryName,
@@ -1741,6 +1790,17 @@ export default function App() {
     const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
     const signature = stateSignature(currentState);
     if (signature === lastSavedSignatureRef.current) return;
+    if (hasIncompleteAuxEmail(auxiliaries)) {
+      setCloudStatus({ kind: "local", text: "Email à terminer" });
+      const id = setTimeout(() => saveState({
+        db: null,
+        user: null,
+        state: currentState,
+      }).then(() => {
+        lastSavedSignatureRef.current = signature;
+      }), 450);
+      return () => clearTimeout(id);
+    }
     if (authState.user && !cloudWriteReadyRef.current) {
       setCloudStatus({ kind: "error", text: "Cloud protégé : rechargez" });
       return;
@@ -1830,6 +1890,11 @@ export default function App() {
       alert("Sauvegarde bloquée : ajoutez au moins un email auxiliaire avant de transmettre le planning.");
       return;
     }
+    const incompleteEmailAux = firstIncompleteAuxEmail(activeAux);
+    if (incompleteEmailAux) {
+      alert(`Sauvegarde bloquée : terminez l'email de ${incompleteEmailAux.name || "cet auxiliaire"} avant de transmettre le planning.`);
+      return;
+    }
     try {
       setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
       const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
@@ -1859,6 +1924,10 @@ export default function App() {
 
   const changeMemberAccess = async ({ email, role, active }) => {
     return setMemberAccess({ db: authState.db, user: authState.user, email, role, active, beneficiaryId, beneficiaryName });
+  };
+
+  const repairAccessMembers = async () => {
+    return repairBeneficiaryMembers({ db: authState.db, user: authState.user, beneficiaryId });
   };
 
   const answerAccessRequest = async ({ request, status }) => {
@@ -2100,7 +2169,7 @@ export default function App() {
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
-      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onResolveAccessRequest: answerAccessRequest }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onRepairMembers: repairAccessMembers, onResolveAccessRequest: answerAccessRequest }) : null,
       view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {
