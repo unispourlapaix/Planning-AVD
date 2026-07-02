@@ -20,8 +20,8 @@ window.alert = message => nativeAlert(String(message)
   .replace("Publication impossible", "Sauvegarde impossible"));
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260702-email-draft"),
-  import("./ui.js"),
+  import("./App.js?v=20260702-member-actions"),
+  import("./ui.js?v=20260702-member-actions"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(h(App));

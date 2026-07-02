@@ -8,6 +8,7 @@ import {
   createNewBeneficiaryAdmin,
   createBeneficiaryId,
   defaultState,
+  deleteMemberAccess,
   ensureBeneficiaryIdentity,
   ensureBeneficiaryGroup,
   loadBeneficiaryState,
@@ -30,7 +31,7 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-email-draft";
+} from "./modules/storage.js?v=20260702-member-actions";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js";
@@ -38,7 +39,7 @@ import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
-import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js";
+import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
 
 const { useEffect, useMemo, useRef, useState } = React;
 
@@ -1135,7 +1136,7 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
   );
 }
 
-function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onRepairMembers, onResolveAccessRequest }) {
+function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiaryId, beneficiaryName, onSaveMember, onSetMemberAccess, onDeleteMember, onRepairMembers, onResolveAccessRequest }) {
   const [members, setMembers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
   const [email, setEmail] = useState("");
@@ -1143,6 +1144,7 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
   const [role, setRole] = useState("auxiliary");
   const [saving, setSaving] = useState(false);
   const [repairingMembers, setRepairingMembers] = useState(false);
+  const [memberBusy, setMemberBusy] = useState("");
   const [accessError, setAccessError] = useState("");
   const [memberFilter, setMemberFilter] = useState("all");
   const connectedEmail = authState.user?.email || "";
@@ -1200,6 +1202,7 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
     const nextActive = !member.active;
     const label = nextActive ? "reactiver" : "desactiver";
     if (!nextActive && !window.confirm(`Desactiver l'acces de ${member.name || member.email} ?`)) return;
+    setMemberBusy(memberEmail);
     try {
       await onSetMemberAccess({
         email: memberEmail,
@@ -1208,6 +1211,26 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
       });
     } catch (error) {
       alert(`Impossible de ${label} cet acces : ${error.message}`);
+    } finally {
+      setMemberBusy("");
+    }
+  };
+
+  const deleteAccess = async member => {
+    const memberEmail = String(member.email || "").trim().toLowerCase();
+    if (!MEMBER_EMAIL_PATTERN.test(memberEmail)) {
+      alert("Cet acces n'a pas d'email valide. Réinvitez la personne avec son adresse complete.");
+      return;
+    }
+    if (!window.confirm(`Supprimer ${member.name || member.email} de ce bénéficiaire ?`)) return;
+    setMemberBusy(memberEmail);
+    try {
+      await onDeleteMember({ email: memberEmail });
+      alert(`${memberEmail} a été retiré du groupe.`);
+    } catch (error) {
+      alert(`Suppression impossible : ${error.message}`);
+    } finally {
+      setMemberBusy("");
     }
   };
 
@@ -1294,18 +1317,25 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
           h("div", { className: "access-member-list" }, filteredMembers.length
             ? filteredMembers.map(member => {
                 const isSelf = String(member.email || "").toLowerCase() === String(connectedEmail || "").toLowerCase();
+                const rowBusy = memberBusy === String(member.email || "").toLowerCase();
                 return h("article", { key: member.email, className: `access-member ${member.active ? "active" : "inactive"}` },
                   h("div", null,
                     h("b", null, member.name || member.email),
                     h("small", null, member.email),
                   ),
                   h("span", { className: `role-pill ${member.role === "admin" || member.role === "owner" ? "saved" : member.role === "viewer" ? "saving" : "local"}` }, ACCESS_ROLE_LABELS[member.role] || member.role),
-                  h("span", { className: `cloud-status ${member.active ? "saved" : "local"}` }, member.active ? "Actif" : "Inactif"),
+                  h(Checkbox, {
+                    checked: member.active,
+                    disabled: isSelf || member.role === "owner" || rowBusy,
+                    onChange: () => toggleAccess(member),
+                    label: member.active ? "Actif" : "Désactivé",
+                  }),
                   h(Button, {
-                    disabled: isSelf || member.role === "owner",
-                    title: isSelf ? "Votre propre acces reste protege" : member.active ? "Desactiver" : "Reactiver",
-                    onClick: () => toggleAccess(member),
-                  }, member.active ? "Desactiver" : "Reactiver"),
+                    className: "danger-btn",
+                    disabled: isSelf || member.role === "owner" || rowBusy,
+                    title: isSelf ? "Votre propre acces reste protege" : "Supprimer du groupe",
+                    onClick: () => deleteAccess(member),
+                  }, rowBusy ? "..." : "Supprimer"),
                 );
               })
             : h("div", { className: "muted" }, members.length ? "Aucun membre dans cet onglet." : "Aucun membre charge pour le moment.")),
@@ -1926,6 +1956,10 @@ export default function App() {
     return setMemberAccess({ db: authState.db, user: authState.user, email, role, active, beneficiaryId, beneficiaryName });
   };
 
+  const removeAccessMember = async ({ email }) => {
+    return deleteMemberAccess({ db: authState.db, user: authState.user, email, beneficiaryId, beneficiaryName });
+  };
+
   const repairAccessMembers = async () => {
     return repairBeneficiaryMembers({ db: authState.db, user: authState.user, beneficiaryId });
   };
@@ -2169,7 +2203,7 @@ export default function App() {
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
-      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onRepairMembers: repairAccessMembers, onResolveAccessRequest: answerAccessRequest }) : null,
+      view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onDeleteMember: removeAccessMember, onRepairMembers: repairAccessMembers, onResolveAccessRequest: answerAccessRequest }) : null,
       view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
     ),
     h(SlotEditor, {

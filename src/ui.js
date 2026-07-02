@@ -18,9 +18,9 @@ export function Select({ value, onChange, children, ...props }) {
   return h("select", { value, onChange: event => onChange(event.target.value), ...props }, children);
 }
 
-export function Checkbox({ checked, onChange, label }) {
+export function Checkbox({ checked, onChange, label, ...props }) {
   return h("label", { className: "check-row" },
-    h("input", { type: "checkbox", checked: !!checked, onChange: event => onChange(event.target.checked) }),
+    h("input", { type: "checkbox", checked: !!checked, onChange: event => onChange(event.target.checked), ...props }),
     h("span", null, label),
   );
 }

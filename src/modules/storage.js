@@ -133,13 +133,14 @@ const mergeSavedState = (local, cloud) => {
 export async function ensureBeneficiaryGroup({ db, user, state }) {
   const identified = ensureBeneficiaryIdentity(state);
   const beneficiaryId = String(identified?.beneficiaryId || "").trim();
+  const beneficiaryName = String(identified.beneficiaryName || "").trim();
   const adminEmail = normalizeEmail(user?.email);
   if (!db || !beneficiaryId || !adminEmail) return;
   const root = beneficiaryRoot(db, beneficiaryId);
   const batch = db.batch();
   batch.set(root, {
     beneficiaryId,
-    beneficiaryName: String(identified.beneficiaryName || "").trim(),
+    beneficiaryName,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: adminEmail,
   }, { merge: true });
@@ -161,6 +162,18 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
         active: aux.active !== false,
         updatedBy: adminEmail,
       }), { merge: true });
+      batch.set(db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(beneficiaryId), {
+        beneficiaryId,
+        beneficiaryName,
+        email,
+        emailOriginal: email,
+        readEmails: [email],
+        role: "auxiliary",
+        active: aux.active !== false,
+        deleted: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminEmail,
+      }, { merge: true });
     });
   await batch.commit();
 }
@@ -832,6 +845,7 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
         readEmails: [clean],
         role: effectiveRole,
         active: true,
+        deleted: false,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: adminEmail,
       }, { merge: true }),
@@ -878,12 +892,23 @@ export async function setMemberAccess({ db, user, email, role = "auxiliary", act
     updatedBy: normalizeEmail(user.email),
   };
   if (safeBeneficiaryId) {
-    await beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(clean)).set({
+    const batch = db.batch();
+    batch.set(beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(clean)), {
       email: clean,
       emailLower: clean,
       role: cleanRole,
       ...payload,
     }, { merge: true });
+    batch.set(db.collection("planning-avd-shares").doc(clean).collection("beneficiaries").doc(safeBeneficiaryId), {
+      beneficiaryId: safeBeneficiaryId,
+      beneficiaryName: String(beneficiaryName || "").trim(),
+      email: clean,
+      emailOriginal: clean,
+      readEmails: [clean],
+      role: cleanRole,
+      ...payload,
+    }, { merge: true });
+    await batch.commit();
     return { email: clean, role: cleanRole, active: false };
   }
   await Promise.all([
@@ -891,6 +916,33 @@ export async function setMemberAccess({ db, user, email, role = "auxiliary", act
     db.collection("planning-avd-admins").doc(clean).set({ email: clean, emailLower: clean, ...payload }, { merge: true }),
   ]);
   return { email: clean, role: cleanRole, active: false };
+}
+
+export async function deleteMemberAccess({ db, user, email, beneficiaryId = "", beneficiaryName = "" }) {
+  const clean = firstValidEmail(email);
+  const safeBeneficiaryId = String(beneficiaryId || "").trim();
+  const adminEmail = normalizeEmail(user?.email);
+  if (!db || !user?.uid) throw new Error("Connexion admin necessaire.");
+  if (!clean) throw new Error("Email invalide.");
+  if (clean === adminEmail) throw new Error("Vous ne pouvez pas supprimer votre propre acces.");
+  if (!safeBeneficiaryId) throw new Error("Bénéficiaire non identifié.");
+  const payload = {
+    beneficiaryId: safeBeneficiaryId,
+    beneficiaryName: String(beneficiaryName || "").trim(),
+    email: clean,
+    emailOriginal: clean,
+    readEmails: [clean],
+    active: false,
+    deleted: true,
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: adminEmail,
+  };
+  const batch = db.batch();
+  batch.delete(beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(clean)));
+  batch.set(db.collection("planning-avd-shares").doc(clean).collection("beneficiaries").doc(safeBeneficiaryId), payload, { merge: true });
+  await batch.commit();
+  return { email: clean, deleted: true };
 }
 
 export async function resolveAccessRequest({ db, user, request, status, beneficiaryId = "", beneficiaryName = "" }) {
@@ -972,9 +1024,13 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
     if (!value) return null;
     try {
       const snapshot = await db.collectionGroup("months").where(field, "==", value).limit(12).get();
-      return sortPersonalPlans(snapshot.docs
-        .map(doc => doc.data())
-        .filter(item => Number.isInteger(item?.year) && Number.isInteger(item?.month) && planMatchesSelection(item)))[0] || null;
+      const activePlans = await Promise.all(snapshot.docs.map(async doc => {
+        const shareSnap = await doc.ref.parent.parent.get().catch(() => null);
+        if (shareSnap?.exists && shareSnap.data()?.active === false) return null;
+        return doc.data();
+      }));
+      return sortPersonalPlans(activePlans
+        .filter(item => item && Number.isInteger(item?.year) && Number.isInteger(item?.month) && planMatchesSelection(item)))[0] || null;
     } catch (error) {
       console.warn("Recherche planning auxiliaire impossible.", error);
       return null;
@@ -984,7 +1040,9 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
     const results = [];
     try {
       const beneficiaries = await db.collection("planning-avd-shares").doc(key).collection("beneficiaries").get();
-      const monthReads = beneficiaries.docs.map(doc => doc.ref.collection("months").doc(candidateId).get());
+      const monthReads = beneficiaries.docs
+        .filter(doc => doc.data()?.active !== false)
+        .map(doc => doc.ref.collection("months").doc(candidateId).get());
       const monthSnaps = await Promise.all(monthReads);
       monthSnaps.forEach(snap => { if (snap.exists) results.push(snap.data()); });
     } catch {}
@@ -1025,6 +1083,7 @@ export function subscribePersonalPlanning({ db, user, year, month, beneficiaryId
       const prefix = `${key}:`;
       const currentKeys = new Set();
       snapshot.docs.forEach(doc => {
+        if (doc.data()?.active === false) return;
         const mapKey = `${prefix}${doc.id}:${monthId}`;
         currentKeys.add(mapKey);
         if (monthUnsubscribers.has(mapKey)) return;
@@ -1324,6 +1383,9 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
         email: sharePayload.email,
         emailOriginal: sharePayload.emailOriginal,
         readEmails: sharePayload.readEmails,
+        role: "auxiliary",
+        active: true,
+        deleted: false,
         latestPeriod: monthKey(year, month),
         latestPublishedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: user.email || "",
