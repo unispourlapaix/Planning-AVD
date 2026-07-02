@@ -290,6 +290,7 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
     await beneficiaryRoot(db, value.beneficiaryId).set({
       beneficiaryId: value.beneficiaryId,
       beneficiaryName: String(value.beneficiaryName || "").trim(),
+      value,
       latestSavedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
@@ -309,34 +310,69 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
   }
 }
 
+const beneficiaryOptionFromDoc = doc => {
+  const data = doc.data() || {};
+  const value = data.value || {};
+  return {
+    id: doc.id,
+    beneficiaryId: data.beneficiaryId || value.beneficiaryId || doc.id,
+    beneficiaryName: String(data.beneficiaryName || value.beneficiaryName || "Bénéficiaire sans nom").trim(),
+    year: Number.isInteger(value.year) ? value.year : null,
+    month: Number.isInteger(value.month) ? value.month : null,
+    role: data.role || "",
+    active: data.active !== false,
+    updatedAt: data.updatedAt || value.updatedAt || null,
+  };
+};
+
+const mergeBeneficiaryOptions = items => {
+  const byId = new Map();
+  items
+    .filter(item => item?.beneficiaryId && item.active !== false)
+    .forEach(item => {
+      const current = byId.get(item.beneficiaryId);
+      if (!current || timestampScore(item.updatedAt) > timestampScore(current.updatedAt)) {
+        byId.set(item.beneficiaryId, item);
+      }
+    });
+  return [...byId.values()].sort((a, b) =>
+    timestampScore(b.updatedAt) - timestampScore(a.updatedAt)
+    || String(a.beneficiaryName || "").localeCompare(String(b.beneficiaryName || "")));
+};
+
 export function subscribeUserBeneficiaries({ db, user, onChange, onError }) {
   if (!db || !user?.uid) return () => {};
-  return db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries")
-    .orderBy("updatedAt", "desc")
-    .limit(80)
-    .onSnapshot(snapshot => {
-      const items = snapshot.docs.map(doc => {
-        const data = doc.data() || {};
-        const value = data.value || {};
-        return {
-          id: doc.id,
-          beneficiaryId: data.beneficiaryId || value.beneficiaryId || doc.id,
-          beneficiaryName: String(data.beneficiaryName || value.beneficiaryName || "Bénéficiaire sans nom").trim(),
-          year: Number.isInteger(value.year) ? value.year : null,
-          month: Number.isInteger(value.month) ? value.month : null,
-          updatedAt: data.updatedAt || value.updatedAt || null,
-        };
-      });
-      onChange?.(items);
-    }, error => onError?.(error));
+  const buckets = { user: [], shared: [] };
+  const emit = () => onChange?.(mergeBeneficiaryOptions([...buckets.user, ...buckets.shared]));
+  const unsubscribers = [
+    db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries")
+      .orderBy("updatedAt", "desc")
+      .limit(80)
+      .onSnapshot(snapshot => {
+        buckets.user = snapshot.docs.map(beneficiaryOptionFromDoc);
+        emit();
+      }, error => onError?.(error)),
+  ];
+  const email = normalizeEmail(user.email);
+  if (email) {
+    unsubscribers.push(db.collection("planning-avd-shares").doc(email).collection("beneficiaries")
+      .limit(80)
+      .onSnapshot(snapshot => {
+        buckets.shared = snapshot.docs.map(beneficiaryOptionFromDoc);
+        emit();
+      }, error => onError?.(error)));
+  }
+  return () => unsubscribers.forEach(unsubscribe => unsubscribe());
 }
 
 export async function loadBeneficiaryState({ db, user, beneficiaryId }) {
   const safeBeneficiaryId = String(beneficiaryId || "").trim();
   if (!db || !user?.uid || !safeBeneficiaryId) throw new Error("Bénéficiaire introuvable.");
   const snap = await userBeneficiaryRef(db, user, safeBeneficiaryId).get();
-  if (!snap.exists || !snap.data()?.value) throw new Error("Sauvegarde bénéficiaire introuvable.");
-  return ensureBeneficiaryIdentity(migrateState(snap.data().value));
+  if (snap.exists && snap.data()?.value) return ensureBeneficiaryIdentity(migrateState(snap.data().value));
+  const sharedSnap = await beneficiaryRoot(db, safeBeneficiaryId).get();
+  if (sharedSnap.exists && sharedSnap.data()?.value) return ensureBeneficiaryIdentity(migrateState(sharedSnap.data().value));
+  throw new Error("Sauvegarde bénéficiaire introuvable.");
 }
 
 const emptyDashboard = () => ({
@@ -610,6 +646,7 @@ export async function createNewBeneficiaryAdmin({ db, user, beneficiaryName = ""
   batch.set(root, {
     beneficiaryId,
     beneficiaryName: cleanBeneficiary,
+    value,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy: email,
