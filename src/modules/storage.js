@@ -118,6 +118,17 @@ const buildBeneficiaryMember = ({ email, name = "", role = "auxiliary", active =
   updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   updatedBy,
 });
+const buildSyncedAuxiliaryMember = ({ email, name = "", active = true, updatedBy = "", role = "" }) => {
+  const payload = buildBeneficiaryMember({
+    email,
+    name,
+    role: role || "auxiliary",
+    active,
+    updatedBy,
+  });
+  if (!role) delete payload.role;
+  return payload;
+};
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
   if (!local) return cloud;
@@ -140,7 +151,6 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
   const activeAuxiliaries = (Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
     .map(aux => ({ ...aux, email: firstValidEmail(aux.email) }))
     .filter(aux => aux.email);
-  const roleByEmail = await readBeneficiaryRoleMap({ db, beneficiaryId, emails: activeAuxiliaries.map(aux => aux.email) });
   const batch = db.batch();
   batch.set(root, {
     beneficiaryId,
@@ -158,26 +168,27 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
   activeAuxiliaries
     .forEach(aux => {
       const email = beneficiaryMemberKey(aux.email);
-      const accessRole = email === adminEmail ? "admin" : roleByEmail.get(email) || "auxiliary";
-      batch.set(root.collection("members").doc(email), buildBeneficiaryMember({
+      const accessRole = email === adminEmail ? "admin" : "";
+      batch.set(root.collection("members").doc(email), buildSyncedAuxiliaryMember({
         email,
         name: aux.name || email,
         role: accessRole,
         active: aux.active !== false,
         updatedBy: adminEmail,
       }), { merge: true });
-      batch.set(db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(beneficiaryId), {
+      const sharePayload = {
         beneficiaryId,
         beneficiaryName,
         email,
         emailOriginal: email,
         readEmails: [email],
-        role: accessRole,
         active: aux.active !== false,
         deleted: false,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: adminEmail,
-      }, { merge: true });
+      };
+      if (accessRole) sharePayload.role = accessRole;
+      batch.set(db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(beneficiaryId), sharePayload, { merge: true });
     });
   await batch.commit();
 }
@@ -435,29 +446,6 @@ const ACCESS_ROLES = ["admin", "auxiliary", "viewer"];
 const normalizeAccessRole = role => ACCESS_ROLES.includes(role) ? role : "auxiliary";
 
 const roleRank = role => ({ owner: 0, admin: 1, auxiliary: 2, viewer: 3 }[role] ?? 4);
-
-const privilegedAccessRole = data => {
-  if (!data || data.active === false || data.deleted === true) return "";
-  const role = data.role === "owner" ? "owner" : normalizeAccessRole(data.role);
-  return role === "owner" || role === "admin" ? role : "";
-};
-
-async function readBeneficiaryRoleMap({ db, beneficiaryId, emails }) {
-  const safeBeneficiaryId = String(beneficiaryId || "").trim();
-  const cleanEmails = [...new Set((emails || []).map(firstValidEmail).filter(Boolean))];
-  if (!db || !safeBeneficiaryId || !cleanEmails.length) return new Map();
-  const entries = await Promise.all(cleanEmails.map(async email => {
-    const [memberSnap, shareSnap] = await Promise.all([
-      beneficiaryRoot(db, safeBeneficiaryId).collection("members").doc(beneficiaryMemberKey(email)).get().catch(() => null),
-      db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(safeBeneficiaryId).get().catch(() => null),
-    ]);
-    const role = privilegedAccessRole(memberSnap?.data?.())
-      || privilegedAccessRole(shareSnap?.data?.())
-      || "auxiliary";
-    return [email, role];
-  }));
-  return new Map(entries);
-}
 
 const accessFromSnapshots = ({ uidAdmin, emailAdmin, adminEmail, bootstrapAdmin, teamMember, beneficiaryShares }) => {
   const globalAdmin = [uidAdmin, emailAdmin, adminEmail].some(snapshot => snapshot?.exists && snapshot.data()?.active !== false);
@@ -1358,11 +1346,6 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
   });
   if (!payloads.length) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
   const adminEmail = normalizeEmail(user.email);
-  const roleByEmail = await readBeneficiaryRoleMap({
-    db,
-    beneficiaryId: safeBeneficiaryId,
-    emails: payloads.map(item => item.email),
-  });
   const batch = db.batch();
   const beneficiaryRef = beneficiaryRoot(db, safeBeneficiaryId);
   batch.set(beneficiaryRef, {
@@ -1387,8 +1370,8 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     .forEach(aux => {
       const rawEmail = firstValidEmail(aux.email);
       const email = rawEmail;
-      const accessRole = email === adminEmail ? "admin" : roleByEmail.get(email) || "auxiliary";
-      batch.set(beneficiaryRef.collection("members").doc(beneficiaryMemberKey(email)), buildBeneficiaryMember({
+      const accessRole = email === adminEmail ? "admin" : "";
+      batch.set(beneficiaryRef.collection("members").doc(beneficiaryMemberKey(email)), buildSyncedAuxiliaryMember({
         email,
         name: aux.name || email,
         role: accessRole,
@@ -1410,20 +1393,21 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
   payloads.forEach(({ rawEmail, sharePayload }) => {
     uniqueShareKeys(rawEmail).forEach(key => {
       const beneficiaryRef = db.collection("planning-avd-shares").doc(key).collection("beneficiaries").doc(safeBeneficiaryId);
-      const accessRole = sharePayload.email === adminEmail ? "admin" : roleByEmail.get(sharePayload.email) || "auxiliary";
-      batch.set(beneficiaryRef, {
+      const accessRole = sharePayload.email === adminEmail ? "admin" : "";
+      const accessPayload = {
         beneficiaryId: safeBeneficiaryId,
         beneficiaryName: sharePayload.beneficiaryName,
         email: sharePayload.email,
         emailOriginal: sharePayload.emailOriginal,
         readEmails: sharePayload.readEmails,
-        role: accessRole,
         active: true,
         deleted: false,
         latestPeriod: monthKey(year, month),
         latestPublishedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: user.email || "",
-      }, { merge: true });
+      };
+      if (accessRole) accessPayload.role = accessRole;
+      batch.set(beneficiaryRef, accessPayload, { merge: true });
       batch.set(beneficiaryRef.collection("months").doc(monthKey(year, month)), sharePayload);
     });
   });
