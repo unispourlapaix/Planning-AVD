@@ -1131,6 +1131,7 @@ function FirstConnectionPanel({ authState, onLogout }) {
 }
 
 function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const members = dashboard?.members || [];
   const activeMembers = members.filter(member => member.active !== false);
   const adminCount = activeMembers.filter(member => ["admin", "owner"].includes(member.role)).length;
@@ -1145,10 +1146,14 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
     { label: "Échanges", value: pendingExchangeCount, detail: "demandes en attente" },
   ];
   return h("section", { className: "panel group-dashboard" },
+    h("div", { className: "group-beneficiary-header" },
+      h("span", null, "Bénéficiaire"),
+      h("b", null, beneficiaryName || beneficiary.beneficiaryName || "Dossier bénéficiaire actif"),
+    ),
     h("div", { className: "title-row" },
       h("div", null,
         h("h3", null, "Tableau du groupe"),
-        h("div", { className: "muted" }, beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "Vue du dossier bénéficiaire actif."),
+        h("div", { className: "muted" }, "Vue rapide du dossier, des accès et des transmissions."),
       ),
       h("span", { className: "role-pill saved" }, `${activeMembers.length} actif(s)`),
     ),
@@ -1167,14 +1172,20 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
         h("b", null, beneficiary.latestPublishedAt ? `${formatDashboardDate(beneficiary.latestPublishedAt)} · ${beneficiary.latestPublishedPeriod || ""}` : "Pas encore"),
       ),
     ),
-    h("div", { className: "group-activity" },
-      h("div", { className: "title-row" },
+    h("div", { className: `group-activity${historyOpen ? " open" : ""}` },
+      h("button", {
+        type: "button",
+        className: "group-activity-toggle",
+        "aria-expanded": historyOpen,
+        onClick: () => setHistoryOpen(open => !open),
+      },
         h("div", null,
           h("h3", null, "Historique récent"),
-          h("div", { className: "muted" }, "Dernières actions visibles du dossier."),
+          h("div", { className: "muted" }, activity.length ? `${activity.length} action(s) visible(s). Cliquez pour ${historyOpen ? "masquer" : "ouvrir"} la liste.` : "Aucune action récente pour le moment."),
         ),
+        h("span", { className: "history-chevron" }, historyOpen ? "-" : "+"),
       ),
-      activity.length
+      historyOpen && activity.length
         ? h("div", { className: "group-activity-list" }, activity.map(item => h("article", { key: item.id, className: `group-activity-item ${item.type || "info"}` },
             h("div", null,
               h("b", null, item.label || "Action"),
@@ -1185,7 +1196,10 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
               ].filter(Boolean).join(" · ")),
             ),
           )))
-        : h("div", { className: "muted" }, "L'historique se remplira aux prochaines sauvegardes et transmissions."),
+        : null,
+      historyOpen && !activity.length
+        ? h("div", { className: "muted" }, "L'historique se remplira aux prochaines sauvegardes et transmissions.")
+        : null,
     ),
   );
 }

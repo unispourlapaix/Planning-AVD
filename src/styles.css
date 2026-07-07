@@ -145,6 +145,9 @@ h2 { font-size: 16px; }
 .new-beneficiary-admin-banner b { display: block; color: #344753; font-size: 13px; }
 .new-beneficiary-admin-banner small { display: block; color: #697981; font-size: 11px; font-weight: 800; }
 .group-dashboard { display: grid; gap: 10px; border-color: rgba(123,175,212,.34); background: rgba(252,254,255,.88); }
+.group-beneficiary-header { display: grid; gap: 3px; padding: 11px 12px; border: 1px solid rgba(123,175,212,.34); border-radius: 9px; background: linear-gradient(135deg, rgba(237,247,255,.92), rgba(255,250,254,.9)); box-shadow: inset 0 1px 0 rgba(255,255,255,.96); }
+.group-beneficiary-header span { color: #697981; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.group-beneficiary-header b { color: #344753; font-size: 15px; overflow-wrap: anywhere; }
 .group-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .group-dashboard-card { min-width: 0; padding: 10px; border: 1px solid rgba(213,225,229,.86); border-radius: 8px; background: rgba(255,255,255,.74); box-shadow: inset 0 1px 0 rgba(255,255,255,.96); }
 .group-dashboard-card strong { display: block; color: #5689c9; font-size: 24px; line-height: 1; font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif; }
@@ -155,6 +158,11 @@ h2 { font-size: 16px; }
 .group-dashboard-timeline span { display: block; color: #697981; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 .group-dashboard-timeline b { display: block; margin-top: 3px; color: #344753; font-size: 12px; overflow-wrap: anywhere; }
 .group-activity { display: grid; gap: 8px; padding-top: 2px; }
+.group-activity-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; border: 1px solid rgba(213,225,229,.86); border-radius: 9px; background: rgba(255,255,255,.74); color: inherit; text-align: left; box-shadow: inset 0 1px 0 rgba(255,255,255,.96); }
+.group-activity-toggle:hover, .group-activity-toggle:focus-visible { outline: none; border-color: rgba(123,175,212,.66); box-shadow: inset 0 1px 0 rgba(255,255,255,.96), 0 8px 20px rgba(84,111,124,.1); }
+.group-activity-toggle h3 { margin: 0 0 3px; }
+.history-chevron { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%; background: #eef7fb; color: #5689c9; font-size: 18px; font-weight: 900; line-height: 1; }
+.group-activity.open .history-chevron { background: #fff0f7; color: #d46aa8; }
 .group-activity-list { display: grid; gap: 7px; max-height: min(300px, 36vh); overflow-y: auto; padding-right: 4px; overscroll-behavior: contain; scrollbar-width: thin; }
 .group-activity-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; padding: 9px 10px; border: 1px solid rgba(213,225,229,.82); border-left: 4px solid #8bbce8; border-radius: 8px; background: rgba(255,255,255,.74); box-shadow: inset 0 1px 0 rgba(255,255,255,.96); }
 .group-activity-item.publish { border-left-color: #d990c3; }
