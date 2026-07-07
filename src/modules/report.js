@@ -9,10 +9,7 @@ const displayHours = summarizeHours;
 
 export function buildReportHtml({ year, month, beneficiaryName = "", auxiliaries, schedule, hours }) {
   const findName = id => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
-  const formatNames = ids => ids.map((id, index) => {
-    const name = findName(id);
-    return index === 0 ? name : name.trim().charAt(0).toUpperCase();
-  }).join(" + ");
+  const formatNames = ids => ids[0] ? findName(ids[0]) : "";
   const dayRows = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1).map(day => {
     const plan = schedule[day] || {};
     const lines = SHIFT_DEFS.map(shift => {

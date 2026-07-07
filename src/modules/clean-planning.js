@@ -17,11 +17,10 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
   const indexById = Object.fromEntries(active.map((aux, index) => [aux.id, index]));
   const nameById = Object.fromEntries(active.map(aux => [aux.id, aux.name || "A definir"]));
 
-  const formatWorkers = ids => ids.map((id, index) => {
+  const formatWorkers = ids => ids.slice(0, 1).map((id, index) => {
     const name = nameById[id] || "A definir";
     const color = colorFor(indexById[id] ?? 0);
-    const label = index === 0 ? name : name.trim().slice(0, 3);
-    return `<span class="${index === 0 ? "name" : "extra"}" style="--fg:${color.text};--bg:${color.light};--bd:${color.solid}">${esc(label)}</span>`;
+    return `<span class="name" style="--fg:${color.text};--bg:${color.light};--bd:${color.solid}">${esc(name)}</span>`;
   }).join("");
 
   const dayHtml = day => {

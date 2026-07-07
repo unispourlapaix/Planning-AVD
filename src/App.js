@@ -33,13 +33,13 @@ import {
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
 } from "./modules/storage.js?v=20260702-login-refresh";
-import { buildCleanPlanningHtml } from "./modules/clean-planning.js";
+import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260707-primary-only";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
-import { buildReportHtml } from "./modules/report.js";
+import { buildReportHtml } from "./modules/report.js?v=20260707-primary-only";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260702-personal-permission";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260707-primary-only";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
@@ -298,11 +298,9 @@ const auxName = (auxiliaries, id) => {
   return aux?.name || `Auxiliaire ${index >= 0 ? index + 1 : ""}`.trim() || "A definir";
 };
 const planningNames = (auxiliaries, ids) => ids
-  .map((id, index) => {
-    const name = auxName(auxiliaries, id);
-    return index === 0 ? name : name.trim().charAt(0).toUpperCase();
-  })
-  .join(" + ");
+  .slice(0, 1)
+  .map(id => auxName(auxiliaries, id))
+  .join("");
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const displayHours = summarizeHours;
 const overrideKey = manualOverrideKey;

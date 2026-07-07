@@ -39,10 +39,8 @@ function buildSimplifiedPlanning({ year, month, auxiliaries, schedule }) {
   if (!days.length) return "Planning simplifié indisponible.";
   return days.map(plan => {
     const shifts = Object.entries(SHARE_SHIFT_LABELS).map(([shift, label]) => {
-      const workers = [...new Set(shiftWorkers(plan?.[shift]))]
-        .map(id => names.get(id) || "À définir")
-        .join(" + ");
-      return `${label}: ${workers || "Repos"}`;
+      const worker = shiftWorkers(plan?.[shift])[0];
+      return `${label}: ${worker ? names.get(worker) || "À définir" : "Repos"}`;
     });
     return `${String(plan.day).padStart(2, "0")} ${dayName(year, month, plan.day)} : ${shifts.join(" | ")}`;
   }).join("\n");
