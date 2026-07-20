@@ -1,4 +1,5 @@
 import { buildSchedule, canWorkShift } from "../src/modules/scheduler-handover.js";
+import { calculatePerformedHours } from "../src/modules/hour-accounting.js";
 
 const team = [
   {
@@ -128,9 +129,21 @@ const assertSplitDay = ({ issues, schedule, year, month, day }) => {
 
 const checkMonth = ({ year, month, rotationDays }) => {
   const { schedule } = buildSchedule({ year, month, auxiliaries: team, rotationDays });
+  const hours = calculatePerformedHours(schedule, team, { year, month, now: new Date(year, month + 1, 1) });
   const issues = [];
   let previousWeekendOwner = "";
   let nightOnlyCount = 0;
+
+  team.forEach(aux => {
+    const account = hours[aux.id];
+    if (!account) return;
+    if (account.total > account.quota) {
+      issues.push(`${monthLabel(year, month)}: ${aux.name} depasse son quota (${account.total}/${account.quota}h)`);
+    }
+    if (account.total < account.quota) {
+      issues.push(`${monthLabel(year, month)}: ${aux.name} n'atteint pas son quota (${account.total}/${account.quota}h)`);
+    }
+  });
 
   Object.keys(schedule).map(Number).forEach(day => {
     shifts.forEach(shift => {

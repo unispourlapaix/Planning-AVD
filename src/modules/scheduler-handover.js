@@ -1,4 +1,6 @@
 import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260628-split-day";
+import { SHIFT_DEFS } from "./constants.js";
+import { createHourAccount, creditScheduledHours } from "./hour-accounting.js";
 
 export * from "./scheduler.js?base=20260628-split-day";
 
@@ -17,6 +19,7 @@ const canHoldDay = (aux, year, month, day) =>
 const weekdayShifts = ["morning", "afternoon"];
 const canOpenWeekendNight = (aux, year, month, saturday) =>
   canWorkShift(aux, "night", year, month, saturday);
+const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 
 const pickCycleWorker = ({ cycle, available, offset = 0, avoid = [], predicate }) => {
   const avoidSet = new Set(avoid.filter(Boolean));
@@ -35,6 +38,91 @@ const setAfternoonAndNight = ({ plan, worker, available, year, month, day }) => 
   }
   const nightFallback = available.find(item => item.id !== worker && canWorkShift(item, "night", year, month, day));
   if (nightFallback) plan.night = withPrimary(plan.night, nightFallback.id);
+};
+
+const appendAccountingDouble = (entry, worker) => {
+  if (!entry?.worker || !worker || entry.worker === worker) return false;
+  const list = [entry.worker, ...workers(entry).slice(1)].filter(Boolean);
+  if (list.includes(worker)) return false;
+  entry.workers = [...list, worker];
+  return true;
+};
+
+const fullMonthAccounts = ({ schedule, available }) => {
+  const accounts = Object.fromEntries(available.map(aux => [aux.id, createHourAccount(aux)]));
+  Object.values(schedule)
+    .sort((a, b) => Number(a.day) - Number(b.day))
+    .forEach(plan => {
+      SHIFT_DEFS.forEach(shift => {
+        [...new Set(workers(plan?.[shift.id]))].forEach(worker => {
+          if (!worker || !accounts[worker]) return;
+          creditScheduledHours({ account: accounts[worker], shift: shift.id, scheduledHours: shift.hours, day: plan.day });
+        });
+      });
+    });
+  return accounts;
+};
+
+const remainingQuota = account => Math.max(0, roundHours((account?.quota || 0) - (account?.total || 0)));
+
+const findQuotaSlot = ({ schedule, aux, account, year, month }) => {
+  const remaining = remainingQuota(account);
+  const slots = [];
+  Object.values(schedule).forEach(plan => {
+    SHIFT_DEFS.forEach(shift => {
+      const entry = plan?.[shift.id];
+      if (!entry?.worker || workers(entry).includes(aux.id)) return;
+      if (!canWorkShift(aux, shift.id, year, month, plan.day)) return;
+      slots.push({
+        day: Number(plan.day),
+        shift,
+        entry,
+        score: (shift.hours <= remaining ? 0 : 100) + Math.abs(remaining - shift.hours),
+      });
+    });
+  });
+  return slots.sort((a, b) => a.score - b.score || b.day - a.day)[0] || null;
+};
+
+const balanceAccountingDoubles = ({ schedule, available, year, month }) => {
+  const team = available.filter(aux => aux.active !== false && aux.status !== "absent");
+  const accounts = fullMonthAccounts({ schedule, available: team });
+
+  team
+    .filter(aux => remainingQuota(accounts[aux.id]) > 0)
+    .sort((a, b) => remainingQuota(accounts[b.id]) - remainingQuota(accounts[a.id]))
+    .forEach(aux => {
+      const account = accounts[aux.id];
+      let guard = 0;
+      while (remainingQuota(account) > 0 && guard < 80) {
+        guard += 1;
+        const slot = findQuotaSlot({ schedule, aux, account, year, month });
+        if (!slot || !appendAccountingDouble(slot.entry, aux.id)) return;
+        creditScheduledHours({ account, shift: slot.shift.id, scheduledHours: slot.shift.hours, day: slot.day });
+      }
+    });
+};
+
+const rebuildBlocksAndLoad = ({ schedule, available }) => {
+  const load = Object.fromEntries(available.map(aux => [aux.id, 0]));
+  const blocks = [];
+  Object.values(schedule)
+    .sort((a, b) => Number(a.day) - Number(b.day))
+    .forEach(plan => {
+      SHIFT_DEFS.forEach(shift => {
+        workers(plan?.[shift.id]).forEach(worker => {
+          if (!worker) return;
+          blocks.push({ day: plan.day, shift: shift.id, worker, hours: shift.hours });
+          load[worker] = (load[worker] || 0) + shift.hours;
+        });
+      });
+    });
+  return { blocks, load };
+};
+
+const finalizeSchedule = ({ result, available, year, month }) => {
+  balanceAccountingDoubles({ schedule: result.schedule, available, year, month });
+  return { ...result, ...rebuildBlocksAndLoad({ schedule: result.schedule, available }) };
 };
 
 const weekendFullPredicate = ({ year, month, saturday }) => aux =>
@@ -341,5 +429,5 @@ export function buildSchedule(options) {
     protectMondayAfterWeekend({ schedule, days, available, weekdayCycle, year: options.year, month: options.month });
   }
   if (!splitDayMode) applyNightToNextMorning({ schedule, days, available, year: options.year, month: options.month });
-  return result;
+  return finalizeSchedule({ result, available, year: options.year, month: options.month });
 }

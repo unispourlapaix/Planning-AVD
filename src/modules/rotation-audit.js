@@ -1,6 +1,6 @@
 import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js";
 import { dayIndex, daysInMonth } from "./dates.js";
-import { canWorkShift } from "./scheduler-handover.js?v=20260614-meals-quota";
+import { canWorkShift } from "./scheduler-handover.js?v=20260720-hour-quota";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primary = entry => workers(entry)[0] || "";

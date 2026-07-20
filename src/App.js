@@ -1,7 +1,7 @@
 import React from "react";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260628-split-day";
+import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260720-hour-quota";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260702-login-refresh";
 import {
   createPlanningChangeRequest,
