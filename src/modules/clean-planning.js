@@ -1,7 +1,7 @@
 import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js";
 import { dayIndex, monthGrid } from "./dates.js";
 import { mealForDate } from "./meal-planning.js";
-import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-rule";
+import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-ranges";
 
 const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",

@@ -2,7 +2,7 @@ import { MONTHS, SHIFT_DEFS } from "./constants.js";
 import { dayName, daysInMonth } from "./dates.js";
 import { summarizeHours } from "./hour-accounting.js";
 import { mealForDate } from "./meal-planning.js";
-import { shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-rule";
+import { shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-ranges";
 
 const esc = value => String(value ?? "").replace(/[<>&]/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char]));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);

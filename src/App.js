@@ -33,14 +33,14 @@ import {
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
 } from "./modules/storage.js?v=20260702-login-refresh";
-import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-rule";
+import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-ranges";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
-import { buildReportHtml } from "./modules/report.js?v=20260720-morning-rule";
+import { buildReportHtml } from "./modules/report.js?v=20260720-morning-ranges";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-rule";
-import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-rule";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-ranges";
+import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-ranges";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
