@@ -1,6 +1,6 @@
 import { MONTHS } from "./constants.js";
 import { mealForDate } from "./meal-planning.js";
-import { shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-start";
+import { shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-rule";
 
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const cleanEmail = email => String(email || "").trim();

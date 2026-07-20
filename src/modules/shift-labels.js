@@ -16,10 +16,9 @@ const firstSharedName = entry => {
   return String(entry?.worker || entry?.name || "").trim();
 };
 
-export const hasNightHandover = ({ schedule = {}, day, worker }) => {
-  const currentWorker = String(worker || primaryShiftWorkerId(schedule?.[day]?.morning) || "");
-  if (!currentWorker || Number(day) <= 1) return false;
-  return primaryShiftWorkerId(schedule?.[Number(day) - 1]?.night) === currentWorker;
+export const hasNightHandover = ({ schedule = {}, day }) => {
+  if (Number(day) <= 1) return false;
+  return !!primaryShiftWorkerId(schedule?.[Number(day) - 1]?.night);
 };
 
 export const hasPersonalNightHandover = ({ entriesByDay = {}, day }) => {
@@ -31,9 +30,9 @@ export const hasPersonalNightHandover = ({ entriesByDay = {}, day }) => {
 };
 
 export const hasSharedNightHandover = ({ calendarByDay = {}, day, name }) => {
+  if (Number(day) <= 1) return false;
   const currentName = String(name || firstSharedName(calendarByDay?.[day]?.shifts?.morning) || "").trim();
-  if (!currentName || Number(day) <= 1) return false;
-  return firstSharedName(calendarByDay?.[Number(day) - 1]?.shifts?.night) === currentName;
+  return !!currentName && !!firstSharedName(calendarByDay?.[Number(day) - 1]?.shifts?.night);
 };
 
 export const shiftDisplayLabel = ({ shift, schedule, entriesByDay, calendarByDay, day, worker, name } = {}) => {

@@ -33,14 +33,14 @@ import {
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
 } from "./modules/storage.js?v=20260702-login-refresh";
-import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-start";
+import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-rule";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
-import { buildReportHtml } from "./modules/report.js?v=20260720-morning-start";
+import { buildReportHtml } from "./modules/report.js?v=20260720-morning-rule";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-start";
-import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-start";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-rule";
+import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-rule";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
@@ -559,7 +559,7 @@ function PersonalTaskOverview({ authState, beneficiaryId, year, month, onOpenTas
   );
 }
 
-function PersonalDayCard({ day, entries, entriesByDay = {}, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true, currentWeek = false }) {
+function PersonalDayCard({ day, entries, entriesByDay = {}, calendarByDay = {}, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true, currentWeek = false }) {
   const hasPresence = entries.length > 0;
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === Number(day);
@@ -568,7 +568,7 @@ function PersonalDayCard({ day, entries, entriesByDay = {}, year, month, request
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
       const request = requestBySlot?.[requestSlotKey(day, shift.id)];
-      const label = shiftDisplayLabel({ shift: shift.id, entriesByDay, day });
+      const label = shiftDisplayLabel({ shift: shift.id, entriesByDay, calendarByDay, day });
       const content = [
         h("span", { className: "slot-label", key: "label" }, label),
         h("span", { key: "text" }, entry ? "Présent" : "Repos"),
@@ -666,6 +666,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   };
   const byDay = Object.fromEntries(Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => [index + 1, []]));
   (visiblePlanning?.entries || []).forEach(entry => { if (byDay[entry.day]) byDay[entry.day].push(entry); });
+  const calendarByDay = Object.fromEntries((visiblePlanning?.calendar || []).map(item => [item.day, item]));
   const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
@@ -777,12 +778,12 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
             const currentWeek = isCurrentMonth && days.includes(today.getDate());
             return h("section", { className: `panel personal-week-panel${currentWeek ? " current-week" : ""}`, key: days.join("-") },
               h("h3", null, currentWeek ? `Semaine actuelle · ${days[0]} ${MONTHS[month]}` : `Semaine du ${days[0]} ${MONTHS[month]}`),
-              h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], entriesByDay: byDay, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute, currentWeek }))),
+              h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], entriesByDay: byDay, calendarByDay, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute, currentWeek }))),
             );
           }))
         : null,
       visiblePlanning && personalView === "month"
-        ? h("div", { className: "personal-month-list personal-planning-scroll" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, entriesByDay: byDay, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
+        ? h("div", { className: "personal-month-list personal-planning-scroll" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, entriesByDay: byDay, calendarByDay, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
         : null,
     ),
     h(ChangeRequestModal, { edit: requestEdit, planning: visiblePlanning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
