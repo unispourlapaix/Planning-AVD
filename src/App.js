@@ -33,13 +33,14 @@ import {
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
 } from "./modules/storage.js?v=20260702-login-refresh";
-import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260707-primary-only";
+import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-start";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
-import { buildReportHtml } from "./modules/report.js?v=20260707-primary-only";
+import { buildReportHtml } from "./modules/report.js?v=20260720-morning-start";
 import { buildRotationAudit } from "./modules/rotation-audit.js";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260707-primary-only";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-start";
+import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-start";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
@@ -58,7 +59,6 @@ const normalizeRotationMode = value => {
   const number = Number(value);
   return [1, 2, 3, 4].includes(number) ? number : 1;
 };
-const SHIFT_COMPACT_LABEL = { morning: "AM", afternoon: "PM", night: "SR" };
 const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
 const TASK_PRIORITY_LABELS = { normal: "Normale", important: "Importante", urgent: "Urgente" };
 const UI_TEXT = {
@@ -559,7 +559,7 @@ function PersonalTaskOverview({ authState, beneficiaryId, year, month, onOpenTas
   );
 }
 
-function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true, currentWeek = false }) {
+function PersonalDayCard({ day, entries, entriesByDay = {}, year, month, requestBySlot, onOpenMeal, onRequestChange, canRequest = true, currentWeek = false }) {
   const hasPresence = entries.length > 0;
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === Number(day);
@@ -568,9 +568,10 @@ function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal,
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
       const request = requestBySlot?.[requestSlotKey(day, shift.id)];
+      const label = shiftDisplayLabel({ shift: shift.id, entriesByDay, day });
       const content = [
-        h("span", { className: "slot-label", key: "label" }, SHIFT_COMPACT_LABEL[shift.id]),
-        h("span", { key: "text" }, entry ? SHIFT_LABEL[shift.id] : "Repos"),
+        h("span", { className: "slot-label", key: "label" }, label),
+        h("span", { key: "text" }, entry ? "Présent" : "Repos"),
         request ? h("span", { key: "request", className: `request-badge ${request.status || "pending"}` }, requestStatusLabel(request.status)) : null,
       ];
       if (entry && canRequest) return h("button", {
@@ -581,8 +582,8 @@ function PersonalDayCard({ day, entries, year, month, requestBySlot, onOpenMeal,
         onClick: () => onRequestChange({ year, month, day, shift: shift.id }),
       }, content);
       return h("div", { className: `personal-slot${entry ? " scheduled" : ""}`, key: shift.id },
-        h("span", { className: "slot-label" }, SHIFT_COMPACT_LABEL[shift.id]),
-        h("span", null, entry ? SHIFT_LABEL[shift.id] : "Repos"),
+        h("span", { className: "slot-label" }, label),
+        h("span", null, entry ? "Présent" : "Repos"),
       );
     }),
     h(DayActivityButton, { year, month, day, onOpen: onOpenMeal }),
@@ -776,12 +777,12 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
             const currentWeek = isCurrentMonth && days.includes(today.getDate());
             return h("section", { className: `panel personal-week-panel${currentWeek ? " current-week" : ""}`, key: days.join("-") },
               h("h3", null, currentWeek ? `Semaine actuelle · ${days[0]} ${MONTHS[month]}` : `Semaine du ${days[0]} ${MONTHS[month]}`),
-              h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute, currentWeek }))),
+              h("div", { className: "week-days" }, days.map(day => h(PersonalDayCard, { key: day, day, entries: byDay[day], entriesByDay: byDay, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute, currentWeek }))),
             );
           }))
         : null,
       visiblePlanning && personalView === "month"
-        ? h("div", { className: "personal-month-list personal-planning-scroll" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
+        ? h("div", { className: "personal-month-list personal-planning-scroll" }, workedDays.map(([day, entries]) => h(PersonalDayCard, { key: day, day, entries, entriesByDay: byDay, year, month, requestBySlot, onOpenMeal: setMealDate, onRequestChange: setRequestEdit, canRequest: canContribute })))
         : null,
     ),
     h(ChangeRequestModal, { edit: requestEdit, planning: visiblePlanning, authState, onClose: () => setRequestEdit(null), onSubmit: sendChangeRequest, saving: requestSaving }),
@@ -878,7 +879,7 @@ function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onR
   );
 }
 
-function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
+function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   if (!day) return h("div", { className: "day-card empty" });
   return h("div", { className: `day-card${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
@@ -886,15 +887,15 @@ function DayCard({ day, year, month, plan, auxiliaries, overrides, onEditSlot, o
       const workers = shiftWorkerIds(plan?.[shift.id]);
       const worker = workers[0];
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
-      const c = colorFor(index);
       const manual = !!overrides?.[overrideKey(year, month, day, shift.id)];
+      const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
       return h("button", {
         className: `slot editable-slot${manual ? " manual-slot" : ""}`,
         key: shift.id,
-        title: manual ? "Modification manuelle" : SHIFT_LABEL[shift.id],
+        title: manual ? `Modification manuelle · ${label}` : label,
         onClick: () => onEditSlot({ day, shift: shift.id }),
       },
-        h("span", { className: "slot-label", title: SHIFT_LABEL[shift.id] }, SHIFT_COMPACT_LABEL[shift.id] || SHIFT_LABEL[shift.id]),
+        h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
           h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
           manual ? h("span", { className: "manual-badge" }, "Mod.") : null,
@@ -909,7 +910,7 @@ function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot, 
   return h("section", { className: "layout" },
     h("div", { className: "calendar" },
       DAYS_SHORT.map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
-      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal })),
+      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, schedule, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal })),
     ),
   );
 }
@@ -919,7 +920,7 @@ function WeekView({ year, month, schedule, auxiliaries, overrides, onEditSlot, o
     const days = Array.from({ length: 7 }, (_, i) => start + i).filter(day => schedule[day]);
     return h("div", { className: "panel", key: start },
       h("h3", null, `Semaine du ${start} ${MONTHS[month]}`),
-      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, plan: schedule[day], auxiliaries, overrides, onEditSlot, onOpenMeal }))),
+      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, schedule, plan: schedule[day], auxiliaries, overrides, onEditSlot, onOpenMeal }))),
     );
   }));
 }

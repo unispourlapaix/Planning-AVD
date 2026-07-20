@@ -1,6 +1,7 @@
 import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js";
 import { dayIndex, monthGrid } from "./dates.js";
 import { mealForDate } from "./meal-planning.js";
+import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-start";
 
 const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
@@ -10,7 +11,6 @@ const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
 }[char]));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const colorFor = index => PALETTE[index % PALETTE.length];
-const shiftNames = { morning: "Matin 11h", afternoon: "Apres-midi 17h", night: "Soir" };
 
 export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxiliaries = [], schedule = {} }) {
   const active = auxiliaries.filter(aux => aux.active !== false);
@@ -29,7 +29,8 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
     const tone = dayIndex(year, month, day) === 5 ? " saturday" : dayIndex(year, month, day) === 6 ? " sunday" : "";
     const slots = SHIFT_DEFS.map(shift => {
       const ids = shiftWorkerIds(plan[shift.id]);
-      return `<div class="slot"><b>${shiftNames[shift.id] || shift.label}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}</div></div>`;
+      const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker: ids[0] || primaryShiftWorkerId(plan[shift.id]) });
+      return `<div class="slot"><b>${esc(label)}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}</div></div>`;
     }).join("");
     const meal = mealForDate(year, month, day);
     return `<div class="day${tone}"><div class="head"><span>${day}</span><em>${DAYS_SHORT[dayIndex(year, month, day)]}</em></div>${slots}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></div>`;

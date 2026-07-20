@@ -7,7 +7,7 @@ export const DAYS_LONG = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Sa
 export const DAYS_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
 
 export const SHIFT_DEFS = [
-  { id: "morning", label: "Matin 11h", hours: 6 },
+  { id: "morning", label: "Matin", hours: 6 },
   { id: "afternoon", label: "Apres-midi 17h", hours: 6 },
   { id: "night", label: "Nuit", hours: 12 },
 ];

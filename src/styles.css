@@ -376,12 +376,12 @@ h2 { font-size: 16px; }
 .day-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 900; color: #425762; }
 .saturday .day-head { color: #477b94; }
 .sunday .day-head { color: #a95d89; }
-.slot { display: grid; grid-template-columns: 32px 1fr; gap: 5px; align-items: center; padding: 5px; border-radius: 7px; background: rgba(255,255,255,.76); border: 1px solid rgba(215,225,228,.92); min-width: 0; }
+.slot { display: grid; grid-template-columns: minmax(0,1fr); gap: 2px; align-items: start; padding: 5px; border-radius: 7px; background: rgba(255,255,255,.76); border: 1px solid rgba(215,225,228,.92); min-width: 0; }
 .editable-slot { width: 100%; text-align: left; color: inherit; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .editable-slot:hover, .editable-slot:focus-visible { border-color: #a8b99a; box-shadow: 0 6px 16px rgba(102,122,142,.16); transform: translateY(-1px); outline: none; }
 .manual-slot { border-color: rgba(212,106,168,.48); background: linear-gradient(90deg, rgba(255,240,247,.96), rgba(255,255,255,.82)); box-shadow: inset 3px 0 0 rgba(212,106,168,.42); }
 .manual-slot .slot-label { color: #8e2d62; border-color: rgba(212,106,168,.34); }
-.slot-label { color: #6c7b83; font-size: 10px; font-weight: 900; background: rgba(255,255,255,.92); border: 1px solid #dfe8eb; border-radius: 5px; text-align: center; padding: 3px 2px; }
+.slot-label { color: #6c7b83; font-size: 7px; line-height: 1.05; font-weight: 900; background: rgba(255,255,255,.92); border: 1px solid #dfe8eb; border-radius: 5px; text-align: left; padding: 2px 3px; text-transform: uppercase; }
 .slot-content { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .slot-name { font-size: 11px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .manual-badge {

@@ -1,7 +1,8 @@
-import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js";
+import { MONTHS, SHIFT_DEFS } from "./constants.js";
 import { dayName, daysInMonth } from "./dates.js";
 import { summarizeHours } from "./hour-accounting.js";
 import { mealForDate } from "./meal-planning.js";
+import { shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-start";
 
 const esc = value => String(value ?? "").replace(/[<>&]/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char]));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
@@ -13,8 +14,10 @@ export function buildReportHtml({ year, month, beneficiaryName = "", auxiliaries
   const dayRows = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1).map(day => {
     const plan = schedule[day] || {};
     const lines = SHIFT_DEFS.map(shift => {
-      const names = formatNames(shiftWorkerIds(plan[shift.id])) || "A definir";
-      return `<div class="slot"><b>${SHIFT_LABEL[shift.id]}</b><span>${esc(names)}</span><em>${shift.hours}h</em></div>`;
+      const ids = shiftWorkerIds(plan[shift.id]);
+      const names = formatNames(ids) || "A definir";
+      const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker: ids[0] });
+      return `<div class="slot"><b>${esc(label)}</b><span>${esc(names)}</span><em>${shift.hours}h</em></div>`;
     }).join("");
     const meal = mealForDate(year, month, day);
     return `<td><div class="date">${day} ${dayName(year, month, day)}</div>${lines}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></td>`;

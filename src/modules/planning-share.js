@@ -1,12 +1,9 @@
 import { MONTHS } from "./constants.js";
 import { dayName } from "./dates.js";
 import { publishPersonalPlannings } from "./storage.js?v=20260702-login-refresh";
+import { shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-start";
 
-const SHARE_SHIFT_LABELS = {
-  morning: "Matin",
-  afternoon: "Après-midi",
-  night: "Soir",
-};
+const SHARE_SHIFT_ORDER = ["morning", "afternoon", "night"];
 
 const uniqueEmails = auxiliaries => [...new Set(auxiliaries
   .filter(aux => aux.active !== false)
@@ -38,8 +35,9 @@ function buildSimplifiedPlanning({ year, month, auxiliaries, schedule }) {
   const days = Object.values(schedule || {}).sort((a, b) => Number(a.day) - Number(b.day));
   if (!days.length) return "Planning simplifié indisponible.";
   return days.map(plan => {
-    const shifts = Object.entries(SHARE_SHIFT_LABELS).map(([shift, label]) => {
+    const shifts = SHARE_SHIFT_ORDER.map(shift => {
       const worker = shiftWorkers(plan?.[shift])[0];
+      const label = shiftDisplayLabel({ shift, schedule, day: plan.day, worker });
       return `${label}: ${worker ? names.get(worker) || "À définir" : "Repos"}`;
     });
     return `${String(plan.day).padStart(2, "0")} ${dayName(year, month, plan.day)} : ${shifts.join(" | ")}`;
