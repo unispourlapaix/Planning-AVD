@@ -36,8 +36,9 @@ import {
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-ranges";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
 import { buildReportHtml } from "./modules/report.js?v=20260720-morning-ranges";
-import { buildRotationAudit } from "./modules/rotation-audit.js";
+import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260722-manual-first";
 import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
+import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260722-manual-first";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-ranges";
 import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-ranges";
@@ -310,16 +311,6 @@ const requestStatusLabel = status => ({
   approved: "Validée",
   rejected: "Refusée",
 }[status] || "Demande");
-const applyOverrides = ({ schedule, overrides, year, month }) => Object.fromEntries(Object.entries(schedule).map(([day, plan]) => [
-  day,
-  {
-    ...plan,
-    ...Object.fromEntries(SHIFT_DEFS.map(shift => {
-      const worker = overrides[overrideKey(year, month, day, shift.id)];
-      return [shift.id, worker ? { ...plan[shift.id], worker, workers: [worker] } : plan[shift.id]];
-    })),
-  },
-]));
 const extractBackupJson = text => {
   const raw = String(text || "").trim();
   const match = raw.match(/----- DEBUT SAUVEGARDE PLANNING-AVD -----(.*?)----- FIN SAUVEGARDE PLANNING-AVD -----/s);
@@ -806,11 +797,11 @@ function Summary({ auxiliaries, hours }) {
 function RotationAudit({ checks }) {
   const visible = checks.slice(0, 6);
   const critical = checks.filter(item => item.level === "danger").length;
-  const title = critical ? `${critical} point(s) a corriger` : checks[0]?.level === "ok" ? "Roulement coherent" : "Controle du roulement";
+  const title = critical ? `${critical} point(s) a corriger` : checks[0]?.level === "ok" ? "Planning coherent" : "Controle du planning";
   return h("section", { className: "panel audit-panel" },
     h("div", { className: "title-row" },
       h("div", null,
-        h("h3", null, "Verification du roulement"),
+        h("h3", null, "Contrôle du planning"),
         h("div", { className: "muted" }, title),
       ),
     ),
@@ -828,16 +819,34 @@ function ManualOverridesPanel({ items, onReset }) {
   return h("section", { className: "panel manual-panel" },
     h("div", { className: "title-row" },
       h("div", null,
-        h("h3", null, "Modifications manuelles"),
-        h("div", { className: "muted" }, `${items.length} creneau(x) ajuste(s) a la main ce mois-ci.`),
+        h("h3", null, "Emploi du temps saisi"),
+        h("div", { className: "muted" }, `${items.length} creneau(x) affecte(s) ce mois-ci.`),
       ),
     ),
     h("div", { className: "manual-list" }, visible.map(item => h("div", { key: item.key, className: "manual-item" },
       h("span", { className: "manual-chip" }, `${item.day} ${item.monthLabel}`),
       h("span", null, h("b", null, item.shiftLabel), h("small", null, item.workerName)),
-      h(Button, { onClick: () => onReset(item.key) }, "Auto"),
+      h(Button, { onClick: () => onReset(item.key) }, "Vider"),
     ))),
-    items.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${items.length - visible.length} autre(s) modification(s).`) : null,
+    items.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${items.length - visible.length} autre(s) affectation(s).`) : null,
+  );
+}
+
+function PlanningFillPanel({ assignmentCount, rotationDays, onApplyExample, onClearMonth }) {
+  const selected = ROTATION_OPTIONS.find(option => normalizeRotationMode(rotationDays) === option.value) || ROTATION_OPTIONS[0];
+  return h("section", { className: "panel manual-mode-panel" },
+    h("div", { className: "title-row" },
+      h("div", null,
+        h("h3", null, "Planning manuel du mois"),
+        h("div", { className: "muted" }, "L'admin compose l'emploi du temps. Les roulements servent seulement d'exemples pour remplir rapidement si besoin."),
+      ),
+      h("span", { className: "cloud-status local" }, `${assignmentCount} créneau(x)`),
+    ),
+    h("div", { className: "summary", style: { marginTop: 8 } },
+      h("span", null, `Exemple sélectionné : ${selected.label}`),
+      h(Button, { active: true, onClick: onApplyExample }, "Remplir avec l'exemple"),
+      h(Button, { onClick: onClearMonth }, "Vider le mois"),
+    ),
   );
 }
 
@@ -893,13 +902,13 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
       return h("button", {
         className: `slot editable-slot${manual ? " manual-slot" : ""}`,
         key: shift.id,
-        title: manual ? `Modification manuelle · ${label}` : label,
+        title: manual ? `Créneau saisi · ${label}` : label,
         onClick: () => onEditSlot({ day, shift: shift.id }),
       },
         h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
           h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
-          manual ? h("span", { className: "manual-badge" }, "Mod.") : null,
+          manual ? h("span", { className: "manual-badge" }, "Saisi") : null,
         ),
       );
     }),
@@ -961,7 +970,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
       h("div", { className: "title-row" },
         h("div", null,
           h("h3", null, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[month]}`),
-          h("div", { className: "muted" }, "Choisir l'intervenant pour ce créneau."),
+          h("div", { className: "muted" }, "Choisir l'intervenant pour ce créneau du planning."),
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
@@ -970,7 +979,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onCho
         active: current === aux.id,
         onClick: () => onChoose(key, aux.id),
       }, h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }), aux.name))),
-      overrides[key] ? h(Button, { onClick: () => onReset(key) }, "↺ Revenir au roulement automatique") : null,
+      overrides[key] ? h(Button, { onClick: () => onReset(key) }, "Vider ce créneau") : null,
     ),
   );
 }
@@ -1458,7 +1467,7 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
   );
 }
 
-function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) {
+function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays, onApplyRotationExample }) {
   const beneficiaryChoices = [
     ...beneficiaryOptions,
     ...(beneficiaryId && !beneficiaryOptions.some(item => item.beneficiaryId === beneficiaryId)
@@ -1532,8 +1541,8 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
       h("div", { className: "panel" },
       h("div", { className: "title-row" },
         h("div", null,
-          h("h3", null, "Roulement"),
-          h("div", { className: "muted" }, "Choisir la logique de tour. En journée + soir, matin et apres-midi restent ensemble."),
+          h("h3", null, "Exemples de remplissage"),
+          h("div", { className: "muted" }, "Choisir un exemple. Il ne change pas le planning tant que vous ne remplissez pas le mois."),
         ),
       ),
       h("div", { className: "rotation-options" }, ROTATION_OPTIONS.map(option => h(Button, {
@@ -1541,6 +1550,9 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
         active: normalizeRotationMode(rotationDays) === option.value,
         onClick: () => setRotationDays(option.value),
       }, h("span", null, option.label), h("small", null, option.detail)))),
+      h("div", { className: "action-row", style: { marginTop: 10 } },
+        h(Button, { active: true, onClick: onApplyRotationExample }, "Remplir le mois avec cet exemple"),
+      ),
     ),
     h("div", { className: "panel title-row" },
       h("div", null,
@@ -1944,8 +1956,9 @@ export default function App() {
     return () => clearTimeout(id);
   }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings]);
 
-  const planning = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
-  const schedule = useMemo(() => applyOverrides({ schedule: planning.schedule, overrides, year, month }), [planning.schedule, overrides, year, month]);
+  const rotationExample = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
+  const emptySchedule = useMemo(() => buildEmptySchedule({ year, month }), [year, month]);
+  const schedule = useMemo(() => applyManualAssignments({ schedule: emptySchedule, assignments: overrides, year, month }), [emptySchedule, overrides, year, month]);
   const hours = useMemo(
     () => calculatePerformedHours(schedule, auxiliaries, { year, month, now: accountingNow }),
     [schedule, auxiliaries, year, month, accountingNow],
@@ -1953,6 +1966,18 @@ export default function App() {
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
   const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
   const planningView = ["month", "week", "hours"].includes(view);
+  const applyRotationExample = () => {
+    if (manualOverrides.length && !window.confirm("Remplacer les créneaux déjà saisis de ce mois par l'exemple sélectionné ?")) return;
+    const nextAssignments = assignmentsFromSchedule({ schedule: rotationExample.schedule, year, month });
+    setOverrides(current => replaceMonthAssignments({ current, next: nextAssignments, year, month }));
+    setCloudStatus({ kind: "local", text: "Exemple appliqué" });
+  };
+  const clearMonthPlanning = () => {
+    const confirmed = window.confirm("Vider tous les créneaux saisis de ce mois ?");
+    if (!confirmed) return;
+    setOverrides(current => clearMonthAssignments({ current, year, month }));
+    setCloudStatus({ kind: "local", text: "Mois vidé" });
+  };
   const requireSafeCloudWrite = () => {
     if (!authState.user || cloudWriteReadyRef.current) return true;
     alert("Sauvegarde bloquée par sécurité : cet appareil n'a pas réussi à lire le cloud. Rechargez l'app avant de sauvegarder.");
@@ -2105,7 +2130,7 @@ export default function App() {
     try {
       const key = overrideKey(request.year, request.month, request.day, request.shift);
       const nextOverrides = { ...overrides, [key]: worker.id };
-      const nextSchedule = applyOverrides({ schedule: planning.schedule, overrides: nextOverrides, year, month });
+      const nextSchedule = applyManualAssignments({ schedule: emptySchedule, assignments: nextOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
       const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, dayOutings };
       const signature = stateSignature(nextState);
@@ -2326,6 +2351,7 @@ export default function App() {
     h("div", { className: "layout" },
       sessionRole.isAdmin ? h(ShareReminder, { dashboard: groupDashboard, year, month, onSharePlanning: sharePlanningEmail }) : null,
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
+      planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onClearMonth: clearMonthPlanning }) : null,
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
@@ -2335,7 +2361,7 @@ export default function App() {
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
       view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onDeleteMember: removeAccessMember, onRepairMembers: repairAccessMembers, onResolveAccessRequest: answerAccessRequest }) : null,
-      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays }) : null,
+      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
     ),
     h(SlotEditor, {
       edit: slotEdit,

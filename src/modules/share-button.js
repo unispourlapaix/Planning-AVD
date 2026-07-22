@@ -1,21 +1,10 @@
-import { SHIFT_DEFS } from "./constants.js";
-import { buildSchedule } from "./scheduler-handover.js?v=20260720-hour-quota";
 import { calculatePerformedHours } from "./hour-accounting.js";
+import { applyManualAssignments, buildEmptySchedule } from "./manual-schedule.js?v=20260722-manual-first";
 import { isAdminUser, loadState } from "./storage.js?v=20260702-login-refresh";
 import { sharePlanningByEmail } from "./planning-share.js?v=20260720-morning-ranges";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
-const overrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
-const applyOverrides = ({ schedule, overrides = {}, year, month }) => Object.fromEntries(
-  Object.entries(schedule).map(([day, plan]) => [day, {
-    ...plan,
-    ...Object.fromEntries(SHIFT_DEFS.map(shift => {
-      const worker = overrides[overrideKey(year, month, day, shift.id)];
-      return [shift.id, worker ? { ...plan[shift.id], worker, workers: [worker] } : plan[shift.id]];
-    })),
-  }]),
-);
 
 const waitForActions = () => new Promise(resolve => {
   const find = () => {
@@ -93,8 +82,12 @@ export async function initPlanningShareButton() {
         if (!emailCount({ auxiliaries })) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");
         const year = source.year;
         const month = source.month;
-        const planning = buildSchedule({ year, month, auxiliaries, rotationDays: source.rotationDays });
-        const schedule = applyOverrides({ schedule: planning.schedule, overrides: source.overrides, year, month });
+        const schedule = applyManualAssignments({
+          schedule: buildEmptySchedule({ year, month }),
+          assignments: source.overrides || {},
+          year,
+          month,
+        });
         const hours = calculatePerformedHours(schedule, auxiliaries, { year, month });
         await sharePlanningByEmail({ db, user, year, month, beneficiaryId: source.beneficiaryId || "", beneficiaryName: source.beneficiaryName || "", auxiliaries, schedule, hours, dayOutings: source.dayOutings || {} });
       } catch (error) {

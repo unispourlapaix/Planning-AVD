@@ -158,7 +158,7 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
   }
 
   if (!checks.length) {
-    return [{ level: "ok", title: "Roulement coherent", detail: "Aucun point bloquant detecte sur le mois affiche." }];
+    return [{ level: "ok", title: "Planning coherent", detail: "Aucun point bloquant detecte sur le mois affiche." }];
   }
   return checks;
 }
