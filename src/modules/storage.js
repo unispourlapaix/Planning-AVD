@@ -1,3 +1,5 @@
+import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
+
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -137,6 +139,7 @@ const mergeSavedState = (local, cloud) => {
     ...cloud,
     auxiliaries: hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
     overrides: cloud.overrides && typeof cloud.overrides === "object" ? cloud.overrides : local.overrides,
+    hourOverrides: cloud.hourOverrides && typeof cloud.hourOverrides === "object" ? cloud.hourOverrides : local.hourOverrides,
     dayOutings: cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
   };
 };
@@ -203,6 +206,7 @@ export const defaultState = () => {
     beneficiaryId: createBeneficiaryId("beneficiaire"),
     beneficiaryName: "",
     auxiliaries: null,
+    hourOverrides: {},
     dayOutings: {},
     updatedAt: "",
   };
@@ -1365,7 +1369,10 @@ export function buildPersonalSharePayloads({ year, month, beneficiaryId = "", be
     const entries = [];
     Object.values(schedule).forEach(plan => {
       ["morning", "afternoon", "night"].forEach(shift => {
-        if (primaryWorkerId(plan?.[shift]) === aux.id) entries.push({ day: plan.day, shift });
+        if (primaryWorkerId(plan?.[shift]) === aux.id) {
+          const notice = breakNoticeForSlot({ shift, schedule, day: plan.day, worker: aux.id });
+          entries.push({ day: plan.day, shift, ...(notice ? { notice } : {}) });
+        }
       });
     });
     const rawEmail = cleanEmail(aux.email);

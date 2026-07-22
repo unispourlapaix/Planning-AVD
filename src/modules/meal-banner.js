@@ -1,4 +1,4 @@
-import { MONTHS } from "./constants.js";
+import { MONTHS } from "./constants.js?v=20260722-shift-7-5";
 import { mealWeekForDate } from "./meal-planning.js";
 import { addShoppingItem, setShoppingChecked, shoppingItems, shoppingListText, subscribeShopping } from "./meal-shopping.js?v=20260628-shopping-author";
 

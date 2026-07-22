@@ -1,7 +1,9 @@
-import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js";
+import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
 import { dayIndex, monthGrid } from "./dates.js";
 import { mealForDate } from "./meal-planning.js";
-import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260720-morning-ranges";
+import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260722-shift-7-5";
+import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
+import { hasCustomSlotHours, slotHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
@@ -29,8 +31,12 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
     const tone = dayIndex(year, month, day) === 5 ? " saturday" : dayIndex(year, month, day) === 6 ? " sunday" : "";
     const slots = SHIFT_DEFS.map(shift => {
       const ids = shiftWorkerIds(plan[shift.id]);
-      const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker: ids[0] || primaryShiftWorkerId(plan[shift.id]) });
-      return `<div class="slot"><b>${esc(label)}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}</div></div>`;
+      const worker = ids[0] || primaryShiftWorkerId(plan[shift.id]);
+      const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
+      const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
+      const noticeHtml = notice ? `<small class="break ${notice.type}">${esc(notice.label)}</small>` : "";
+      const hoursHtml = hasCustomSlotHours(plan[shift.id], shift.id) ? `<small class="break hours">${slotHours(plan[shift.id], shift.id)}h</small>` : "";
+      return `<div class="slot"><b>${esc(label)}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}${hoursHtml}${noticeHtml}</div></div>`;
     }).join("");
     const meal = mealForDate(year, month, day);
     return `<div class="day${tone}"><div class="head"><span>${day}</span><em>${DAYS_SHORT[dayIndex(year, month, day)]}</em></div>${slots}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></div>`;
@@ -51,7 +57,7 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
     .day.empty{background:transparent;border:0}.day.saturday{background:#eef8fc;border-color:#b9ddea}.day.sunday{background:#fff0f7;border-color:#efc2dc}
     .head{display:flex;justify-content:space-between;align-items:center;font-weight:900;color:#344753}.head span{font-size:17px}.head em{font-size:10px;font-style:normal;text-transform:uppercase;color:#7a858b}
     .slot{display:grid;grid-template-columns:54px minmax(0,1fr);gap:5px;align-items:center;padding:4px;border-radius:8px;background:rgba(255,255,255,.68);border:1px solid rgba(218,227,230,.82)}
-    .slot b{font-size:8px;line-height:1.1;color:#687a83;text-transform:uppercase}.name{display:inline;font-size:11px;font-weight:900;color:var(--fg);line-height:1.12}.extra{display:inline-flex;margin-left:4px;padding:1px 4px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font-size:8px;font-weight:900;vertical-align:middle}.rest{color:#9a948b;font-size:10px;font-weight:800}
+    .slot b{font-size:8px;line-height:1.1;color:#687a83;text-transform:uppercase}.name{display:inline;font-size:11px;font-weight:900;color:var(--fg);line-height:1.12}.extra,.break{display:inline-flex;margin-left:4px;padding:1px 4px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font-size:8px;font-weight:900;vertical-align:middle}.break{--bd:#a6dcc2;--bg:#e4f8f0;--fg:#1a6a44}.break.rest{--bd:#c9bee8;--bg:#f0ecff;--fg:#3e2a9e}.rest{color:#9a948b;font-size:10px;font-weight:800}
     .meal{display:grid;grid-template-columns:36px minmax(0,1fr);gap:4px;padding:4px;border-radius:7px;background:#eef9f3;color:#39735b}.meal b{font-size:8px;text-transform:uppercase}.meal span{font-size:9px;font-weight:900}
     footer{margin-top:10px;color:#6e7c84;font-size:10px;font-weight:700;text-align:right}
     @media print{html,body{width:297mm;min-height:210mm;background:#fff}body{padding:0}.sheet{width:auto;min-height:194mm;box-shadow:none;border-radius:0;border:0}footer{display:none}}

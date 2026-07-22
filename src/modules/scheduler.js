@@ -1,6 +1,6 @@
-import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js";
+import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
 import { dayIndex, daysInMonth, isWeekendDay } from "./dates.js";
-import { createHourAccount, creditScheduledHours } from "./hour-accounting.js";
+import { createHourAccount, creditScheduledHours } from "./hour-accounting.js?v=20260722-custom-hours";
 
 const dayAllowed = (rule, index) => {
   if (rule === "weekdays") return index >= 0 && index <= 4;

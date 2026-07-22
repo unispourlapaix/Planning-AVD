@@ -1,7 +1,7 @@
 import React from "react";
-import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js";
+import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js?v=20260722-shift-7-5";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260720-hour-quota";
+import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260722-shift-7-5";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260702-login-refresh";
 import {
   createPlanningChangeRequest,
@@ -32,16 +32,18 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260702-login-refresh";
-import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260720-morning-ranges";
-import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js";
-import { buildReportHtml } from "./modules/report.js?v=20260720-morning-ranges";
-import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260722-manual-first";
-import { calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js";
-import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260722-manual-first";
+} from "./modules/storage.js?v=20260722-custom-hours";
+import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260722-custom-hours";
+import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js?v=20260722-custom-hours";
+import { buildReportHtml } from "./modules/report.js?v=20260722-custom-hours";
+import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260722-shift-7-5";
+import { calculateAssignedHours, calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js?v=20260722-custom-hours";
+import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260722-custom-hours";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
-import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260720-morning-ranges";
-import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260720-morning-ranges";
+import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
+import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260722-shift-7-5";
+import { breakNoticeForSlot, personalBreakNoticeForSlot } from "./modules/break-rules.js?v=20260722-custom-hours";
+import { defaultHoursForShift, hasCustomSlotHours, normalizeHourOverrides, normalizeSlotHour, slotHours } from "./modules/shift-hours.js?v=20260722-custom-hours";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
@@ -304,6 +306,14 @@ const planningNames = (auxiliaries, ids) => ids
   .join("");
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const displayHours = summarizeHours;
+const assignmentSummary = (raw = {}, fallbackQuota = 0) => {
+  const quota = Number(raw.quota ?? fallbackQuota) || Number(fallbackQuota) || 0;
+  const total = Number(raw.total) || 0;
+  const remaining = Math.max(0, Math.round((quota - total) * 100) / 100);
+  const over = Math.max(0, Math.round((total - quota) * 100) / 100);
+  const percent = quota > 0 ? Math.min(100, Math.round((Math.min(total, quota) / quota) * 100)) : 0;
+  return { ...raw, total, quota, remaining, over, percent };
+};
 const overrideKey = manualOverrideKey;
 const requestSlotKey = (day, shift) => `${day}-${shift}`;
 const requestStatusLabel = status => ({
@@ -560,9 +570,11 @@ function PersonalDayCard({ day, entries, entriesByDay = {}, calendarByDay = {}, 
       const entry = entries.find(item => item.shift === shift.id);
       const request = requestBySlot?.[requestSlotKey(day, shift.id)];
       const label = shiftDisplayLabel({ shift: shift.id, entriesByDay, calendarByDay, day });
+      const notice = entry ? personalBreakNoticeForSlot({ shift: shift.id, entriesByDay, day }) : null;
       const content = [
         h("span", { className: "slot-label", key: "label" }, label),
         h("span", { key: "text" }, entry ? "Présent" : "Repos"),
+        notice ? h("span", { key: "notice", className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
         request ? h("span", { key: "request", className: `request-badge ${request.status || "pending"}` }, requestStatusLabel(request.status)) : null,
       ];
       if (entry && canRequest) return h("button", {
@@ -794,6 +806,29 @@ function Summary({ auxiliaries, hours }) {
   }));
 }
 
+function AssignmentProgress({ auxiliaries, assignedHours }) {
+  return h("section", { className: "assignment-progress" }, auxiliaries.map((aux, index) => {
+    const data = assignmentSummary(assignedHours[aux.id], aux.quota);
+    const c = colorFor(index);
+    const status = data.over > 0 ? `Dépassement ${data.over}h` : data.remaining > 0 ? `Reste ${data.remaining}h` : "Quota attribué";
+    return h("div", { className: `panel assignment-card${data.over > 0 ? " over" : data.remaining === 0 ? " complete" : ""}`, key: aux.id },
+      h("div", { className: "title-row" },
+        h("div", null,
+          h("div", { className: "pill", style: { background: c.light, color: c.text } }, aux.name || aux.id),
+          h("div", { className: "muted", style: { marginTop: 6 } }, `${data.total}h attribuées / ${data.quota}h`),
+        ),
+        h("b", { style: { color: data.over > 0 ? "#a02828" : c.text } }, status),
+      ),
+      h("div", { className: "progress assignment-bar" }, h("span", { style: { width: `${data.percent}%`, background: data.over > 0 ? "#E08A8A" : c.solid } })),
+      h("div", { className: "assignment-meta" },
+        h("span", null, `Matin ${data.morning || 0}h`),
+        h("span", null, `Après-midi ${data.afternoon || 0}h`),
+        h("span", null, `Soir ${data.night || 0}h`),
+      ),
+    );
+  }));
+}
+
 function RotationAudit({ checks }) {
   const visible = checks.slice(0, 6);
   const critical = checks.filter(item => item.level === "danger").length;
@@ -825,7 +860,10 @@ function ManualOverridesPanel({ items, onReset }) {
     ),
     h("div", { className: "manual-list" }, visible.map(item => h("div", { key: item.key, className: "manual-item" },
       h("span", { className: "manual-chip" }, `${item.day} ${item.monthLabel}`),
-      h("span", null, h("b", null, item.shiftLabel), h("small", null, item.workerName)),
+      h("span", null,
+        h("b", null, item.shiftLabel),
+        h("small", null, `${item.workerName}${item.customHours !== null && item.customHours !== item.defaultHours ? ` · ${item.customHours}h` : ""}`),
+      ),
       h(Button, { onClick: () => onReset(item.key) }, "Vider"),
     ))),
     items.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${items.length - visible.length} autre(s) affectation(s).`) : null,
@@ -899,15 +937,19 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
       const manual = !!overrides?.[overrideKey(year, month, day, shift.id)];
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
+      const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
+      const customHours = hasCustomSlotHours(plan?.[shift.id], shift.id);
       return h("button", {
         className: `slot editable-slot${manual ? " manual-slot" : ""}`,
         key: shift.id,
-        title: manual ? `Créneau saisi · ${label}` : label,
+        title: [manual ? "Créneau saisi" : "", label, notice?.title].filter(Boolean).join(" · "),
         onClick: () => onEditSlot({ day, shift: shift.id }),
       },
         h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
           h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
+          customHours ? h("span", { className: "hour-badge", title: "Durée réelle modifiée" }, `${slotHours(plan?.[shift.id], shift.id)}h`) : null,
+          notice ? h("span", { className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
           manual ? h("span", { className: "manual-badge" }, "Saisi") : null,
         ),
       );
@@ -960,25 +1002,58 @@ function HoursView({ auxiliaries, hours }) {
   );
 }
 
-function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, onChoose, onReset, onClose }) {
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onReset, onSetHours, onResetHours, onClose }) {
+  const [hoursInput, setHoursInput] = useState("");
+  const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
+  const currentHours = edit ? slotHours(schedule[edit.day]?.[edit.shift], edit.shift) : 0;
+  useEffect(() => {
+    if (edit) setHoursInput(String(currentHours).replace(".", ","));
+  }, [key, currentHours]);
   if (!edit) return null;
-  const key = overrideKey(year, month, edit.day, edit.shift);
   const current = schedule[edit.day]?.[edit.shift]?.worker;
-  const available = auxiliaries.filter(aux => aux.active !== false && canWorkShift(aux, edit.shift, year, month, edit.day));
+  const available = auxiliaries.filter(aux => aux.active !== false);
+  const defaultHours = defaultHoursForShift(edit.shift);
+  const customHours = hourOverrides?.[key] !== undefined && normalizeSlotHour(hourOverrides[key]) !== null;
+  const parsedHours = normalizeSlotHour(hoursInput);
+  const invalidHours = String(hoursInput || "").trim() !== "" && parsedHours === null;
   return h("div", { className: "modal-backdrop", onClick: onClose },
     h("section", { className: "slot-editor", onClick: event => event.stopPropagation() },
       h("div", { className: "title-row" },
         h("div", null,
           h("h3", null, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[month]}`),
-          h("div", { className: "muted" }, "Choisir l'intervenant pour ce créneau du planning."),
+          h("div", { className: "muted" }, `Choisir l'intervenant et ajuster la durée réelle si besoin. Défaut : ${defaultHours}h.`),
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
-      h("div", { className: "worker-options" }, available.map((aux, index) => h(Button, {
-        key: aux.id,
-        active: current === aux.id,
-        onClick: () => onChoose(key, aux.id),
-      }, h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }), aux.name))),
+      h("div", { className: "slot-hours-row" },
+        h(Field, { label: "Durée réelle du créneau" },
+          h(TextInput, {
+            value: hoursInput,
+            inputMode: "decimal",
+            placeholder: `${defaultHours}h`,
+            onChange: setHoursInput,
+          }),
+        ),
+        h(Button, { active: true, disabled: parsedHours === null || invalidHours, onClick: () => parsedHours !== null && onSetHours(key, parsedHours, edit.shift) }, "Appliquer"),
+        customHours ? h(Button, { onClick: () => onResetHours(key) }, `Défaut ${defaultHours}h`) : null,
+        invalidHours ? h("small", { className: "field-error" }, "Entrez une durée entre 0 et 24h.") : h("small", { className: "muted" }, "Exemples : 6h, 4,5h, 7.25h."),
+      ),
+      h("div", { className: "worker-options" }, available.map((aux, index) => {
+        const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
+        const preferred = canWorkShift(aux, edit.shift, year, month, edit.day);
+        const hourLabel = data.over > 0 ? `+${data.over}h` : `reste ${data.remaining}h`;
+        return h(Button, {
+          key: aux.id,
+          active: current === aux.id,
+          className: preferred ? "" : "out-of-preference",
+          title: preferred ? "Dans les options de l'auxiliaire" : "Hors options, autorisé en manuel",
+          onClick: () => onChoose(key, aux.id),
+        },
+          h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }),
+          h("span", null, aux.name),
+          h("small", null, preferred ? hourLabel : `${hourLabel} · hors option`),
+        );
+      })),
       overrides[key] ? h(Button, { onClick: () => onReset(key) }, "Vider ce créneau") : null,
     ),
   );
@@ -1627,6 +1702,7 @@ export default function App() {
   const [beneficiaryName, setBeneficiaryName] = useState(defaultState().beneficiaryName);
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
   const [overrides, setOverrides] = useState({});
+  const [hourOverrides, setHourOverrides] = useState({});
   const [dayOutings, setDayOutings] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
   const [mealDate, setMealDate] = useState(null);
@@ -1870,10 +1946,11 @@ export default function App() {
       beneficiaryName: activeBeneficiaryName,
       auxiliaries,
       overrides,
+      hourOverrides,
       dayOutings: personalMode ? personalPlanning?.dayOutings || {} : dayOutings,
       personal: personalMode,
     };
-  }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings, personalMode, personalBeneficiaryId, personalPlanning, personalAccess]);
+  }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings, personalMode, personalBeneficiaryId, personalPlanning, personalAccess]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;
@@ -1888,6 +1965,7 @@ export default function App() {
         beneficiaryName: String(identifiedSaved?.beneficiaryName || "").trim(),
         auxiliaries: identifiedSaved?.auxiliaries || identifiedSaved?.names ? normalizeAuxiliaries(identifiedSaved) : auxiliaries,
         overrides: identifiedSaved?.overrides && typeof identifiedSaved.overrides === "object" ? identifiedSaved.overrides : overrides,
+        hourOverrides: normalizeHourOverrides(identifiedSaved?.hourOverrides || hourOverrides),
         dayOutings: identifiedSaved?.dayOutings && typeof identifiedSaved.dayOutings === "object" ? normalizeDayOutings(identifiedSaved.dayOutings) : dayOutings,
       };
       const cloudMeta = saved?.__cloud || {};
@@ -1909,6 +1987,7 @@ export default function App() {
       setBeneficiaryName(nextState.beneficiaryName);
       setAuxiliaries(nextState.auxiliaries);
       setOverrides(nextState.overrides);
+      setHourOverrides(nextState.hourOverrides);
       setDayOutings(nextState.dayOutings);
       setStateLoaded(true);
     });
@@ -1924,7 +2003,7 @@ export default function App() {
       setCloudStatus({ kind: "local", text: "Mode auxiliaire" });
       return;
     }
-    const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
+    const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings };
     const signature = stateSignature(currentState);
     if (signature === lastSavedSignatureRef.current) return;
     if (hasIncompleteAuxEmail(auxiliaries)) {
@@ -1954,28 +2033,31 @@ export default function App() {
       if (result?.cloud || result?.reason === "not-connected") lastSavedSignatureRef.current = signature;
     }), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings]);
+  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings]);
 
   const rotationExample = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const emptySchedule = useMemo(() => buildEmptySchedule({ year, month }), [year, month]);
-  const schedule = useMemo(() => applyManualAssignments({ schedule: emptySchedule, assignments: overrides, year, month }), [emptySchedule, overrides, year, month]);
+  const schedule = useMemo(() => applyManualAssignments({ schedule: emptySchedule, assignments: overrides, hourOverrides, year, month }), [emptySchedule, overrides, hourOverrides, year, month]);
+  const assignedHours = useMemo(() => calculateAssignedHours(schedule, auxiliaries), [schedule, auxiliaries]);
   const hours = useMemo(
     () => calculatePerformedHours(schedule, auxiliaries, { year, month, now: accountingNow }),
     [schedule, auxiliaries, year, month, accountingNow],
   );
   const rotationChecks = useMemo(() => buildRotationAudit({ year, month, auxiliaries: activeAux, schedule, hours, rotationDays }), [year, month, activeAux, schedule, hours, rotationDays]);
-  const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, year, month, auxiliaries }), [overrides, year, month, auxiliaries]);
+  const manualOverrides = useMemo(() => buildManualOverrideList({ overrides, hourOverrides, year, month, auxiliaries }), [overrides, hourOverrides, year, month, auxiliaries]);
   const planningView = ["month", "week", "hours"].includes(view);
   const applyRotationExample = () => {
     if (manualOverrides.length && !window.confirm("Remplacer les créneaux déjà saisis de ce mois par l'exemple sélectionné ?")) return;
     const nextAssignments = assignmentsFromSchedule({ schedule: rotationExample.schedule, year, month });
     setOverrides(current => replaceMonthAssignments({ current, next: nextAssignments, year, month }));
+    setHourOverrides(current => clearMonthAssignments({ current, year, month }));
     setCloudStatus({ kind: "local", text: "Exemple appliqué" });
   };
   const clearMonthPlanning = () => {
     const confirmed = window.confirm("Vider tous les créneaux saisis de ce mois ?");
     if (!confirmed) return;
     setOverrides(current => clearMonthAssignments({ current, year, month }));
+    setHourOverrides(current => clearMonthAssignments({ current, year, month }));
     setCloudStatus({ kind: "local", text: "Mois vidé" });
   };
   const requireSafeCloudWrite = () => {
@@ -2047,7 +2129,7 @@ export default function App() {
     }
     try {
       setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
-      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
+      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings };
       const signature = stateSignature(currentState);
       const cloudResult = await saveStateWithOverwriteOption(currentState);
       setCloudResult(cloudResult);
@@ -2081,7 +2163,7 @@ export default function App() {
     }
     try {
       setCloudStatus({ kind: "saving", text: "Préparation partage..." });
-      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings };
+      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings };
       const signature = stateSignature(currentState);
       const cloudResult = await saveStateWithOverwriteOption(currentState);
       setCloudResult(cloudResult);
@@ -2130,9 +2212,9 @@ export default function App() {
     try {
       const key = overrideKey(request.year, request.month, request.day, request.shift);
       const nextOverrides = { ...overrides, [key]: worker.id };
-      const nextSchedule = applyManualAssignments({ schedule: emptySchedule, assignments: nextOverrides, year, month });
+      const nextSchedule = applyManualAssignments({ schedule: emptySchedule, assignments: nextOverrides, hourOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
-      const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, dayOutings };
+      const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, hourOverrides, dayOutings };
       const signature = stateSignature(nextState);
       const cloudResult = await saveState({
         db: authState.db,
@@ -2193,6 +2275,7 @@ export default function App() {
       beneficiaryName: String(identifiedNext.beneficiaryName || "").trim(),
       auxiliaries: normalizeAuxiliaries({ auxiliaries: next.auxiliaries }),
       overrides: next.overrides && typeof next.overrides === "object" ? next.overrides : {},
+      hourOverrides: normalizeHourOverrides(next.hourOverrides),
       dayOutings: normalizeDayOutings(next.dayOutings),
     };
     setYear(restoredState.year);
@@ -2203,6 +2286,7 @@ export default function App() {
     setBeneficiaryName(restoredState.beneficiaryName);
     setAuxiliaries(restoredState.auxiliaries);
     setOverrides(restoredState.overrides);
+    setHourOverrides(restoredState.hourOverrides);
     setDayOutings(restoredState.dayOutings);
     return restoredState;
   };
@@ -2239,6 +2323,7 @@ export default function App() {
       beneficiaryName: cleanName,
       auxiliaries: cloneDefaultAux(),
       overrides: {},
+      hourOverrides: {},
       dayOutings: {},
     };
     applyRestoredPlanningState(next);
@@ -2252,7 +2337,7 @@ export default function App() {
       app: "Planning-AVD",
       version: 1,
       exportedAt: new Date().toISOString(),
-      state: { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, dayOutings },
+      state: { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings },
     };
     const content = JSON.stringify(backup, null, 2);
     const fileName = `planning-avd-sauvegarde-${year}-${String(month + 1).padStart(2, "0")}.json`;
@@ -2352,10 +2437,14 @@ export default function App() {
       sessionRole.isAdmin ? h(ShareReminder, { dashboard: groupDashboard, year, month, onSharePlanning: sharePlanningEmail }) : null,
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onClearMonth: clearMonthPlanning }) : null,
+      planningView ? h(AssignmentProgress, { auxiliaries: activeAux, assignedHours }) : null,
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
-      planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: key => setOverrides(current => { const next = { ...current }; delete next[key]; return next; }) }) : null,
+      planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: key => {
+        setOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+        setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+      } }) : null,
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
@@ -2370,8 +2459,28 @@ export default function App() {
       auxiliaries,
       schedule,
       overrides,
+      hourOverrides,
+      assignedHours,
       onChoose: (key, worker) => { setOverrides(current => ({ ...current, [key]: worker })); setSlotEdit(null); },
-      onReset: key => { setOverrides(current => { const next = { ...current }; delete next[key]; return next; }); setSlotEdit(null); },
+      onReset: key => {
+        setOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+        setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+        setSlotEdit(null);
+      },
+      onSetHours: (key, hours, shift) => {
+        const defaultHours = defaultHoursForShift(shift);
+        setHourOverrides(current => {
+          const next = { ...current };
+          if (hours === defaultHours) delete next[key];
+          else next[key] = hours;
+          return next;
+        });
+      },
+      onResetHours: key => setHourOverrides(current => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }),
       onClose: () => setSlotEdit(null),
     }),
     h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null), dayOutings, onDayOutingsChange: updateDayOutings }),

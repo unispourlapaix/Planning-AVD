@@ -1,6 +1,6 @@
-import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js";
+import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js?v=20260722-shift-7-5";
 import { dayIndex, daysInMonth } from "./dates.js";
-import { canWorkShift } from "./scheduler-handover.js?v=20260720-hour-quota";
+import { canWorkShift } from "./scheduler-handover.js?v=20260722-shift-7-5";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primary = entry => workers(entry)[0] || "";
@@ -29,7 +29,9 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
   };
 
   const undefinedSlots = [];
-  const invalidSlots = [];
+  const emptyDays = [];
+  const missingWorkerSlots = [];
+  const preferenceSlots = [];
   const brokenWeekendHandovers = [];
   const brokenWeekendBlocks = [];
   const mondayRestBreaks = [];
@@ -40,15 +42,19 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
 
   for (let day = 1; day <= totalDays; day += 1) {
     const plan = schedule[day] || {};
+    const dayHasWorker = SHIFT_DEFS.some(shift => workers(plan[shift.id]).length);
+    if (!dayHasWorker) emptyDays.push(`${day} ${MONTHS[month]}`);
     SHIFT_DEFS.forEach(shift => {
       const ids = workers(plan[shift.id]);
-      if (!ids.length) undefinedSlots.push(`${day} ${SHIFT_LABEL[shift.id]}`);
+      if (!ids.length && dayHasWorker) undefinedSlots.push(`${day} ${SHIFT_LABEL[shift.id]}`);
       ids.forEach(id => {
         const aux = byId[id];
         const allowedHandover = isNightHandoverMorning(schedule, day, shift.id, id)
           || isWeekendOpeningNight({ schedule, year, month, day, shift: shift.id, id, aux });
-        if (!aux || (!canWorkShift(aux, shift.id, year, month, day) && !allowedHandover)) {
-          invalidSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
+        if (!aux) {
+          missingWorkerSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
+        } else if (!canWorkShift(aux, shift.id, year, month, day) && !allowedHandover) {
+          preferenceSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
         }
       });
     });
@@ -90,12 +96,20 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
     }
   }
 
+  if (emptyDays.length) {
+    add("danger", "Journees sans auxiliaire", `${emptyDays.length}/${totalDays} journee(s) sans aucun auxiliaire : ${compactDays(emptyDays)}.`);
+  }
+
   if (undefinedSlots.length) {
     add("danger", "Creneaux a definir", `${undefinedSlots.length} creneau(x) sans auxiliaire : ${compactDays(undefinedSlots)}.`);
   }
 
-  if (invalidSlots.length) {
-    add("danger", "Options auxiliaires non respectees", `${compactDays(invalidSlots)}.`);
+  if (missingWorkerSlots.length) {
+    add("danger", "Auxiliaire non affecte", `${compactDays(missingWorkerSlots)}.`);
+  }
+
+  if (preferenceSlots.length) {
+    add("warning", "Hors preferences auxiliaires", `${compactDays(preferenceSlots)}. Autorise en mode manuel.`);
   }
 
   if (brokenWeekendHandovers.length) {
@@ -107,7 +121,7 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
   }
 
   if (mondayRestBreaks.length) {
-    add("danger", "Repos du lundi", `Celui du week-end ne doit pas reprendre lundi apres-midi/soir : ${compactDays(mondayRestBreaks)}.`);
+    add("info", "Repos du lundi", `Annonce seulement : celui du week-end reprend lundi apres-midi/soir : ${compactDays(mondayRestBreaks)}.`);
   }
 
   active

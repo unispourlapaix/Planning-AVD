@@ -1,4 +1,4 @@
-import { DAYS_LONG } from "./constants.js";
+import { DAYS_LONG } from "./constants.js?v=20260722-shift-7-5";
 
 export const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 export const dayIndex = (year, month, day) => (new Date(year, month, day).getDay() + 6) % 7;

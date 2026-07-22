@@ -1,5 +1,6 @@
-import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js";
+import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
 import { daysInMonth } from "./dates.js";
+import { slotHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -58,6 +59,39 @@ export const summarizeHours = (raw = {}, fallbackQuota = 0) => {
 const shiftWorkerIds = entry =>
   Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 
+export function calculateAssignedHours(schedule, auxiliaries) {
+  const hours = Object.fromEntries(auxiliaries.map(aux => [aux.id, {
+    morning: 0,
+    afternoon: 0,
+    night: 0,
+    total: 0,
+    quota: quotaFor(aux),
+    pause: quotaFor(aux),
+    over: 0,
+    daily: {},
+  }]));
+
+  Object.entries(schedule || {}).forEach(([dayValue, plan]) => {
+    const day = Number(dayValue);
+    SHIFT_DEFS.forEach(shift => {
+      shiftWorkerIds(plan?.[shift.id]).forEach(worker => {
+        if (!worker || !hours[worker]) return;
+        const scheduled = slotHours(plan?.[shift.id], shift.id);
+        hours[worker][shift.id] = roundHours(hours[worker][shift.id] + scheduled);
+        hours[worker].total = roundHours(hours[worker].total + scheduled);
+        hours[worker].daily[day] = roundHours((hours[worker].daily[day] || 0) + scheduled);
+      });
+    });
+  });
+
+  Object.values(hours).forEach(account => {
+    account.pause = Math.max(0, roundHours(account.quota - account.total));
+    account.over = Math.max(0, roundHours(account.total - account.quota));
+  });
+
+  return hours;
+}
+
 export function accountingPeriodState({ year, month, now = new Date() }) {
   const monthStart = new Date(year, month, 1);
   const nextMonthStart = new Date(year, month + 1, 1);
@@ -88,7 +122,7 @@ export function calculatePerformedHours(schedule, auxiliaries, { year, month, no
         // Secondary workers are completion hours confirmed when the month is closed.
         if (workerIndex > 0 && !period.monthClosed) return;
         if (!worker || !hours[worker]) return;
-        creditScheduledHours({ account: hours[worker], shift: shift.id, scheduledHours: shift.hours, day });
+        creditScheduledHours({ account: hours[worker], shift: shift.id, scheduledHours: slotHours(plan?.[shift.id], shift.id), day });
       });
     });
   });

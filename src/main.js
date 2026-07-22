@@ -1,8 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260720-morning-ranges";
-import { initPlanningShareButton } from "./modules/share-button.js?v=20260722-manual-first";
-import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260720-morning-ranges";
+import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260722-shift-7-5";
+import { initPlanningShareButton } from "./modules/share-button.js?v=20260722-custom-hours";
+import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260722-custom-hours";
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260624-life-separate";
 import { initPersonalMobileView } from "./modules/personal-mobile-view.js?v=20260624-life-separate";
 import { initSettingsTools } from "./modules/settings-tools.js?v=20260626-icon-menu";
@@ -20,7 +20,7 @@ window.alert = message => nativeAlert(String(message)
   .replace("Publication impossible", "Sauvegarde impossible"));
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260722-manual-first"),
+  import("./App.js?v=20260722-custom-hours"),
   import("./ui.js?v=20260702-member-actions"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));

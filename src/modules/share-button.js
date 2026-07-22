@@ -1,7 +1,7 @@
-import { calculatePerformedHours } from "./hour-accounting.js";
-import { applyManualAssignments, buildEmptySchedule } from "./manual-schedule.js?v=20260722-manual-first";
-import { isAdminUser, loadState } from "./storage.js?v=20260702-login-refresh";
-import { sharePlanningByEmail } from "./planning-share.js?v=20260720-morning-ranges";
+import { calculatePerformedHours } from "./hour-accounting.js?v=20260722-custom-hours";
+import { applyManualAssignments, buildEmptySchedule } from "./manual-schedule.js?v=20260722-custom-hours";
+import { isAdminUser, loadState } from "./storage.js?v=20260722-custom-hours";
+import { sharePlanningByEmail } from "./planning-share.js?v=20260722-custom-hours";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
@@ -85,6 +85,7 @@ export async function initPlanningShareButton() {
         const schedule = applyManualAssignments({
           schedule: buildEmptySchedule({ year, month }),
           assignments: source.overrides || {},
+          hourOverrides: source.hourOverrides || {},
           year,
           month,
         });

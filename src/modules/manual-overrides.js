@@ -1,4 +1,5 @@
-import { MONTHS, SHIFT_LABEL } from "./constants.js";
+import { MONTHS, SHIFT_LABEL } from "./constants.js?v=20260722-shift-7-5";
+import { defaultHoursForShift, normalizeSlotHour } from "./shift-hours.js?v=20260722-custom-hours";
 
 export const manualOverrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 
@@ -11,7 +12,7 @@ export function parseManualOverrideKey(key) {
   return { year, month, day, shift };
 }
 
-export function buildManualOverrideList({ overrides = {}, year, month, auxiliaries = [] }) {
+export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, year, month, auxiliaries = [] }) {
   const names = Object.fromEntries(auxiliaries.map(aux => [aux.id, aux.name || "A definir"]));
   return Object.entries(overrides)
     .map(([key, worker]) => {
@@ -25,6 +26,8 @@ export function buildManualOverrideList({ overrides = {}, year, month, auxiliari
         monthLabel: MONTHS[month],
         worker,
         workerName: names[worker] || "A definir",
+        customHours: normalizeSlotHour(hourOverrides[key]),
+        defaultHours: defaultHoursForShift(parsed.shift),
       };
     })
     .filter(Boolean)

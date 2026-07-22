@@ -241,6 +241,13 @@ h2 { font-size: 16px; }
 .install-banner span { color: #697981; font-size: 12px; font-weight: 700; }
 .install-banner-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.assignment-progress { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.assignment-card { border-color: rgba(123,175,212,.28); }
+.assignment-card.complete { border-color: rgba(104,196,154,.36); background: linear-gradient(135deg, rgba(255,255,255,.9), rgba(232,249,241,.72)); }
+.assignment-card.over { border-color: rgba(224,138,138,.42); background: linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,240,240,.78)); }
+.assignment-bar { margin-top: 8px; }
+.assignment-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; color: #697981; font-size: 10px; font-weight: 850; }
+.assignment-meta span { padding: 3px 6px; border-radius: 999px; background: rgba(255,255,255,.72); border: 1px solid rgba(218,227,230,.7); }
 .pill { border-radius: 999px; padding: 5px 8px; font-weight: 900; font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
 .audit-panel { display: grid; gap: 10px; }
 .audit-panel h3 { margin: 0 0 3px; }
@@ -384,6 +391,37 @@ h2 { font-size: 16px; }
 .slot-label { color: #6c7b83; font-size: 7px; line-height: 1.05; font-weight: 900; background: rgba(255,255,255,.92); border: 1px solid #dfe8eb; border-radius: 5px; text-align: left; padding: 2px 3px; text-transform: uppercase; }
 .slot-content { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .slot-name { font-size: 11px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.break-badge {
+  flex: 0 0 auto;
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(104,196,154,.38);
+  background: rgba(228,248,240,.92);
+  color: #1a6a44;
+  font-size: 7px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+.break-badge.rest {
+  border-color: rgba(158,142,216,.38);
+  background: rgba(240,236,255,.92);
+  color: #3e2a9e;
+}
+.hour-badge {
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(123,175,212,.38);
+  background: rgba(230,243,255,.92);
+  color: #1e5a8a;
+  font-size: 7px;
+  line-height: 1.2;
+  font-weight: 900;
+}
 .manual-badge {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -451,10 +489,18 @@ h2 { font-size: 16px; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 18px; background: rgba(49,58,55,.28); backdrop-filter: blur(7px); }
 .slot-editor { width: min(460px, 100%); max-height: min(620px, 90vh); overflow: auto; display: grid; gap: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.94); border: 1px solid rgba(255,255,255,.98); box-shadow: 0 24px 54px rgba(67,80,94,.24); }
 .slot-editor h3 { margin: 0 0 4px; }
+.slot-hours-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
+.slot-hours-row .field { margin: 0; }
+.slot-hours-row .btn { min-height: 38px; }
+.slot-hours-row small { grid-column: 1 / -1; font-size: 10px; font-weight: 800; }
+.field-error { color: #a02828; }
 .icon-btn { width: 38px; height: 38px; padding: 0; font-size: 24px; line-height: 1; }
 .icon-btn .icon { width: 20px; height: 20px; }
 .worker-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .worker-options .btn { display: flex; align-items: center; gap: 8px; text-align: left; }
+.worker-options .btn.out-of-preference { border-color: rgba(240,182,110,.55); background: rgba(255,246,234,.88); }
+.worker-options .btn span:not(.worker-dot) { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.worker-options .btn small { margin-left: auto; color: #697981; font-size: 10px; font-weight: 900; white-space: nowrap; }
 .worker-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
 .meal-planner {
   width: min(980px, 100%);

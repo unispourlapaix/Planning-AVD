@@ -1,9 +1,10 @@
-import { SHIFT_DEFS } from "./constants.js";
+import { SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { daysInMonth } from "./dates.js";
+import { defaultHoursForShift, normalizeSlotHour, shiftHourKey } from "./shift-hours.js?v=20260722-custom-hours";
 
 export const scheduleAssignmentKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 
-const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-const emptyShift = shift => ({ id: shift.id, worker: "", workers: [] });
+const emptyShift = shift => ({ id: shift.id, worker: "", workers: [], hours: defaultHoursForShift(shift.id) });
 const primaryWorker = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean)[0] || "" : entry?.worker || "";
 const monthPrefix = (year, month) => `${year}-${month}-`;
 
@@ -17,13 +18,15 @@ export function buildEmptySchedule({ year, month }) {
   }));
 }
 
-export function applyManualAssignments({ schedule, assignments = {}, year, month }) {
+export function applyManualAssignments({ schedule, assignments = {}, hourOverrides = {}, year, month }) {
   return Object.fromEntries(Object.entries(schedule || {}).map(([day, plan]) => [day, {
     ...plan,
     ...Object.fromEntries(SHIFT_DEFS.map(shift => {
       const worker = assignments[scheduleAssignmentKey(year, month, day, shift.id)] || "";
       const base = plan?.[shift.id] || emptyShift(shift);
-      return [shift.id, worker ? { ...base, worker, workers: [worker] } : emptyShift(shift)];
+      const customHours = normalizeSlotHour(hourOverrides[shiftHourKey(year, month, day, shift.id)]);
+      const hours = customHours === null ? defaultHoursForShift(shift.id) : customHours;
+      return [shift.id, worker ? { ...base, worker, workers: [worker], hours } : { ...emptyShift(shift), hours }];
     })),
   }]));
 }
