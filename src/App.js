@@ -34,11 +34,12 @@ import {
   subscribePersonalPlanning,
 } from "./modules/storage.js?v=20260722-custom-hours";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260722-custom-hours";
-import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js?v=20260722-custom-hours";
+import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js?v=20260724-day-doubles";
 import { buildReportHtml } from "./modules/report.js?v=20260722-custom-hours";
 import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260722-shift-7-5";
 import { calculateAssignedHours, calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js?v=20260722-custom-hours";
-import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260722-custom-hours";
+import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260724-day-doubles";
+import { manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker } from "./modules/manual-workers.js?v=20260724-day-doubles";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
 import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260722-shift-7-5";
@@ -304,6 +305,7 @@ const planningNames = (auxiliaries, ids) => ids
   .slice(0, 1)
   .map(id => auxName(auxiliaries, id))
   .join("");
+const shortAuxName = (auxiliaries, id) => auxName(auxiliaries, id).slice(0, 3);
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const displayHours = summarizeHours;
 const assignmentSummary = (raw = {}, fallbackQuota = 0) => {
@@ -862,7 +864,7 @@ function ManualOverridesPanel({ items, onReset }) {
       h("span", { className: "manual-chip" }, `${item.day} ${item.monthLabel}`),
       h("span", null,
         h("b", null, item.shiftLabel),
-        h("small", null, `${item.workerName}${item.customHours !== null && item.customHours !== item.defaultHours ? ` · ${item.customHours}h` : ""}`),
+        h("small", null, `${item.workerName}${item.extraNames?.length ? ` + ${item.extraNames.join(", ")}` : ""}${item.customHours !== null && item.customHours !== item.defaultHours ? ` · ${item.customHours}h` : ""}`),
       ),
       h(Button, { onClick: () => onReset(item.key) }, "Vider"),
     ))),
@@ -934,6 +936,7 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
     SHIFT_DEFS.map(shift => {
       const workers = shiftWorkerIds(plan?.[shift.id]);
       const worker = workers[0];
+      const extraWorkers = workers.slice(1);
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
       const manual = !!overrides?.[overrideKey(year, month, day, shift.id)];
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
@@ -948,6 +951,9 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
         h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
           h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
+          extraWorkers.length ? h("span", { className: "double-stack", title: `Doublon : ${extraWorkers.map(id => auxName(auxiliaries, id)).join(", ")}` },
+            extraWorkers.map(id => h("span", { className: "double-chip", key: id }, shortAuxName(auxiliaries, id))),
+          ) : null,
           customHours ? h("span", { className: "hour-badge", title: "Durée réelle modifiée" }, `${slotHours(plan?.[shift.id], shift.id)}h`) : null,
           notice ? h("span", { className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
           manual ? h("span", { className: "manual-badge" }, "Saisi") : null,
@@ -1002,7 +1008,7 @@ function HoursView({ auxiliaries, hours }) {
   );
 }
 
-function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onReset, onSetHours, onResetHours, onClose }) {
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onClose }) {
   const [hoursInput, setHoursInput] = useState("");
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
   const currentHours = edit ? slotHours(schedule[edit.day]?.[edit.shift], edit.shift) : 0;
@@ -1010,7 +1016,9 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
     if (edit) setHoursInput(String(currentHours).replace(".", ","));
   }, [key, currentHours]);
   if (!edit) return null;
-  const current = schedule[edit.day]?.[edit.shift]?.worker;
+  const currentWorkers = manualWorkerIds(overrides[key] || schedule[edit.day]?.[edit.shift]);
+  const current = currentWorkers[0] || "";
+  const currentDoubles = currentWorkers.slice(1);
   const available = auxiliaries.filter(aux => aux.active !== false);
   const defaultHours = defaultHoursForShift(edit.shift);
   const customHours = hourOverrides?.[key] !== undefined && normalizeSlotHour(hourOverrides[key]) !== null;
@@ -1021,7 +1029,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
       h("div", { className: "title-row" },
         h("div", null,
           h("h3", null, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[month]}`),
-          h("div", { className: "muted" }, `Choisir l'intervenant et ajuster la durée réelle si besoin. Défaut : ${defaultHours}h.`),
+          h("div", { className: "muted" }, `Choisir le titulaire, ajouter des doublons si besoin, et ajuster la durée réelle. Défaut : ${defaultHours}h.`),
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
@@ -1038,22 +1046,47 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
         customHours ? h(Button, { onClick: () => onResetHours(key) }, `Défaut ${defaultHours}h`) : null,
         invalidHours ? h("small", { className: "field-error" }, "Entrez une durée entre 0 et 24h.") : h("small", { className: "muted" }, "Exemples : 6h, 4,5h, 7.25h."),
       ),
-      h("div", { className: "worker-options" }, available.map((aux, index) => {
+      h("div", { className: "slot-editor-section" },
+        h("b", null, "Titulaire principal"),
+        h("div", { className: "worker-options" }, available.map((aux, index) => {
+          const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
+          const preferred = canWorkShift(aux, edit.shift, year, month, edit.day);
+          const hourLabel = data.over > 0 ? `+${data.over}h` : `reste ${data.remaining}h`;
+          return h(Button, {
+            key: aux.id,
+            active: current === aux.id,
+            className: preferred ? "" : "out-of-preference",
+            title: preferred ? "Dans les options de l'auxiliaire" : "Hors options, autorisé en manuel",
+            onClick: () => onChoose(key, aux.id),
+          },
+            h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }),
+            h("span", null, aux.name),
+            h("small", null, preferred ? hourLabel : `${hourLabel} · hors option`),
+          );
+        })),
+      ),
+      h("div", { className: "slot-editor-section" },
+        h("b", null, "Doublons / renforts"),
+        h("div", { className: "muted" }, current ? "Coche les auxiliaires en plus sur le même créneau." : "Choisis d'abord le titulaire principal."),
+        h("div", { className: "worker-options double-options" }, available.map((aux, index) => {
         const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
         const preferred = canWorkShift(aux, edit.shift, year, month, edit.day);
         const hourLabel = data.over > 0 ? `+${data.over}h` : `reste ${data.remaining}h`;
+        const selected = currentDoubles.includes(aux.id);
+        const primary = current === aux.id;
         return h(Button, {
           key: aux.id,
-          active: current === aux.id,
-          className: preferred ? "" : "out-of-preference",
-          title: preferred ? "Dans les options de l'auxiliaire" : "Hors options, autorisé en manuel",
-          onClick: () => onChoose(key, aux.id),
+          active: selected,
+          disabled: !current || primary,
+          className: `${preferred ? "" : "out-of-preference"}${primary ? " primary-worker" : ""}`.trim(),
+          title: primary ? "Déjà titulaire principal" : preferred ? "Ajouter ou retirer le doublon" : "Hors options, autorisé en manuel",
+          onClick: () => onToggleDouble(key, aux.id),
         },
           h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }),
           h("span", null, aux.name),
-          h("small", null, preferred ? hourLabel : `${hourLabel} · hors option`),
+          h("small", null, primary ? "principal" : selected ? "doublon" : preferred ? hourLabel : `${hourLabel} · hors option`),
         );
-      })),
+      }))),
       overrides[key] ? h(Button, { onClick: () => onReset(key) }, "Vider ce créneau") : null,
     ),
   );
@@ -2211,7 +2244,7 @@ export default function App() {
     if (!worker) return alert("Choisissez l'auxiliaire qui reprend le créneau.");
     try {
       const key = overrideKey(request.year, request.month, request.day, request.shift);
-      const nextOverrides = { ...overrides, [key]: worker.id };
+      const nextOverrides = { ...overrides, [key]: setManualPrimaryWorker(overrides[key], worker.id) };
       const nextSchedule = applyManualAssignments({ schedule: emptySchedule, assignments: nextOverrides, hourOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
       const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, hourOverrides, dayOutings };
@@ -2461,7 +2494,11 @@ export default function App() {
       overrides,
       hourOverrides,
       assignedHours,
-      onChoose: (key, worker) => { setOverrides(current => ({ ...current, [key]: worker })); setSlotEdit(null); },
+      onChoose: (key, worker) => setOverrides(current => ({ ...current, [key]: setManualPrimaryWorker(current[key], worker) })),
+      onToggleDouble: (key, worker) => setOverrides(current => {
+        const nextValue = toggleManualDoubleWorker(current[key], worker);
+        return nextValue ? { ...current, [key]: nextValue } : current;
+      }),
       onReset: key => {
         setOverrides(current => { const next = { ...current }; delete next[key]; return next; });
         setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });

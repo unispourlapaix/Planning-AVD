@@ -1,11 +1,11 @@
 import { SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
 import { daysInMonth } from "./dates.js";
 import { defaultHoursForShift, normalizeSlotHour, shiftHourKey } from "./shift-hours.js?v=20260722-custom-hours";
+import { compactManualWorkers, manualWorkerIds, primaryManualWorker } from "./manual-workers.js?v=20260724-day-doubles";
 
 export const scheduleAssignmentKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 
 const emptyShift = shift => ({ id: shift.id, worker: "", workers: [], hours: defaultHoursForShift(shift.id) });
-const primaryWorker = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean)[0] || "" : entry?.worker || "";
 const monthPrefix = (year, month) => `${year}-${month}-`;
 
 export function buildEmptySchedule({ year, month }) {
@@ -22,11 +22,12 @@ export function applyManualAssignments({ schedule, assignments = {}, hourOverrid
   return Object.fromEntries(Object.entries(schedule || {}).map(([day, plan]) => [day, {
     ...plan,
     ...Object.fromEntries(SHIFT_DEFS.map(shift => {
-      const worker = assignments[scheduleAssignmentKey(year, month, day, shift.id)] || "";
+      const workers = manualWorkerIds(assignments[scheduleAssignmentKey(year, month, day, shift.id)]);
+      const worker = workers[0] || "";
       const base = plan?.[shift.id] || emptyShift(shift);
       const customHours = normalizeSlotHour(hourOverrides[shiftHourKey(year, month, day, shift.id)]);
       const hours = customHours === null ? defaultHoursForShift(shift.id) : customHours;
-      return [shift.id, worker ? { ...base, worker, workers: [worker], hours } : { ...emptyShift(shift), hours }];
+      return [shift.id, worker ? { ...base, worker, workers, hours } : { ...emptyShift(shift), hours }];
     })),
   }]));
 }
@@ -35,8 +36,8 @@ export function assignmentsFromSchedule({ schedule = {}, year, month }) {
   const assignments = {};
   Object.values(schedule).forEach(plan => {
     SHIFT_DEFS.forEach(shift => {
-      const worker = primaryWorker(plan?.[shift.id]);
-      if (worker) assignments[scheduleAssignmentKey(year, month, plan.day, shift.id)] = worker;
+      const workers = manualWorkerIds(plan?.[shift.id]);
+      if (primaryManualWorker(workers)) assignments[scheduleAssignmentKey(year, month, plan.day, shift.id)] = compactManualWorkers(workers);
     });
   });
   return assignments;

@@ -1,5 +1,6 @@
 import { MONTHS, SHIFT_LABEL } from "./constants.js?v=20260722-shift-7-5";
 import { defaultHoursForShift, normalizeSlotHour } from "./shift-hours.js?v=20260722-custom-hours";
+import { manualWorkerIds } from "./manual-workers.js?v=20260724-day-doubles";
 
 export const manualOverrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 
@@ -14,10 +15,14 @@ export function parseManualOverrideKey(key) {
 
 export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, year, month, auxiliaries = [] }) {
   const names = Object.fromEntries(auxiliaries.map(aux => [aux.id, aux.name || "A definir"]));
+  const shortName = id => String(names[id] || "A definir").trim().slice(0, 3);
   return Object.entries(overrides)
-    .map(([key, worker]) => {
+    .map(([key, value]) => {
       const parsed = parseManualOverrideKey(key);
+      const workers = manualWorkerIds(value);
+      const worker = workers[0] || "";
       if (!parsed || parsed.year !== year || parsed.month !== month || !worker) return null;
+      const extras = workers.slice(1);
       return {
         key,
         day: parsed.day,
@@ -26,6 +31,8 @@ export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, ye
         monthLabel: MONTHS[month],
         worker,
         workerName: names[worker] || "A definir",
+        extraWorkers: extras,
+        extraNames: extras.map(shortName),
         customHours: normalizeSlotHour(hourOverrides[key]),
         defaultHours: defaultHoursForShift(parsed.shift),
       };
