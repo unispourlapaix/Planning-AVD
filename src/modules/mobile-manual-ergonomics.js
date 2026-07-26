@@ -1,4 +1,4 @@
-import { MONTHS, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { MONTHS, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const manualKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;

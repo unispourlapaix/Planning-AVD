@@ -1,6 +1,6 @@
-import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js?v=20260722-shift-7-5";
+import { MONTHS, SHIFT_DEFS, SHIFT_LABEL } from "./constants.js?v=20260726-normal-slots";
 import { dayIndex, daysInMonth } from "./dates.js";
-import { canWorkShift } from "./scheduler-handover.js?v=20260722-shift-7-5";
+import { canWorkShift } from "./scheduler-handover.js?v=20260726-normal-slots";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primary = entry => workers(entry)[0] || "";
@@ -113,11 +113,11 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
   }
 
   if (brokenWeekendHandovers.length) {
-    add("danger", "Passation du vendredi soir", `Le titulaire du samedi doit commencer le vendredi soir : ${compactDays(brokenWeekendHandovers)}.`);
+    add("info", "Week-end manuel", `Vendredi soir et samedi matin sont differents : ${compactDays(brokenWeekendHandovers)}.`);
   }
 
   if (brokenWeekendBlocks.length) {
-    add("danger", "Week-end coupe", `Samedi et dimanche doivent rester avec le meme titulaire : ${compactDays(brokenWeekendBlocks)}.`);
+    add("info", "Week-end separe", `Samedi et dimanche sont separes : ${compactDays(brokenWeekendBlocks)}.`);
   }
 
   if (mondayRestBreaks.length) {

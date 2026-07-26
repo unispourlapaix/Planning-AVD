@@ -1,6 +1,6 @@
 const FALLBACK_LABELS = {
-  morning: "Matin 7h30-14h30",
-  afternoon: "Après-midi 5h",
+  morning: "Matin",
+  afternoon: "Après-midi",
   night: "Soir",
 };
 
@@ -48,18 +48,4 @@ export const hasDayContinuation = ({ schedule = {}, entriesByDay = {}, calendarB
     && currentEntries.some(entry => entry.shift === "afternoon");
 };
 
-const morningRangeLabel = ({ lateStart, fullDay }) => {
-  if (lateStart) return fullDay ? "Matin 11h-23h" : "Matin 11h-18h";
-  return fullDay ? "Matin 7h30-19h30" : "Matin 7h30-14h30";
-};
-
-export const shiftDisplayLabel = ({ shift, schedule, entriesByDay, calendarByDay, day, worker, name } = {}) => {
-  if (shift === "morning") {
-    const lateStart = hasNightHandover({ schedule, day, worker })
-      || hasPersonalNightHandover({ entriesByDay, day })
-      || hasSharedNightHandover({ calendarByDay, day, name });
-    const fullDay = hasDayContinuation({ schedule, entriesByDay, calendarByDay, day, worker, name });
-    return morningRangeLabel({ lateStart, fullDay });
-  }
-  return FALLBACK_LABELS[shift] || shift;
-};
+export const shiftDisplayLabel = ({ shift } = {}) => FALLBACK_LABELS[shift] || shift;

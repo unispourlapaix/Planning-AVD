@@ -1,4 +1,4 @@
-import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { dayIndex, daysInMonth, isWeekendDay } from "./dates.js";
 import { createHourAccount, creditScheduledHours } from "./hour-accounting.js?v=20260722-custom-hours";
 

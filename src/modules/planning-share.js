@@ -1,7 +1,7 @@
-import { MONTHS } from "./constants.js?v=20260722-shift-7-5";
+import { MONTHS } from "./constants.js?v=20260726-normal-slots";
 import { dayName } from "./dates.js";
 import { publishPersonalPlannings } from "./storage.js?v=20260722-custom-hours";
-import { shiftDisplayLabel } from "./shift-labels.js?v=20260722-shift-7-5";
+import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
 import { hasCustomSlotHours, slotHours } from "./shift-hours.js?v=20260722-custom-hours";
 

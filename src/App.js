@@ -1,7 +1,7 @@
 import React from "react";
-import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js?v=20260722-shift-7-5";
+import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js?v=20260726-normal-slots";
 import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
-import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260722-shift-7-5";
+import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260726-normal-slots";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260702-login-refresh";
 import {
   createPlanningChangeRequest,
@@ -36,13 +36,13 @@ import {
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260722-custom-hours";
 import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js?v=20260724-day-doubles";
 import { buildReportHtml } from "./modules/report.js?v=20260722-custom-hours";
-import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260722-shift-7-5";
+import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260726-manual-weekend-free";
 import { calculateAssignedHours, calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js?v=20260722-custom-hours";
-import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260724-day-doubles";
+import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, removeAutomaticNightMorningAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260726-manual-weekend-free";
 import { manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker } from "./modules/manual-workers.js?v=20260724-day-doubles";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
-import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260722-shift-7-5";
+import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot, personalBreakNoticeForSlot } from "./modules/break-rules.js?v=20260722-custom-hours";
 import { defaultHoursForShift, hasCustomSlotHours, normalizeHourOverrides, normalizeSlotHour, slotHours } from "./modules/shift-hours.js?v=20260722-custom-hours";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
@@ -1000,7 +1000,7 @@ function HoursView({ auxiliaries, hours }) {
         h("div", { className: "summary", style: { marginTop: 8 } },
           h("span", null, `Matin : ${hData.morning || 0}h`),
           h("span", null, `Apres-midi : ${hData.afternoon || 0}h`),
-          h("span", null, `Nuit : ${hData.night || 0}h`),
+          h("span", null, `Soir : ${hData.night || 0}h`),
           h("span", null, `En pause : ${hData.pause}h`),
         ),
       );
@@ -2081,7 +2081,11 @@ export default function App() {
   const planningView = ["month", "week", "hours"].includes(view);
   const applyRotationExample = () => {
     if (manualOverrides.length && !window.confirm("Remplacer les créneaux déjà saisis de ce mois par l'exemple sélectionné ?")) return;
-    const nextAssignments = assignmentsFromSchedule({ schedule: rotationExample.schedule, year, month });
+    const nextAssignments = removeAutomaticNightMorningAssignments({
+      assignments: assignmentsFromSchedule({ schedule: rotationExample.schedule, year, month }),
+      year,
+      month,
+    });
     setOverrides(current => replaceMonthAssignments({ current, next: nextAssignments, year, month }));
     setHourOverrides(current => clearMonthAssignments({ current, year, month }));
     setCloudStatus({ kind: "local", text: "Exemple appliqué" });

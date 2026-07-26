@@ -1,4 +1,4 @@
-import { SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 
 const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 

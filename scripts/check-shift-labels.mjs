@@ -32,24 +32,28 @@ const schedule = {
 };
 
 assert(
-  shiftDisplayLabel({ shift: "morning", schedule, day: 1, worker: "A" }) === "Matin 7h30-19h30",
-  "Un jour complet sans veille doit rester 7h30-19h30",
+  shiftDisplayLabel({ shift: "morning", schedule, day: 1, worker: "A" }) === "Matin",
+  "Le matin doit rester un creneau simple",
 );
 assert(
-  shiftDisplayLabel({ shift: "morning", schedule, day: 2, worker: "B" }) === "Matin 11h-23h",
-  "Un jour complet apres veille doit rester 11h-23h",
+  shiftDisplayLabel({ shift: "morning", schedule, day: 2, worker: "B" }) === "Matin",
+  "Le matin apres veille doit rester un creneau simple",
 );
 assert(
-  shiftDisplayLabel({ shift: "morning", schedule, day: 3, worker: "C" }) === "Matin 7h30-14h30",
-  "Un demi-matin sans veille doit passer a 7h30-14h30",
+  shiftDisplayLabel({ shift: "morning", schedule, day: 3, worker: "C" }) === "Matin",
+  "Le demi-matin doit rester un creneau simple",
 );
 assert(
-  shiftDisplayLabel({ shift: "morning", schedule, day: 4, worker: "E" }) === "Matin 11h-18h",
-  "Un demi-matin apres veille doit passer a 11h-18h",
+  shiftDisplayLabel({ shift: "morning", schedule, day: 4, worker: "E" }) === "Matin",
+  "Le demi-matin apres veille doit rester un creneau simple",
 );
 assert(
-  shiftDisplayLabel({ shift: "afternoon" }) === "Après-midi 5h",
-  "L'apres-midi doit afficher 5h",
+  shiftDisplayLabel({ shift: "afternoon" }) === "Après-midi",
+  "L'apres-midi doit rester un creneau simple",
+);
+assert(
+  shiftDisplayLabel({ shift: "night" }) === "Soir",
+  "Le soir doit rester un creneau simple",
 );
 
-console.log("Controle libelles OK: matin 7h et apres-midi 5h");
+console.log("Controle libelles OK: creneaux simples matin, apres-midi, soir");

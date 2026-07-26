@@ -1,7 +1,7 @@
-import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { dayIndex, monthGrid } from "./dates.js";
 import { mealForDate } from "./meal-planning.js";
-import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260722-shift-7-5";
+import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
 import { hasCustomSlotHours, slotHours } from "./shift-hours.js?v=20260722-custom-hours";
 

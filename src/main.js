@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260722-shift-7-5";
+import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260726-normal-slots";
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260724-day-doubles";
 import { initPersonalTeamCalendar } from "./modules/personal-team-calendar.js?v=20260722-custom-hours";
 import { initMobileManualErgonomics } from "./modules/mobile-manual-ergonomics.js?v=20260624-life-separate";
@@ -20,7 +20,7 @@ window.alert = message => nativeAlert(String(message)
   .replace("Publication impossible", "Sauvegarde impossible"));
 
 const [{ default: App }, { h }] = await Promise.all([
-  import("./App.js?v=20260724-day-doubles"),
+  import("./App.js?v=20260726-manual-weekend-free"),
   import("./ui.js?v=20260702-member-actions"),
 ]);
 const root = ReactDOM.createRoot(document.getElementById("root"));

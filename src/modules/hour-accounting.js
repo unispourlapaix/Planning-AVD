@@ -1,4 +1,4 @@
-import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { daysInMonth } from "./dates.js";
 import { slotHours } from "./shift-hours.js?v=20260722-custom-hours";
 

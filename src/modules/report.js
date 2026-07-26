@@ -1,8 +1,8 @@
-import { MONTHS, SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { MONTHS, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { dayName, daysInMonth } from "./dates.js";
 import { summarizeHours } from "./hour-accounting.js?v=20260722-custom-hours";
 import { mealForDate } from "./meal-planning.js";
-import { shiftDisplayLabel } from "./shift-labels.js?v=20260722-shift-7-5";
+import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
 import { slotHours } from "./shift-hours.js?v=20260722-custom-hours";
 
@@ -54,5 +54,5 @@ export function buildReportHtml({ year, month, beneficiaryName = "", auxiliaries
     .hours{margin-top:18px}.hours td,.hours th{font-size:12px}
   </style></head><body><h1>Planning-AVD - ${MONTHS[month]} ${year}</h1>${beneficiaryLine}<table>${rows.join("")}</table>
   <p>${accountingNote}</p>
-  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Nuit</th><th>Effectue</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
+  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Soir</th><th>Effectue</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
 }

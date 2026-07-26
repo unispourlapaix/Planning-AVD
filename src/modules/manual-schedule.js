@@ -1,4 +1,4 @@
-import { SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { daysInMonth } from "./dates.js";
 import { defaultHoursForShift, normalizeSlotHour, shiftHourKey } from "./shift-hours.js?v=20260722-custom-hours";
 import { compactManualWorkers, manualWorkerIds, primaryManualWorker } from "./manual-workers.js?v=20260724-day-doubles";
@@ -41,6 +41,20 @@ export function assignmentsFromSchedule({ schedule = {}, year, month }) {
     });
   });
   return assignments;
+}
+
+export function removeAutomaticNightMorningAssignments({ assignments = {}, year, month }) {
+  const next = { ...assignments };
+  Object.keys(assignments).forEach(key => {
+    const [rawYear, rawMonth, rawDay, shift] = key.split("-");
+    const day = Number(rawDay);
+    if (Number(rawYear) !== year || Number(rawMonth) !== month || shift !== "morning" || day <= 1) return;
+    const previousNightKey = scheduleAssignmentKey(year, month, day - 1, "night");
+    const morningPrimary = primaryManualWorker(assignments[key]);
+    const previousNightPrimary = primaryManualWorker(assignments[previousNightKey]);
+    if (morningPrimary && morningPrimary === previousNightPrimary) delete next[key];
+  });
+  return next;
 }
 
 export function replaceMonthAssignments({ current = {}, next = {}, year, month }) {

@@ -1,5 +1,5 @@
 import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260628-split-day";
-import { SHIFT_DEFS } from "./constants.js?v=20260722-shift-7-5";
+import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { createHourAccount, creditScheduledHours } from "./hour-accounting.js?v=20260722-custom-hours";
 
 export * from "./scheduler.js?base=20260628-split-day";

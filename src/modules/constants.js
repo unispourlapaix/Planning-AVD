@@ -7,9 +7,9 @@ export const DAYS_LONG = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Sa
 export const DAYS_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
 
 export const SHIFT_DEFS = [
-  { id: "morning", label: "Matin 7h", hours: 7 },
-  { id: "afternoon", label: "Apres-midi 5h", hours: 5 },
-  { id: "night", label: "Nuit", hours: 12 },
+  { id: "morning", label: "Matin", hours: 7 },
+  { id: "afternoon", label: "Après-midi", hours: 5 },
+  { id: "night", label: "Soir", hours: 12 },
 ];
 
 export const SHIFT_LABEL = Object.fromEntries(SHIFT_DEFS.map(shift => [shift.id, shift.label]));

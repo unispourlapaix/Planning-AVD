@@ -1,4 +1,4 @@
-import { MONTHS, SHIFT_LABEL } from "./constants.js?v=20260722-shift-7-5";
+import { MONTHS, SHIFT_LABEL } from "./constants.js?v=20260726-normal-slots";
 import { defaultHoursForShift, normalizeSlotHour } from "./shift-hours.js?v=20260722-custom-hours";
 import { manualWorkerIds } from "./manual-workers.js?v=20260724-day-doubles";
 
