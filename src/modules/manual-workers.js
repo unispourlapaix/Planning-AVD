@@ -1,6 +1,15 @@
 const cleanWorkerId = value => String(value || "").trim();
+const EMPTY_SLOT_MARKER = "__planning_avd_empty_slot__";
+
+export const emptyManualSlot = () => ({ marker: EMPTY_SLOT_MARKER });
+
+export const isManualEmptySlot = value =>
+  value === EMPTY_SLOT_MARKER
+  || value?.marker === EMPTY_SLOT_MARKER
+  || value?.empty === true;
 
 export const manualWorkerIds = value => {
+  if (isManualEmptySlot(value)) return [];
   const raw = Array.isArray(value)
     ? value
     : Array.isArray(value?.workers)
@@ -22,7 +31,7 @@ export const primaryManualWorker = value => manualWorkerIds(value)[0] || "";
 export const setManualPrimaryWorker = (value, worker) => {
   const primary = cleanWorkerId(worker);
   if (!primary) return "";
-  const extras = manualWorkerIds(value).filter(id => id !== primary);
+  const extras = isManualEmptySlot(value) ? [] : manualWorkerIds(value).filter(id => id !== primary);
   return compactManualWorkers([primary, ...extras]);
 };
 

@@ -1,6 +1,6 @@
 import { calculatePerformedHours } from "./hour-accounting.js?v=20260722-custom-hours";
-import { applyManualAssignments, buildEmptySchedule } from "./manual-schedule.js?v=20260726-manual-weekend-free";
-import { isAdminUser, loadState } from "./storage.js?v=20260722-custom-hours";
+import { applyManualAssignments, buildEmptySchedule } from "./manual-schedule.js?v=20260726-empty-slot";
+import { isAdminUser, loadState } from "./storage.js?v=20260726-empty-slot";
 import { sharePlanningByEmail } from "./planning-share.js?v=20260722-custom-hours";
 
 const LOCAL_KEY = "planning-avd-state-v2";

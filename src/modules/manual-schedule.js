@@ -1,7 +1,7 @@
 import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { daysInMonth } from "./dates.js";
 import { defaultHoursForShift, normalizeSlotHour, shiftHourKey } from "./shift-hours.js?v=20260722-custom-hours";
-import { compactManualWorkers, manualWorkerIds, primaryManualWorker } from "./manual-workers.js?v=20260724-day-doubles";
+import { compactManualWorkers, manualWorkerIds, primaryManualWorker } from "./manual-workers.js?v=20260726-empty-slot";
 
 export const scheduleAssignmentKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 

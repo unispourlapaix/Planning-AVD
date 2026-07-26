@@ -32,14 +32,14 @@ import {
   subscribeUserAccess,
   subscribePersonalChangeRequests,
   subscribePersonalPlanning,
-} from "./modules/storage.js?v=20260722-custom-hours";
+} from "./modules/storage.js?v=20260726-empty-slot";
 import { buildCleanPlanningHtml } from "./modules/clean-planning.js?v=20260722-custom-hours";
-import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js?v=20260724-day-doubles";
+import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-overrides.js?v=20260726-empty-slot";
 import { buildReportHtml } from "./modules/report.js?v=20260722-custom-hours";
 import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260726-manual-weekend-free";
 import { calculateAssignedHours, calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js?v=20260722-custom-hours";
-import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, removeAutomaticNightMorningAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260726-manual-weekend-free";
-import { manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker } from "./modules/manual-workers.js?v=20260724-day-doubles";
+import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, removeAutomaticNightMorningAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260726-empty-slot";
+import { emptyManualSlot, isManualEmptySlot, manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker } from "./modules/manual-workers.js?v=20260726-empty-slot";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
 import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260726-normal-slots";
@@ -866,7 +866,7 @@ function ManualOverridesPanel({ items, onReset }) {
         h("b", null, item.shiftLabel),
         h("small", null, `${item.workerName}${item.extraNames?.length ? ` + ${item.extraNames.join(", ")}` : ""}${item.customHours !== null && item.customHours !== item.defaultHours ? ` · ${item.customHours}h` : ""}`),
       ),
-      h(Button, { onClick: () => onReset(item.key) }, "Vider"),
+      h(Button, { onClick: () => onReset(item.key, item.empty) }, item.empty ? "Retirer" : "Vider"),
     ))),
     items.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${items.length - visible.length} autre(s) affectation(s).`) : null,
   );
@@ -938,7 +938,9 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
       const worker = workers[0];
       const extraWorkers = workers.slice(1);
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
-      const manual = !!overrides?.[overrideKey(year, month, day, shift.id)];
+      const overrideValue = overrides?.[overrideKey(year, month, day, shift.id)];
+      const manual = !!overrideValue;
+      const manualEmpty = isManualEmptySlot(overrideValue);
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
       const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
       const customHours = hasCustomSlotHours(plan?.[shift.id], shift.id);
@@ -956,7 +958,7 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
           ) : null,
           customHours ? h("span", { className: "hour-badge", title: "Durée réelle modifiée" }, `${slotHours(plan?.[shift.id], shift.id)}h`) : null,
           notice ? h("span", { className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
-          manual ? h("span", { className: "manual-badge" }, "Saisi") : null,
+          manual ? h("span", { className: "manual-badge" }, manualEmpty ? "Vidé" : "Saisi") : null,
         ),
       );
     }),
@@ -1019,6 +1021,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
   const currentWorkers = manualWorkerIds(overrides[key] || schedule[edit.day]?.[edit.shift]);
   const current = currentWorkers[0] || "";
   const currentDoubles = currentWorkers.slice(1);
+  const manualEmpty = isManualEmptySlot(overrides[key]);
   const available = auxiliaries.filter(aux => aux.active !== false);
   const defaultHours = defaultHoursForShift(edit.shift);
   const customHours = hourOverrides?.[key] !== undefined && normalizeSlotHour(hourOverrides[key]) !== null;
@@ -1087,7 +1090,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
           h("small", null, primary ? "principal" : selected ? "doublon" : preferred ? hourLabel : `${hourLabel} · hors option`),
         );
       }))),
-      overrides[key] ? h(Button, { onClick: () => onReset(key) }, "Vider ce créneau") : null,
+      overrides[key] ? h(Button, { onClick: () => onReset(key, manualEmpty) }, manualEmpty ? "Retirer la saisie vide" : "Vider ce créneau") : null,
     ),
   );
 }
@@ -2478,8 +2481,13 @@ export default function App() {
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
-      planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: key => {
-        setOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+      planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: (key, alreadyEmpty) => {
+        setOverrides(current => {
+          const next = { ...current };
+          if (alreadyEmpty) delete next[key];
+          else next[key] = emptyManualSlot();
+          return next;
+        });
         setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });
       } }) : null,
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
@@ -2503,8 +2511,13 @@ export default function App() {
         const nextValue = toggleManualDoubleWorker(current[key], worker);
         return nextValue ? { ...current, [key]: nextValue } : current;
       }),
-      onReset: key => {
-        setOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+      onReset: (key, alreadyEmpty) => {
+        setOverrides(current => {
+          const next = { ...current };
+          if (alreadyEmpty) delete next[key];
+          else next[key] = emptyManualSlot();
+          return next;
+        });
         setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });
         setSlotEdit(null);
       },

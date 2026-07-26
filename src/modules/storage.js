@@ -1,4 +1,5 @@
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
+import { isManualEmptySlot } from "./manual-workers.js?v=20260726-empty-slot";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
@@ -131,6 +132,15 @@ const buildSyncedAuxiliaryMember = ({ email, name = "", active = true, updatedBy
   if (!role) delete payload.role;
   return payload;
 };
+const mergeOverrides = (localOverrides, cloudOverrides) => {
+  const local = localOverrides && typeof localOverrides === "object" ? localOverrides : {};
+  if (!cloudOverrides || typeof cloudOverrides !== "object") return local;
+  const cloud = cloudOverrides;
+  return {
+    ...cloud,
+    ...Object.fromEntries(Object.entries(local).filter(([, value]) => isManualEmptySlot(value))),
+  };
+};
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
   if (!local) return cloud;
@@ -138,7 +148,7 @@ const mergeSavedState = (local, cloud) => {
     ...local,
     ...cloud,
     auxiliaries: hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
-    overrides: cloud.overrides && typeof cloud.overrides === "object" ? cloud.overrides : local.overrides,
+    overrides: mergeOverrides(local.overrides, cloud.overrides),
     hourOverrides: cloud.hourOverrides && typeof cloud.hourOverrides === "object" ? cloud.hourOverrides : local.hourOverrides,
     dayOutings: cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
   };

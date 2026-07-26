@@ -1,6 +1,6 @@
 import { MONTHS, SHIFT_LABEL } from "./constants.js?v=20260726-normal-slots";
 import { defaultHoursForShift, normalizeSlotHour } from "./shift-hours.js?v=20260722-custom-hours";
-import { manualWorkerIds } from "./manual-workers.js?v=20260724-day-doubles";
+import { isManualEmptySlot, manualWorkerIds } from "./manual-workers.js?v=20260726-empty-slot";
 
 export const manualOverrideKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
 
@@ -19,9 +19,10 @@ export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, ye
   return Object.entries(overrides)
     .map(([key, value]) => {
       const parsed = parseManualOverrideKey(key);
+      const empty = isManualEmptySlot(value);
       const workers = manualWorkerIds(value);
       const worker = workers[0] || "";
-      if (!parsed || parsed.year !== year || parsed.month !== month || !worker) return null;
+      if (!parsed || parsed.year !== year || parsed.month !== month || (!worker && !empty)) return null;
       const extras = workers.slice(1);
       return {
         key,
@@ -30,7 +31,8 @@ export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, ye
         shiftLabel: SHIFT_LABEL[parsed.shift] || parsed.shift,
         monthLabel: MONTHS[month],
         worker,
-        workerName: names[worker] || "A definir",
+        workerName: empty ? "Créneau vidé" : names[worker] || "A definir",
+        empty,
         extraWorkers: extras,
         extraNames: extras.map(shortName),
         customHours: normalizeSlotHour(hourOverrides[key]),
