@@ -399,13 +399,14 @@ h2 { font-size: 16px; }
   max-width: 28px;
   padding: 1px 4px;
   border-radius: 999px;
-  border: 1px solid rgba(134,154,166,.26);
-  background: rgba(255,255,255,.78);
-  color: #7b5db5;
+  border: 1px solid rgba(123,93,181,.38);
+  background: rgba(246,241,255,.96);
+  color: #493078;
   font-size: 7px;
   line-height: 1.2;
   font-weight: 900;
   text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
 }
 .break-badge {
   flex: 0 0 auto;
@@ -521,6 +522,14 @@ h2 { font-size: 16px; }
 .worker-options .btn:disabled { cursor: not-allowed; filter: saturate(.78); }
 .worker-options .btn span:not(.worker-dot) { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 .worker-options .btn small { margin-left: auto; color: #697981; font-size: 10px; font-weight: 900; white-space: nowrap; }
+.double-options .btn.active {
+  background: rgba(246,241,255,.96);
+  color: #493078;
+  border-color: rgba(123,93,181,.42);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92), 0 6px 14px rgba(83,63,132,.10);
+}
+.double-options .btn.active small { color: #6a4ca2; }
+.double-options .btn.active .worker-dot { box-shadow: 0 0 0 2px rgba(255,255,255,.92), 0 0 0 4px rgba(123,93,181,.20); }
 .worker-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
 .meal-planner {
   width: min(980px, 100%);
