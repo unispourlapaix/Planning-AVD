@@ -1326,6 +1326,22 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
   );
 }
 
+function CloudConflictNotice({ conflict, onReload }) {
+  if (!conflict) return null;
+  const actor = String(conflict.updatedBy || "").trim();
+  const dateText = formatDashboardDate(conflict.currentBeneficiaryUpdatedAt || conflict.currentUpdatedAt);
+  return h("section", { className: "panel cloud-conflict-banner" },
+    h("div", null,
+      h("h3", null, "Modification cloud détectée"),
+      h("div", { className: "muted" }, actor
+        ? `Dernière modification par ${actor} · ${dateText}`
+        : `Une autre version existe dans le cloud · ${dateText}`),
+      h("small", null, "Rechargez pour récupérer la version partagée. Le bouton Sauvegarder cloud demandera une confirmation avant tout écrasement volontaire."),
+    ),
+    h(Button, { active: true, onClick: onReload }, h(IconLabel, { icon: "restore", label: "Recharger" })),
+  );
+}
+
 function ShareReminder({ dashboard, year, month, onSharePlanning }) {
   const today = new Date();
   const currentPeriod = periodKey(year, month);
@@ -1754,18 +1770,27 @@ export default function App() {
   const [beneficiarySwitching, setBeneficiarySwitching] = useState(false);
   const [groupDashboard, setGroupDashboard] = useState(null);
   const [cloudStatus, setCloudStatus] = useState({ kind: "local", text: "Local uniquement" });
+  const [cloudConflict, setCloudConflict] = useState(null);
   const [accountingNow, setAccountingNow] = useState(() => new Date());
   const cloudBaseUpdatedAtRef = useRef(undefined);
+  const cloudBeneficiaryUpdatedAtRef = useRef(undefined);
   const cloudWriteReadyRef = useRef(false);
   const lastSavedSignatureRef = useRef("");
   const beneficiaryGroupSignatureRef = useRef("");
+  const rememberCloudVersion = result => {
+    if (!result?.cloud) return;
+    cloudBaseUpdatedAtRef.current = result.updatedAt || cloudBaseUpdatedAtRef.current;
+    cloudBeneficiaryUpdatedAtRef.current = result.beneficiaryUpdatedAt || result.updatedAt || cloudBeneficiaryUpdatedAtRef.current;
+  };
   const setCloudResult = result => {
     if (result?.cloud) {
+      setCloudConflict(null);
       setCloudStatus({ kind: "saved", text: `Cloud sauvegardé ${formatCloudTime()}` });
       return;
     }
     if (result?.reason === "conflict") {
-      setCloudStatus({ kind: "error", text: "Cloud plus récent" });
+      setCloudConflict(result);
+      setCloudStatus({ kind: "error", text: "Cloud modifié ailleurs" });
       return;
     }
     if (result?.reason === "not-connected") {
@@ -1865,6 +1890,22 @@ export default function App() {
       onError: error => console.warn("Tableau de bord groupe indisponible.", error),
     });
   }, [authState.db, authState.user, sessionRole.ready, sessionRole.isAdmin, beneficiaryGroupReady, beneficiaryId]);
+
+  useEffect(() => {
+    const remoteUpdatedAt = String(groupDashboard?.beneficiary?.value?.updatedAt || "").trim();
+    if (!authState.user || !sessionRole.isAdmin || !remoteUpdatedAt || cloudBeneficiaryUpdatedAtRef.current === undefined) return;
+    if (remoteUpdatedAt === cloudBeneficiaryUpdatedAtRef.current) return;
+    const updatedBy = groupDashboard?.beneficiary?.updatedBy || "";
+    setCloudConflict({
+      local: true,
+      cloud: false,
+      reason: "conflict",
+      scope: "beneficiary",
+      currentBeneficiaryUpdatedAt: remoteUpdatedAt,
+      updatedBy,
+    });
+    setCloudStatus({ kind: "error", text: "Cloud modifié ailleurs" });
+  }, [groupDashboard, authState.user, sessionRole.isAdmin]);
 
   useEffect(() => {
     if (!personalMode) {
@@ -2007,7 +2048,9 @@ export default function App() {
       const cloudMeta = saved?.__cloud || {};
       cloudWriteReadyRef.current = !authState.user || cloudMeta.ready === true;
       cloudBaseUpdatedAtRef.current = authState.user && cloudMeta.ready === true ? cloudMeta.updatedAt || "" : undefined;
+      cloudBeneficiaryUpdatedAtRef.current = authState.user && cloudMeta.ready === true ? cloudMeta.beneficiaryUpdatedAt || cloudMeta.updatedAt || "" : undefined;
       lastSavedSignatureRef.current = stateSignature(nextState);
+      setCloudConflict(null);
       if (authState.user && cloudMeta.ready === false) {
         setCloudStatus({ kind: "error", text: "Lecture cloud bloquée" });
       } else if (authState.user && cloudMeta.ready === true && cloudMeta.exists) {
@@ -2063,9 +2106,10 @@ export default function App() {
       user: authState.user,
       state: currentState,
       expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
+      expectedBeneficiaryUpdatedAt: authState.user ? cloudBeneficiaryUpdatedAtRef.current : undefined,
     }).then(result => {
       setCloudResult(result);
-      if (result?.cloud) cloudBaseUpdatedAtRef.current = result.updatedAt || cloudBaseUpdatedAtRef.current;
+      rememberCloudVersion(result);
       if (result?.cloud || result?.reason === "not-connected") lastSavedSignatureRef.current = signature;
     }), 450);
     return () => clearTimeout(id);
@@ -2112,6 +2156,7 @@ export default function App() {
       user: authState.user,
       state: currentState,
       expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
+      expectedBeneficiaryUpdatedAt: authState.user ? cloudBeneficiaryUpdatedAtRef.current : undefined,
     });
     if (baseResult?.reason !== "conflict") return baseResult;
     const overwrite = window.confirm([
@@ -2181,7 +2226,7 @@ export default function App() {
           : `Sauvegarde cloud impossible : ${cloudResult?.error || "réessayez plus tard."}`);
         return;
       }
-      cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
+      rememberCloudVersion(cloudResult);
       lastSavedSignatureRef.current = signature;
       const count = await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, beneficiaryId, beneficiaryName, auxiliaries: activeAux, schedule, hours, dayOutings });
       alert(`Planning sauvegardé pour ${count} auxiliaire(s). ${cloudResult?.forced ? "Cloud écrasé volontairement." : "Sauvegarde cloud à jour."}`);
@@ -2215,7 +2260,7 @@ export default function App() {
           : `Partage impossible : ${cloudResult?.error || "réessayez plus tard."}`);
         return;
       }
-      cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
+      rememberCloudVersion(cloudResult);
       lastSavedSignatureRef.current = signature;
       const count = await sharePlanningByEmail({ db: authState.db, user: authState.user, year, month, beneficiaryId, beneficiaryName, auxiliaries: activeAux, schedule, hours, dayOutings });
       setCloudStatus({ kind: "saved", text: `Email prêt · ${count} auxiliaire(s)` });
@@ -2256,20 +2301,17 @@ export default function App() {
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
       const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, hourOverrides, dayOutings };
       const signature = stateSignature(nextState);
-      const cloudResult = await saveState({
-        db: authState.db,
-        user: authState.user,
-        state: nextState,
-        expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
-      });
+      const cloudResult = await saveStateWithOverwriteOption(nextState);
       setCloudResult(cloudResult);
       if (!cloudResult?.cloud) {
-        alert(cloudResult?.reason === "conflict"
+        alert(cloudResult?.reason === "overwrite-cancelled"
+          ? "Validation annulée : la version cloud a été conservée."
+          : cloudResult?.reason === "conflict"
           ? "Validation bloquée : une version cloud plus récente existe. Rechargez l'app avant de valider."
           : `Validation bloquée : ${cloudResult?.error || "cloud non sauvegardé."}`);
         return;
       }
-      cloudBaseUpdatedAtRef.current = cloudResult.updatedAt || cloudBaseUpdatedAtRef.current;
+      rememberCloudVersion(cloudResult);
       lastSavedSignatureRef.current = signature;
       setOverrides(nextOverrides);
       await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, beneficiaryId, beneficiaryName, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours, dayOutings });
@@ -2338,6 +2380,11 @@ export default function App() {
     try {
       const next = await loadBeneficiaryState({ db: authState.db, user: authState.user, beneficiaryId: cleanId });
       const restored = applyRestoredPlanningState(next);
+      const cloudMeta = next?.__cloud || {};
+      cloudWriteReadyRef.current = true;
+      cloudBaseUpdatedAtRef.current = cloudMeta.updatedAt || restored.updatedAt || "";
+      cloudBeneficiaryUpdatedAtRef.current = cloudMeta.beneficiaryUpdatedAt || cloudMeta.updatedAt || restored.updatedAt || "";
+      setCloudConflict(null);
       beneficiaryGroupSignatureRef.current = "";
       lastSavedSignatureRef.current = "";
       setCloudStatus({ kind: "saving", text: `Dossier ${restored.beneficiaryName || "bénéficiaire"} chargé` });
@@ -2367,8 +2414,10 @@ export default function App() {
       dayOutings: {},
     };
     applyRestoredPlanningState(next);
+    cloudBeneficiaryUpdatedAtRef.current = "";
     beneficiaryGroupSignatureRef.current = "";
     lastSavedSignatureRef.current = "";
+    setCloudConflict(null);
     setCloudStatus({ kind: "saving", text: "Nouveau dossier créé" });
   };
 
@@ -2427,6 +2476,7 @@ export default function App() {
       const restored = applyRestoredPlanningState(backup.value);
       cloudWriteReadyRef.current = true;
       cloudBaseUpdatedAtRef.current = backup.currentUpdatedAt || cloudBaseUpdatedAtRef.current;
+      cloudBeneficiaryUpdatedAtRef.current = backup.currentBeneficiaryUpdatedAt || backup.currentUpdatedAt || cloudBeneficiaryUpdatedAtRef.current;
       setCloudStatus({ kind: "saving", text: "Secours restauré" });
       alert(`Sauvegarde de secours restauree : ${MONTHS[restored.month]} ${restored.year}. Elle va redevenir la sauvegarde cloud active.`);
     } catch (error) {
@@ -2474,6 +2524,7 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
+      sessionRole.isAdmin ? h(CloudConflictNotice, { conflict: cloudConflict, onReload: () => window.location.reload() }) : null,
       sessionRole.isAdmin ? h(ShareReminder, { dashboard: groupDashboard, year, month, onSharePlanning: sharePlanningEmail }) : null,
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onClearMonth: clearMonthPlanning }) : null,

@@ -171,6 +171,10 @@ h2 { font-size: 16px; }
 .share-reminder { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-color: rgba(212,106,168,.34); background: linear-gradient(135deg, rgba(255,250,254,.9), rgba(240,248,255,.88)); }
 .share-reminder h3 { margin: 0 0 3px; color: #8e2d62; }
 .share-reminder .btn { white-space: nowrap; }
+.cloud-conflict-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-color: rgba(212,106,168,.48); background: linear-gradient(135deg, rgba(255,246,251,.94), rgba(241,248,255,.92)); }
+.cloud-conflict-banner h3 { margin: 0 0 3px; color: #9a2b62; }
+.cloud-conflict-banner small { display: block; margin-top: 4px; color: #596976; font-size: 11px; font-weight: 800; line-height: 1.35; }
+.cloud-conflict-banner .btn { flex: 0 0 auto; white-space: nowrap; }
 .btn {
   border: 1px solid rgba(255,255,255,.95);
   border-radius: 8px;
@@ -649,6 +653,7 @@ h2 { font-size: 16px; }
   .first-role-choice { min-height: auto; }
   .new-beneficiary-admin-banner { align-items: stretch; flex-direction: column; }
   .share-reminder { align-items: stretch; flex-direction: column; }
+  .cloud-conflict-banner { align-items: stretch; flex-direction: column; }
   .personal-beneficiary-picker { grid-template-columns: 1fr; }
   .personal-planning-scroll { max-height: min(620px, 58vh); }
   .personal-month-list { grid-template-columns: 1fr; }

@@ -102,6 +102,11 @@ const withLoadMeta = (state, meta) => ({
   ...(state || {}),
   __cloud: meta,
 });
+const savedStateUpdatedAt = value => String(value?.updatedAt || "");
+const beneficiaryDocumentUpdatedAt = data => savedStateUpdatedAt(data?.value);
+const latestSavedState = (...states) => states
+  .filter(Boolean)
+  .sort((a, b) => timestampScore(savedStateUpdatedAt(b)) - timestampScore(savedStateUpdatedAt(a)))[0] || null;
 const stateMonthKey = value => `${Number(value?.year) || new Date().getFullYear()}-${String((Number(value?.month) || 0) + 1).padStart(2, "0")}`;
 const stateRestoreKey = value => `${String(value?.beneficiaryId || "legacy")}-${stateMonthKey(value)}`;
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
@@ -227,13 +232,28 @@ export async function loadState({ db, user }) {
   if (!db || !user?.uid) return withLoadMeta(local, { ready: false, exists: false, source: local ? "local" : "empty", reason: "not-connected" });
   try {
     const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
-    const cloud = snap.exists ? migrateState(snap.data().value) : null;
-    const merged = ensureBeneficiaryIdentity(snap.exists ? mergeSavedState(local, cloud) : local);
+    const userCloud = snap.exists ? migrateState(snap.data().value) : null;
+    const beneficiaryId = String(userCloud?.beneficiaryId || local?.beneficiaryId || "").trim();
+    let beneficiaryCloud = null;
+    let beneficiaryData = null;
+    if (beneficiaryId) {
+      const beneficiarySnap = await beneficiaryRoot(db, beneficiaryId).get().catch(error => {
+        console.warn("Lecture dossier bénéficiaire impossible, repli sauvegarde utilisateur.", error);
+        return null;
+      });
+      beneficiaryData = beneficiarySnap?.exists ? beneficiarySnap.data() : null;
+      beneficiaryCloud = beneficiaryData?.value ? migrateState(beneficiaryData.value) : null;
+    }
+    const cloud = latestSavedState(beneficiaryCloud, userCloud);
+    const merged = ensureBeneficiaryIdentity(beneficiaryCloud ? beneficiaryCloud : userCloud ? mergeSavedState(local, userCloud) : local);
+    const beneficiaryUpdatedAt = beneficiaryDocumentUpdatedAt(beneficiaryData) || savedStateUpdatedAt(cloud);
     return withLoadMeta(merged, {
       ready: true,
-      exists: snap.exists,
-      source: snap.exists ? "cloud" : local ? "local" : "empty",
-      updatedAt: merged?.updatedAt || cloud?.updatedAt || "",
+      exists: snap.exists || !!beneficiaryCloud,
+      source: cloud ? beneficiaryCloud === cloud ? "beneficiary-cloud" : "cloud" : local ? "local" : "empty",
+      updatedAt: savedStateUpdatedAt(cloud) || savedStateUpdatedAt(merged),
+      beneficiaryUpdatedAt,
+      updatedBy: beneficiaryData?.updatedBy || snap.data?.()?.updatedBy || "",
     });
   } catch (error) {
     console.warn("Lecture cloud impossible, repli local.", error);
@@ -247,7 +267,7 @@ export async function loadState({ db, user }) {
   }
 }
 
-export async function saveState({ db, user, state, expectedUpdatedAt, force = false }) {
+export async function saveState({ db, user, state, expectedUpdatedAt, expectedBeneficiaryUpdatedAt, force = false }) {
   const value = { ...ensureBeneficiaryIdentity(stripStateMeta(state)), rotationRevision: ROTATION_REVISION, updatedAt: new Date().toISOString() };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(value));
   if (!db || !user?.uid) return { local: true, cloud: false, reason: "not-connected" };
@@ -268,6 +288,23 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
         reason: "conflict",
         error: "Une sauvegarde cloud plus récente existe. Rechargez avant de sauvegarder.",
         currentUpdatedAt,
+      };
+    }
+    const rootRef = beneficiaryRoot(db, value.beneficiaryId);
+    const rootSnap = await rootRef.get();
+    const rootData = rootSnap.exists ? rootSnap.data() : null;
+    const currentBeneficiaryUpdatedAt = beneficiaryDocumentUpdatedAt(rootData);
+    const expectedBeneficiaryProvided = expectedBeneficiaryUpdatedAt !== undefined;
+    if (!force && currentBeneficiaryUpdatedAt && (!expectedBeneficiaryProvided || currentBeneficiaryUpdatedAt !== String(expectedBeneficiaryUpdatedAt || ""))) {
+      return {
+        local: true,
+        cloud: false,
+        reason: "conflict",
+        scope: "beneficiary",
+        error: "Le dossier cloud a été modifié par un autre administrateur. Rechargez avant de sauvegarder.",
+        currentUpdatedAt,
+        currentBeneficiaryUpdatedAt,
+        updatedBy: rootData?.updatedBy || "",
       };
     }
     const currentValue = currentSnap.exists ? migrateState(currentSnap.data()?.value) : null;
@@ -301,7 +338,7 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
     }, { merge: true });
-    await beneficiaryRoot(db, value.beneficiaryId).set({
+    await rootRef.set({
       beneficiaryId: value.beneficiaryId,
       beneficiaryName: String(value.beneficiaryName || "").trim(),
       value,
@@ -317,7 +354,7 @@ export async function saveState({ db, user, state, expectedUpdatedAt, force = fa
       user,
       detail: `${stateMonthKey(value)} · ${value.auxiliaries?.filter?.(aux => aux.active !== false).length || 0} auxiliaire(s)`,
     });
-    return { local: true, cloud: true, updatedAt: value.updatedAt };
+    return { local: true, cloud: true, updatedAt: value.updatedAt, beneficiaryUpdatedAt: value.updatedAt };
   } catch (error) {
     console.warn("Sauvegarde cloud impossible, conservee en local.", error);
     return { local: true, cloud: false, reason: "error", error: error.message || "Sauvegarde cloud impossible" };
@@ -383,10 +420,34 @@ export function subscribeUserBeneficiaries({ db, user, onChange, onError }) {
 export async function loadBeneficiaryState({ db, user, beneficiaryId }) {
   const safeBeneficiaryId = String(beneficiaryId || "").trim();
   if (!db || !user?.uid || !safeBeneficiaryId) throw new Error("Bénéficiaire introuvable.");
-  const snap = await userBeneficiaryRef(db, user, safeBeneficiaryId).get();
-  if (snap.exists && snap.data()?.value) return ensureBeneficiaryIdentity(migrateState(snap.data().value));
-  const sharedSnap = await beneficiaryRoot(db, safeBeneficiaryId).get();
-  if (sharedSnap.exists && sharedSnap.data()?.value) return ensureBeneficiaryIdentity(migrateState(sharedSnap.data().value));
+  const [snap, sharedSnap] = await Promise.all([
+    userBeneficiaryRef(db, user, safeBeneficiaryId).get().catch(() => null),
+    beneficiaryRoot(db, safeBeneficiaryId).get().catch(() => null),
+  ]);
+  const sharedData = sharedSnap?.exists ? sharedSnap.data() : null;
+  const sharedValue = sharedData?.value ? ensureBeneficiaryIdentity(migrateState(sharedData.value)) : null;
+  if (sharedValue) {
+    return withLoadMeta(sharedValue, {
+      ready: true,
+      exists: true,
+      source: "beneficiary-cloud",
+      updatedAt: savedStateUpdatedAt(sharedValue),
+      beneficiaryUpdatedAt: beneficiaryDocumentUpdatedAt(sharedData) || savedStateUpdatedAt(sharedValue),
+      updatedBy: sharedData?.updatedBy || "",
+    });
+  }
+  const userData = snap?.exists ? snap.data() : null;
+  const userValue = userData?.value ? ensureBeneficiaryIdentity(migrateState(userData.value)) : null;
+  if (userValue) {
+    return withLoadMeta(userValue, {
+      ready: true,
+      exists: true,
+      source: "cloud",
+      updatedAt: savedStateUpdatedAt(userValue),
+      beneficiaryUpdatedAt: savedStateUpdatedAt(userValue),
+      updatedBy: userData?.updatedBy || "",
+    });
+  }
   throw new Error("Sauvegarde bénéficiaire introuvable.");
 }
 
@@ -461,11 +522,14 @@ export async function loadRestoreBackup({ db, user }) {
     appRef.doc("state").get(),
   ]);
   if (!snap.exists || !snap.data()?.value) throw new Error("Aucune sauvegarde de restauration disponible.");
+  const value = migrateState(snap.data().value);
+  const rootSnap = value?.beneficiaryId ? await beneficiaryRoot(db, value.beneficiaryId).get().catch(() => null) : null;
   return {
-    value: migrateState(snap.data().value),
-    month: snap.data()?.month || stateMonthKey(snap.data().value),
+    value,
+    month: snap.data()?.month || stateMonthKey(value),
     sourceUpdatedAt: snap.data()?.sourceUpdatedAt || "",
     currentUpdatedAt: stateSnap.exists ? stateSnap.data()?.value?.updatedAt || "" : "",
+    currentBeneficiaryUpdatedAt: rootSnap?.exists ? beneficiaryDocumentUpdatedAt(rootSnap.data()) : "",
   };
 }
 
