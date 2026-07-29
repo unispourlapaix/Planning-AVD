@@ -393,8 +393,19 @@ h2 { font-size: 16px; }
 .manual-slot { border-color: rgba(212,106,168,.48); background: linear-gradient(90deg, rgba(255,240,247,.96), rgba(255,255,255,.82)); box-shadow: inset 3px 0 0 rgba(212,106,168,.42); }
 .manual-slot .slot-label { color: #8e2d62; border-color: rgba(212,106,168,.34); }
 .slot-label { color: #6c7b83; font-size: 7px; line-height: 1.05; font-weight: 900; background: rgba(255,255,255,.92); border: 1px solid #dfe8eb; border-radius: 5px; text-align: left; padding: 2px 3px; text-transform: uppercase; }
-.slot-content { min-width: 0; display: flex; align-items: center; gap: 4px; }
-.slot-name { font-size: 11px; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-content { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.slot-name { font-size: 10px; font-weight: 900; min-width: 0; overflow-wrap: anywhere; white-space: normal; line-height: 1.08; }
+.slot-person-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid rgba(123,175,212,.38);
+  border-radius: 999px;
+  background: rgba(241,246,248,.9);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.92);
+}
+.slot-person-pill.empty { color: #746d61; background: rgba(247,248,249,.82); border-color: rgba(213,225,229,.86); }
 .double-stack { display: inline-flex; flex: 0 0 auto; gap: 2px; align-items: center; }
 .double-chip {
   display: inline-grid;
@@ -508,11 +519,31 @@ h2 { font-size: 16px; }
 .progress span { display: block; height: 100%; background: #8b9a7a; }
 .report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 18px; background: rgba(49,58,55,.28); backdrop-filter: blur(7px); }
-.slot-editor { width: min(460px, 100%); max-height: min(620px, 90vh); overflow: auto; display: grid; gap: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.94); border: 1px solid rgba(255,255,255,.98); box-shadow: 0 24px 54px rgba(67,80,94,.24); }
+.slot-editor { width: min(560px, 100%); max-height: min(640px, 90vh); overflow: auto; display: grid; gap: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.94); border: 1px solid rgba(255,255,255,.98); box-shadow: 0 24px 54px rgba(67,80,94,.24); }
 .slot-editor h3 { margin: 0 0 4px; }
 .slot-editor-section { display: grid; gap: 7px; }
 .slot-editor-section > b { color: #425762; font-size: 12px; }
+.slot-editor-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(213,225,229,.88);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(248,252,253,.92), rgba(255,250,254,.88));
+}
+.slot-editor-current span { color: #697981; font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.slot-editor-current b { color: #344753; font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+.slot-editor-current.empty { background: rgba(247,248,249,.9); }
+.slot-editor-current.empty b { color: #8e2d62; }
 .slot-hours-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
+.slot-hours-row.compact-hours {
+  padding: 8px;
+  border: 1px solid rgba(213,225,229,.72);
+  border-radius: 10px;
+  background: rgba(250,253,254,.72);
+}
 .slot-hours-row .field { margin: 0; }
 .slot-hours-row .btn { min-height: 38px; }
 .slot-hours-row small { grid-column: 1 / -1; font-size: 10px; font-weight: 800; }
@@ -535,6 +566,72 @@ h2 { font-size: 16px; }
 .double-options .btn.active small { color: #6a4ca2; }
 .double-options .btn.active .worker-dot { box-shadow: 0 0 0 2px rgba(255,255,255,.92), 0 0 0 4px rgba(123,93,181,.20); }
 .worker-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
+.worker-pill-grid { display: grid; gap: 7px; }
+.main-pill-grid { grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); }
+.support-pill-grid { grid-template-columns: repeat(auto-fit, minmax(142px, 1fr)); }
+.worker-pill {
+  min-width: 0;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(213,225,229,.9);
+  border-radius: 999px;
+  background: rgba(255,255,255,.84);
+  color: #344753;
+  text-align: left;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.96), 0 6px 14px rgba(84,111,124,.08);
+  transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.worker-pill:hover, .worker-pill:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--worker-color) 52%, #ffffff);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.96), 0 9px 18px rgba(84,111,124,.12);
+}
+.worker-pill.active {
+  border-color: color-mix(in srgb, var(--worker-color) 58%, #ffffff);
+  background: linear-gradient(135deg, var(--worker-bg), rgba(255,255,255,.92));
+  color: var(--worker-text);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.96), 0 8px 18px rgba(84,111,124,.1);
+}
+.worker-pill.out-of-preference:not(.active) {
+  border-style: dashed;
+  background: rgba(255,248,239,.82);
+}
+.worker-pill.primary-worker {
+  opacity: .62;
+  cursor: default;
+}
+.worker-pill:disabled { cursor: not-allowed; filter: saturate(.75); }
+.worker-pill-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--worker-color);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 0 0 4px color-mix(in srgb, var(--worker-color) 28%, transparent);
+}
+.worker-pill-main { min-width: 0; display: grid; gap: 1px; }
+.worker-pill-main b {
+  min-width: 0;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.12;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.worker-pill-main small {
+  color: #697981;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: normal;
+}
+.worker-pill.active .worker-pill-main small { color: color-mix(in srgb, var(--worker-text) 70%, #697981); }
+.support-pill-grid .worker-pill { min-height: 40px; padding: 7px 9px; }
+.slot-editor-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .meal-planner {
   width: min(980px, 100%);
   max-height: 92vh;

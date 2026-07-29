@@ -58,12 +58,27 @@ const ROTATION_OPTIONS = [
   { value: 3, label: "Roulement 3 jours", detail: "Bloc plus stable, toujours termine au matin." },
   { value: 4, label: "Roulement 4 jours", detail: "Longue presence, passage au suivant apres le matin." },
 ];
+const AUX_DAY_OPTIONS = [
+  { value: "all", label: "Tous les jours", short: "Tous" },
+  { value: "weekdays", label: "Semaine seulement", short: "Semaine" },
+  { value: "weekend", label: "Week-end seulement", short: "Week-end" },
+  { value: "saturday", label: "Samedi seulement", short: "Samedi" },
+  { value: "sunday", label: "Dimanche seulement", short: "Dimanche" },
+  { value: "custom", label: "Jours precis", short: "Perso" },
+];
+const AUX_SHIFT_OPTIONS = [
+  { value: "all", label: "Jour et nuit", short: "Tout" },
+  { value: "day", label: "Jour seulement", short: "Jour" },
+  { value: "morning", label: "Matin seulement", short: "Matin" },
+  { value: "afternoon", label: "Après-midi/soir", short: "Soir" },
+  { value: "night", label: "Nuits seulement", short: "Nuit" },
+];
+const AUX_WEEKDAY_OPTIONS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const normalizeRotationMode = value => {
   if (value === "split-day") return "split-day";
   const number = Number(value);
   return [1, 2, 3, 4].includes(number) ? number : 1;
 };
-const PLANNING_TEXT_COLORS = ["#5689C9", "#D46AA8", "#5BA58D", "#9274C9", "#CF7B6D", "#4C9EA8", "#BA72B4", "#7D9B55"];
 const TASK_PRIORITY_LABELS = { normal: "Normale", important: "Importante", urgent: "Urgente" };
 const UI_TEXT = {
   "action.print": { fr: "Imprimer", en: "Print" },
@@ -938,6 +953,7 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
       const worker = workers[0];
       const extraWorkers = workers.slice(1);
       const index = Math.max(0, auxiliaries.findIndex(aux => aux.id === worker));
+      const workerColor = worker ? colorFor(index) : null;
       const overrideValue = overrides?.[overrideKey(year, month, day, shift.id)];
       const manual = !!overrideValue;
       const manualEmpty = isManualEmptySlot(overrideValue);
@@ -952,7 +968,10 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
       },
         h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
-          h("span", { className: "slot-name", style: { color: worker ? PLANNING_TEXT_COLORS[index % PLANNING_TEXT_COLORS.length] : "#746d61" } }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
+          h("span", {
+            className: `slot-name slot-person-pill${worker ? "" : " empty"}`,
+            style: workerColor ? { color: workerColor.text, background: workerColor.light, borderColor: workerColor.solid } : null,
+          }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
           extraWorkers.length ? h("span", { className: "double-stack", title: `Doublon : ${extraWorkers.map(id => auxName(auxiliaries, id)).join(", ")}` },
             extraWorkers.map(id => h("span", { className: "double-chip", key: id }, shortAuxName(auxiliaries, id))),
           ) : null,
@@ -1010,6 +1029,29 @@ function HoursView({ auxiliaries, hours }) {
   );
 }
 
+function WorkerPill({ aux, index, active = false, selected = false, primary = false, disabled = false, preferred = true, summary = "", onClick }) {
+  const color = colorFor(index);
+  const stateText = primary ? "Titulaire" : active || selected ? "Sélectionné" : preferred ? "Disponible" : "Hors option";
+  return h("button", {
+    type: "button",
+    className: `worker-pill${active || selected ? " active" : ""}${primary ? " primary-worker" : ""}${preferred ? "" : " out-of-preference"}`,
+    style: {
+      "--worker-color": color.solid,
+      "--worker-bg": color.light,
+      "--worker-text": color.text,
+    },
+    disabled,
+    title: preferred ? `${aux.name} · ${summary || stateText}` : `${aux.name} · hors options, autorisé en manuel`,
+    onClick,
+  },
+    h("span", { className: "worker-pill-dot" }),
+    h("span", { className: "worker-pill-main" },
+      h("b", null, aux.name || "Auxiliaire"),
+      h("small", null, [stateText, summary].filter(Boolean).join(" · ")),
+    ),
+  );
+}
+
 function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onClose }) {
   const [hoursInput, setHoursInput] = useState("");
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
@@ -1027,16 +1069,21 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
   const customHours = hourOverrides?.[key] !== undefined && normalizeSlotHour(hourOverrides[key]) !== null;
   const parsedHours = normalizeSlotHour(hoursInput);
   const invalidHours = String(hoursInput || "").trim() !== "" && parsedHours === null;
+  const currentNames = currentWorkers.map(id => auxName(auxiliaries, id));
   return h("div", { className: "modal-backdrop", onClick: onClose },
     h("section", { className: "slot-editor", onClick: event => event.stopPropagation() },
       h("div", { className: "title-row" },
         h("div", null,
           h("h3", null, `${SHIFT_LABEL[edit.shift]} · ${edit.day} ${MONTHS[month]}`),
-          h("div", { className: "muted" }, `Choisir le titulaire, ajouter des doublons si besoin, et ajuster la durée réelle. Défaut : ${defaultHours}h.`),
+          h("div", { className: "muted" }, "Cliquez une pastille pour choisir. Les restrictions restent indicatives en mode manuel."),
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
-      h("div", { className: "slot-hours-row" },
+      h("div", { className: `slot-editor-current${manualEmpty ? " empty" : ""}` },
+        h("span", null, manualEmpty ? "Créneau vidé" : currentNames.length ? "Actuel" : "À définir"),
+        h("b", null, manualEmpty ? "Aucun auxiliaire" : currentNames.length ? currentNames.join(" + ") : "Choisir un titulaire"),
+      ),
+      h("div", { className: "slot-hours-row compact-hours" },
         h(Field, { label: "Durée réelle du créneau" },
           h(TextInput, {
             value: hoursInput,
@@ -1050,47 +1097,47 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
         invalidHours ? h("small", { className: "field-error" }, "Entrez une durée entre 0 et 24h.") : h("small", { className: "muted" }, "Exemples : 6h, 4,5h, 7.25h."),
       ),
       h("div", { className: "slot-editor-section" },
-        h("b", null, "Titulaire principal"),
-        h("div", { className: "worker-options" }, available.map((aux, index) => {
+        h("b", null, "Titulaire"),
+        h("div", { className: "worker-pill-grid main-pill-grid" }, available.map((aux, index) => {
           const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
           const preferred = canWorkShift(aux, edit.shift, year, month, edit.day);
           const hourLabel = data.over > 0 ? `+${data.over}h` : `reste ${data.remaining}h`;
-          return h(Button, {
+          return h(WorkerPill, {
             key: aux.id,
             active: current === aux.id,
-            className: preferred ? "" : "out-of-preference",
-            title: preferred ? "Dans les options de l'auxiliaire" : "Hors options, autorisé en manuel",
+            aux,
+            index,
+            preferred,
+            summary: hourLabel,
             onClick: () => onChoose(key, aux.id),
-          },
-            h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }),
-            h("span", null, aux.name),
-            h("small", null, preferred ? hourLabel : `${hourLabel} · hors option`),
-          );
+          });
         })),
       ),
       h("div", { className: "slot-editor-section" },
-        h("b", null, "Doublons / renforts"),
-        h("div", { className: "muted" }, current ? "Coche les auxiliaires en plus sur le même créneau." : "Choisis d'abord le titulaire principal."),
-        h("div", { className: "worker-options double-options" }, available.map((aux, index) => {
+        h("b", null, "Renforts"),
+        h("div", { className: "muted" }, current ? "Ajouter une ou plusieurs pastilles sur le même créneau." : "Choisissez d'abord le titulaire."),
+        h("div", { className: "worker-pill-grid support-pill-grid" }, available.map((aux, index) => {
         const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
         const preferred = canWorkShift(aux, edit.shift, year, month, edit.day);
         const hourLabel = data.over > 0 ? `+${data.over}h` : `reste ${data.remaining}h`;
         const selected = currentDoubles.includes(aux.id);
         const primary = current === aux.id;
-        return h(Button, {
+        return h(WorkerPill, {
           key: aux.id,
-          active: selected,
+          selected,
           disabled: !current || primary,
-          className: `${preferred ? "" : "out-of-preference"}${primary ? " primary-worker" : ""}`.trim(),
-          title: primary ? "Déjà titulaire principal" : preferred ? "Ajouter ou retirer le doublon" : "Hors options, autorisé en manuel",
+          primary,
+          aux,
+          index,
+          preferred,
+          summary: hourLabel,
           onClick: () => onToggleDouble(key, aux.id),
-        },
-          h("span", { className: "worker-dot", style: { background: colorFor(index).solid } }),
-          h("span", null, aux.name),
-          h("small", null, primary ? "principal" : selected ? "doublon" : preferred ? hourLabel : `${hourLabel} · hors option`),
-        );
+        });
       }))),
-      overrides[key] ? h(Button, { onClick: () => onReset(key, manualEmpty) }, manualEmpty ? "Retirer la saisie vide" : "Vider ce créneau") : null,
+      h("div", { className: "slot-editor-actions" },
+        overrides[key] ? h(Button, { onClick: () => onReset(key, manualEmpty) }, manualEmpty ? "Retirer la saisie vide" : "Vider ce créneau") : null,
+        h(Button, { active: true, onClick: onClose }, "Terminer"),
+      ),
     ),
   );
 }
