@@ -105,6 +105,7 @@ const ICON_PATHS = {
   settings: ["M4 7h10M18 7h2M4 17h2M10 17h10M8 14v6M16 4v6"],
   file: ["M6 3h8l4 4v14H6V3ZM14 3v5h5M8 13h8M8 17h6"],
   sparkles: ["M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15ZM5 14l.7 1.8L8 16.5l-2.3.7L5 19l-.7-1.8L2 16.5l2.3-.7L5 14Z"],
+  star: ["M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8L12 3.5Z"],
   save: ["M5 4h12l2 2v14H5V4ZM8 4v6h8V4M8 20v-6h8v6"],
   restore: ["M4 7v6h6M5 13a7 7 0 1 0 2-7"],
   cloud: ["M7 18a4 4 0 0 1 .7-7.9A6 6 0 0 1 19 12a3 3 0 0 1 0 6H7ZM10 15l2 2 4-5"],
@@ -131,6 +132,10 @@ const dayTone = (year, month, day) => {
   return index === 6 ? " saturday" : index === 0 ? " sunday" : "";
 };
 const alternateDayTone = day => Number(day) % 2 === 0 ? " even-day" : " odd-day";
+function EvenDayStar({ day }) {
+  if (Number(day) % 2 !== 0) return null;
+  return h("span", { className: "even-day-star", title: "Jour pair", "aria-label": "Jour pair" }, h(Icon, { name: "star" }));
+}
 function Icon({ name }) {
   return h("svg", {
     className: "icon",
@@ -592,7 +597,7 @@ function PersonalDayCard({ day, entries, entriesByDay = {}, calendarByDay = {}, 
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === Number(day);
   return h("div", { className: `day-card personal-day${alternateDayTone(day)}${dayTone(year, month, day)}${hasPresence ? " presence-day" : " rest-day"}${isToday ? " today" : ""}${currentWeek ? " current-week-day" : ""}` },
-    h("div", { className: "day-head" }, h("span", null, day)),
+    h("div", { className: "day-head" }, h("span", null, day), h(EvenDayStar, { day })),
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
       const request = requestBySlot?.[requestSlotKey(day, shift.id)];
@@ -957,7 +962,10 @@ function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onR
 function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   if (!day) return h("div", { className: "day-card empty" });
   return h("div", { className: `day-card${alternateDayTone(day)}${dayTone(year, month, day)}` },
-    h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
+    h("div", { className: "day-head" },
+      h("span", null, day),
+      h("span", { className: "day-head-meta" }, h("span", null, dayName(year, month, day)), h(EvenDayStar, { day })),
+    ),
     SHIFT_DEFS.map(shift => {
       const workers = shiftWorkerIds(plan?.[shift.id]);
       const worker = workers[0];
