@@ -8,6 +8,7 @@
     "build": "vite build --configLoader runner",
     "check:personal": "node scripts/check-personal-view.mjs",
     "check:tasks": "node scripts/check-task-calendar.mjs",
+    "check:pill-hours": "node scripts/check-worker-pill-hours.mjs",
     "check:rotation": "node scripts/check-rotation.mjs",
     "preview": "vite preview"
   },

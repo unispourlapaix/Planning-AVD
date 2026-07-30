@@ -3,7 +3,7 @@ import { dayName } from "./dates.js";
 import { publishPersonalPlannings } from "./storage.js?v=20260722-custom-hours";
 import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
-import { hasCustomSlotHours, slotHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { defaultHoursForShift, hasCustomSlotHours, hasCustomWorkerHours, slotHours, slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const SHARE_SHIFT_ORDER = ["morning", "afternoon", "night"];
 
@@ -42,7 +42,11 @@ function buildSimplifiedPlanning({ year, month, auxiliaries, schedule }) {
       const label = shiftDisplayLabel({ shift, schedule, day: plan.day, worker });
       const notice = breakNoticeForSlot({ shift, schedule, day: plan.day, worker });
       const noticeText = notice ? ` (${notice.label})` : "";
-      const hoursText = hasCustomSlotHours(plan?.[shift], shift) ? ` - ${slotHours(plan?.[shift], shift)}h` : "";
+      const entry = plan?.[shift];
+      const hoursChanged = worker
+        ? hasCustomWorkerHours(entry, shift, worker) || slotHours(entry, shift) !== defaultHoursForShift(shift)
+        : hasCustomSlotHours(entry, shift);
+      const hoursText = hoursChanged ? ` - ${slotWorkerHours(entry, shift, worker)}h` : "";
       return `${label}: ${worker ? names.get(worker) || "À définir" : "Repos"}${hoursText}${noticeText}`;
     });
     return `${String(plan.day).padStart(2, "0")} ${dayName(year, month, plan.day)} : ${shifts.join(" | ")}`;

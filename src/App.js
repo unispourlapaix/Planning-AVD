@@ -44,7 +44,7 @@ import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from 
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
 import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot, personalBreakNoticeForSlot } from "./modules/break-rules.js?v=20260722-custom-hours";
-import { defaultHoursForShift, hasCustomSlotHours, normalizeHourOverrides, normalizeSlotHour, slotHours } from "./modules/shift-hours.js?v=20260722-custom-hours";
+import { defaultHoursForShift, hasCustomSlotHours, hasCustomWorkerHours, normalizeHourOverrides, normalizeSlotHour, shiftWorkerHourKey, slotHours, slotWorkerHours } from "./modules/shift-hours.js?v=20260722-custom-hours";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
@@ -130,6 +130,7 @@ const dayTone = (year, month, day) => {
   const index = new Date(year, month, day).getDay();
   return index === 6 ? " saturday" : index === 0 ? " sunday" : "";
 };
+const alternateDayTone = day => Number(day) % 2 === 0 ? " even-day" : " odd-day";
 function Icon({ name }) {
   return h("svg", {
     className: "icon",
@@ -332,6 +333,15 @@ const assignmentSummary = (raw = {}, fallbackQuota = 0) => {
   return { ...raw, total, quota, remaining, over, percent };
 };
 const overrideKey = manualOverrideKey;
+const clearSlotHourOverrides = (current = {}, key = "") =>
+  Object.fromEntries(Object.entries(current).filter(([itemKey]) => itemKey !== key && !itemKey.startsWith(`${key}::`)));
+const pruneSlotWorkerHourOverrides = (current = {}, key = "", workers = []) => {
+  const keep = new Set(workers.map(String));
+  return Object.fromEntries(Object.entries(current).filter(([itemKey]) => {
+    if (!itemKey.startsWith(`${key}::`)) return true;
+    return keep.has(itemKey.slice(`${key}::`.length));
+  }));
+};
 const requestSlotKey = (day, shift) => `${day}-${shift}`;
 const requestStatusLabel = status => ({
   pending: "En attente",
@@ -581,7 +591,7 @@ function PersonalDayCard({ day, entries, entriesByDay = {}, calendarByDay = {}, 
   const hasPresence = entries.length > 0;
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === Number(day);
-  return h("div", { className: `day-card personal-day${dayTone(year, month, day)}${hasPresence ? " presence-day" : " rest-day"}${isToday ? " today" : ""}${currentWeek ? " current-week-day" : ""}` },
+  return h("div", { className: `day-card personal-day${alternateDayTone(day)}${dayTone(year, month, day)}${hasPresence ? " presence-day" : " rest-day"}${isToday ? " today" : ""}${currentWeek ? " current-week-day" : ""}` },
     h("div", { className: "day-head" }, h("span", null, day)),
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
@@ -879,7 +889,7 @@ function ManualOverridesPanel({ items, onReset }) {
       h("span", { className: "manual-chip" }, `${item.day} ${item.monthLabel}`),
       h("span", null,
         h("b", null, item.shiftLabel),
-        h("small", null, `${item.workerName}${item.extraNames?.length ? ` + ${item.extraNames.join(", ")}` : ""}${item.customHours !== null && item.customHours !== item.defaultHours ? ` · ${item.customHours}h` : ""}`),
+        h("small", null, `${item.workerName}${item.extraNames?.length ? ` + ${item.extraNames.join(", ")}` : ""}${item.customHours !== null && item.customHours !== item.defaultHours ? ` · ${item.customHours === "par auxiliaire" ? "heures par auxiliaire" : `${item.customHours}h`}` : ""}`),
       ),
       h(Button, { onClick: () => onReset(item.key, item.empty) }, item.empty ? "Retirer" : "Vider"),
     ))),
@@ -946,7 +956,7 @@ function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onR
 
 function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   if (!day) return h("div", { className: "day-card empty" });
-  return h("div", { className: `day-card${dayTone(year, month, day)}` },
+  return h("div", { className: `day-card${alternateDayTone(day)}${dayTone(year, month, day)}` },
     h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
     SHIFT_DEFS.map(shift => {
       const workers = shiftWorkerIds(plan?.[shift.id]);
@@ -959,7 +969,11 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
       const manualEmpty = isManualEmptySlot(overrideValue);
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
       const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
-      const customHours = hasCustomSlotHours(plan?.[shift.id], shift.id);
+      const entry = plan?.[shift.id];
+      const customHours = worker
+        ? hasCustomWorkerHours(entry, shift.id, worker) || slotHours(entry, shift.id) !== defaultHoursForShift(shift.id)
+        : hasCustomSlotHours(entry, shift.id);
+      const visibleHours = worker ? slotWorkerHours(entry, shift.id, worker) : slotHours(entry, shift.id);
       return h("button", {
         className: `slot editable-slot${manual ? " manual-slot" : ""}`,
         key: shift.id,
@@ -975,7 +989,7 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
           extraWorkers.length ? h("span", { className: "double-stack", title: `Doublon : ${extraWorkers.map(id => auxName(auxiliaries, id)).join(", ")}` },
             extraWorkers.map(id => h("span", { className: "double-chip", key: id }, shortAuxName(auxiliaries, id))),
           ) : null,
-          customHours ? h("span", { className: "hour-badge", title: "Durée réelle modifiée" }, `${slotHours(plan?.[shift.id], shift.id)}h`) : null,
+          customHours ? h("span", { className: "hour-badge", title: "Durée réelle modifiée" }, `${visibleHours}h`) : null,
           notice ? h("span", { className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
           manual ? h("span", { className: "manual-badge" }, manualEmpty ? "Vidé" : "Saisi") : null,
         ),
@@ -1029,47 +1043,95 @@ function HoursView({ auxiliaries, hours }) {
   );
 }
 
-function WorkerPill({ aux, index, active = false, selected = false, primary = false, disabled = false, preferred = true, summary = "", onClick }) {
+function WorkerPill({ aux, index, active = false, selected = false, primary = false, disabled = false, preferred = true, summary = "", hoursValue = "", hoursActive = false, hoursDisabled = false, hoursInvalid = false, onClick, onHoursChange, onHoursReset }) {
   const color = colorFor(index);
   const stateText = primary ? "Titulaire" : active || selected ? "Sélectionné" : preferred ? "Disponible" : "Hors option";
-  return h("button", {
-    type: "button",
+  const canEditHours = hoursActive && !disabled && !hoursDisabled;
+  return h("div", {
     className: `worker-pill${active || selected ? " active" : ""}${primary ? " primary-worker" : ""}${preferred ? "" : " out-of-preference"}`,
     style: {
       "--worker-color": color.solid,
       "--worker-bg": color.light,
       "--worker-text": color.text,
     },
-    disabled,
-    title: preferred ? `${aux.name} · ${summary || stateText}` : `${aux.name} · hors options, autorisé en manuel`,
-    onClick,
   },
-    h("span", { className: "worker-pill-dot" }),
-    h("span", { className: "worker-pill-main" },
-      h("b", null, aux.name || "Auxiliaire"),
-      h("small", null, [stateText, summary].filter(Boolean).join(" · ")),
+    h("button", {
+      type: "button",
+      className: "worker-pill-button",
+      disabled,
+      title: preferred ? `${aux.name} · ${summary || stateText}` : `${aux.name} · hors options, autorisé en manuel`,
+      onClick,
+    },
+      h("span", { className: "worker-pill-dot" }),
+      h("span", { className: "worker-pill-main" },
+        h("b", null, aux.name || "Auxiliaire"),
+        h("small", null, [stateText, summary].filter(Boolean).join(" · ")),
+      ),
     ),
+    canEditHours ? h("span", { className: `worker-hour-control${hoursInvalid ? " invalid" : ""}` },
+      h("input", {
+        value: hoursValue,
+        inputMode: "decimal",
+        "aria-label": `Heures de ${aux.name || "auxiliaire"}`,
+        onClick: event => event.stopPropagation(),
+        onChange: event => onHoursChange?.(event.target.value),
+      }),
+      h("span", null, "h"),
+      onHoursReset ? h("button", {
+        type: "button",
+        title: "Revenir à la durée du créneau",
+        onClick: event => {
+          event.stopPropagation();
+          onHoursReset();
+        },
+      }, "x") : null,
+    ) : null,
   );
 }
 
 function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onClose }) {
-  const [hoursInput, setHoursInput] = useState("");
+  const [hourInputs, setHourInputs] = useState({});
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
-  const currentHours = edit ? slotHours(schedule[edit.day]?.[edit.shift], edit.shift) : 0;
-  useEffect(() => {
-    if (edit) setHoursInput(String(currentHours).replace(".", ","));
-  }, [key, currentHours]);
-  if (!edit) return null;
-  const currentWorkers = manualWorkerIds(overrides[key] || schedule[edit.day]?.[edit.shift]);
+  const entry = edit ? schedule[edit.day]?.[edit.shift] : null;
+  const currentWorkers = edit ? manualWorkerIds(overrides[key] || entry) : [];
+  const currentWorkerKey = currentWorkers.join("|");
   const current = currentWorkers[0] || "";
   const currentDoubles = currentWorkers.slice(1);
-  const manualEmpty = isManualEmptySlot(overrides[key]);
+  const manualEmpty = edit ? isManualEmptySlot(overrides[key]) : false;
   const available = auxiliaries.filter(aux => aux.active !== false);
-  const defaultHours = defaultHoursForShift(edit.shift);
-  const customHours = hourOverrides?.[key] !== undefined && normalizeSlotHour(hourOverrides[key]) !== null;
-  const parsedHours = normalizeSlotHour(hoursInput);
-  const invalidHours = String(hoursInput || "").trim() !== "" && parsedHours === null;
+  const defaultHours = edit ? defaultHoursForShift(edit.shift) : 0;
+  const inheritedHours = edit ? slotHours(entry, edit.shift) : defaultHours;
   const currentNames = currentWorkers.map(id => auxName(auxiliaries, id));
+  useEffect(() => {
+    if (!edit) return;
+    setHourInputs(Object.fromEntries(currentWorkers.map(worker => [
+      worker,
+      String(slotWorkerHours(entry, edit.shift, worker)).replace(".", ","),
+    ])));
+  }, [key, currentWorkerKey, inheritedHours]);
+  if (!edit) return null;
+  const workerHourKeyFor = worker => shiftWorkerHourKey(year, month, edit.day, edit.shift, worker);
+  const workerHourValue = worker => hourInputs[worker] ?? String(slotWorkerHours(entry, edit.shift, worker)).replace(".", ",");
+  const workerHourInvalid = worker => {
+    const raw = String(workerHourValue(worker) || "").trim();
+    return raw !== "" && normalizeSlotHour(raw) === null;
+  };
+  const workerHourReset = worker => {
+    setHourInputs(currentInputs => ({ ...currentInputs, [worker]: String(inheritedHours).replace(".", ",") }));
+    onResetHours(workerHourKeyFor(worker));
+  };
+  const workerHourChange = (worker, value) => {
+    setHourInputs(currentInputs => ({ ...currentInputs, [worker]: value }));
+    const raw = String(value || "").trim();
+    if (!raw) {
+      onResetHours(workerHourKeyFor(worker));
+      return;
+    }
+    const parsed = normalizeSlotHour(raw);
+    if (parsed !== null) onSetHours(workerHourKeyFor(worker), parsed, inheritedHours);
+  };
+  const workerHourSummary = worker => `${slotWorkerHours(entry, edit.shift, worker)}h`;
+  const invalidWorkerCount = currentWorkers.filter(workerHourInvalid).length;
   return h("div", { className: "modal-backdrop", onClick: onClose },
     h("section", { className: "slot-editor", onClick: event => event.stopPropagation() },
       h("div", { className: "title-row" },
@@ -1083,18 +1145,11 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
         h("span", null, manualEmpty ? "Créneau vidé" : currentNames.length ? "Actuel" : "À définir"),
         h("b", null, manualEmpty ? "Aucun auxiliaire" : currentNames.length ? currentNames.join(" + ") : "Choisir un titulaire"),
       ),
-      h("div", { className: "slot-hours-row compact-hours" },
-        h(Field, { label: "Durée réelle du créneau" },
-          h(TextInput, {
-            value: hoursInput,
-            inputMode: "decimal",
-            placeholder: `${defaultHours}h`,
-            onChange: setHoursInput,
-          }),
+      h("div", { className: "slot-hour-help" },
+        h("b", null, `Défaut du créneau : ${inheritedHours || defaultHours}h`),
+        h("small", { className: invalidWorkerCount ? "field-error" : "muted" },
+          invalidWorkerCount ? "Corrigez les heures en rouge. Valeur attendue entre 0 et 24h." : "La durée se règle directement sur chaque pastille sélectionnée.",
         ),
-        h(Button, { active: true, disabled: parsedHours === null || invalidHours, onClick: () => parsedHours !== null && onSetHours(key, parsedHours, edit.shift) }, "Appliquer"),
-        customHours ? h(Button, { onClick: () => onResetHours(key) }, `Défaut ${defaultHours}h`) : null,
-        invalidHours ? h("small", { className: "field-error" }, "Entrez une durée entre 0 et 24h.") : h("small", { className: "muted" }, "Exemples : 6h, 4,5h, 7.25h."),
       ),
       h("div", { className: "slot-editor-section" },
         h("b", null, "Titulaire"),
@@ -1108,7 +1163,12 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
             aux,
             index,
             preferred,
-            summary: hourLabel,
+            summary: current === aux.id ? `${workerHourSummary(aux.id)} · ${hourLabel}` : hourLabel,
+            hoursActive: current === aux.id,
+            hoursValue: workerHourValue(aux.id),
+            hoursInvalid: workerHourInvalid(aux.id),
+            onHoursChange: value => workerHourChange(aux.id, value),
+            onHoursReset: hasCustomWorkerHours(entry, edit.shift, aux.id) ? () => workerHourReset(aux.id) : null,
             onClick: () => onChoose(key, aux.id),
           });
         })),
@@ -1130,7 +1190,12 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
           aux,
           index,
           preferred,
-          summary: hourLabel,
+          summary: selected ? `${workerHourSummary(aux.id)} · ${hourLabel}` : hourLabel,
+          hoursActive: selected,
+          hoursValue: workerHourValue(aux.id),
+          hoursInvalid: workerHourInvalid(aux.id),
+          onHoursChange: value => workerHourChange(aux.id, value),
+          onHoursReset: hasCustomWorkerHours(entry, edit.shift, aux.id) ? () => workerHourReset(aux.id) : null,
           onClick: () => onToggleDouble(key, aux.id),
         });
       }))),
@@ -2586,7 +2651,7 @@ export default function App() {
           else next[key] = emptyManualSlot();
           return next;
         });
-        setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+        setHourOverrides(current => clearSlotHourOverrides(current, key));
       } }) : null,
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
@@ -2604,11 +2669,19 @@ export default function App() {
       overrides,
       hourOverrides,
       assignedHours,
-      onChoose: (key, worker) => setOverrides(current => ({ ...current, [key]: setManualPrimaryWorker(current[key], worker) })),
-      onToggleDouble: (key, worker) => setOverrides(current => {
-        const nextValue = toggleManualDoubleWorker(current[key], worker);
-        return nextValue ? { ...current, [key]: nextValue } : current;
-      }),
+      onChoose: (key, worker) => {
+        const nextValue = setManualPrimaryWorker(overrides[key], worker);
+        setOverrides(current => ({ ...current, [key]: setManualPrimaryWorker(current[key], worker) }));
+        setHourOverrides(current => pruneSlotWorkerHourOverrides(current, key, manualWorkerIds(nextValue)));
+      },
+      onToggleDouble: (key, worker) => {
+        const nextValue = toggleManualDoubleWorker(overrides[key], worker);
+        setOverrides(current => {
+          const value = toggleManualDoubleWorker(current[key], worker);
+          return value ? { ...current, [key]: value } : current;
+        });
+        setHourOverrides(current => pruneSlotWorkerHourOverrides(current, key, manualWorkerIds(nextValue)));
+      },
       onReset: (key, alreadyEmpty) => {
         setOverrides(current => {
           const next = { ...current };
@@ -2616,14 +2689,14 @@ export default function App() {
           else next[key] = emptyManualSlot();
           return next;
         });
-        setHourOverrides(current => { const next = { ...current }; delete next[key]; return next; });
+        setHourOverrides(current => clearSlotHourOverrides(current, key));
         setSlotEdit(null);
       },
-      onSetHours: (key, hours, shift) => {
-        const defaultHours = defaultHoursForShift(shift);
+      onSetHours: (key, hours, fallbackHours) => {
+        const defaultHours = normalizeSlotHour(fallbackHours);
         setHourOverrides(current => {
           const next = { ...current };
-          if (hours === defaultHours) delete next[key];
+          if (defaultHours !== null && hours === defaultHours) delete next[key];
           else next[key] = hours;
           return next;
         });

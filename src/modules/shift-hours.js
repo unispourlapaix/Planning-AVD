@@ -3,6 +3,8 @@ import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 
 export const shiftHourKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
+export const shiftWorkerHourKey = (year, month, day, shift, worker) =>
+  `${shiftHourKey(year, month, day, shift)}::${String(worker || "").trim()}`;
 
 export const defaultHoursForShift = shift => {
   const id = typeof shift === "string" ? shift : shift?.id;
@@ -22,9 +24,22 @@ export const slotHours = (entry, shift) => {
   return custom === null ? defaultHoursForShift(shift) : custom;
 };
 
+export const slotWorkerHours = (entry, shift, worker) => {
+  const inherited = slotHours(entry, shift);
+  const custom = normalizeSlotHour(entry?.workerHours?.[worker]);
+  return custom === null ? inherited : custom;
+};
+
 export const hasCustomSlotHours = (entry, shift) => {
   const custom = normalizeSlotHour(entry?.hours);
-  return custom !== null && custom !== defaultHoursForShift(shift);
+  if (custom !== null && custom !== defaultHoursForShift(shift)) return true;
+  return Object.values(entry?.workerHours || {})
+    .some(hours => normalizeSlotHour(hours) !== null && normalizeSlotHour(hours) !== slotHours(entry, shift));
+};
+
+export const hasCustomWorkerHours = (entry, shift, worker) => {
+  const custom = normalizeSlotHour(entry?.workerHours?.[worker]);
+  return custom !== null && custom !== slotHours(entry, shift);
 };
 
 export const normalizeHourOverrides = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})

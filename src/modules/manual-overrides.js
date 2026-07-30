@@ -16,6 +16,7 @@ export function parseManualOverrideKey(key) {
 export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, year, month, auxiliaries = [] }) {
   const names = Object.fromEntries(auxiliaries.map(aux => [aux.id, aux.name || "A definir"]));
   const shortName = id => String(names[id] || "A definir").trim().slice(0, 3);
+  const hasWorkerHours = key => Object.keys(hourOverrides || {}).some(itemKey => itemKey.startsWith(`${key}::`));
   return Object.entries(overrides)
     .map(([key, value]) => {
       const parsed = parseManualOverrideKey(key);
@@ -35,7 +36,7 @@ export function buildManualOverrideList({ overrides = {}, hourOverrides = {}, ye
         empty,
         extraWorkers: extras,
         extraNames: extras.map(shortName),
-        customHours: normalizeSlotHour(hourOverrides[key]),
+        customHours: normalizeSlotHour(hourOverrides[key]) ?? (hasWorkerHours(key) ? "par auxiliaire" : null),
         defaultHours: defaultHoursForShift(parsed.shift),
       };
     })

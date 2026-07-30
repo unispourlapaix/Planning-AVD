@@ -384,6 +384,19 @@ h2 { font-size: 16px; }
 .day-card.empty { opacity: .35; }
 .day-card.saturday, .calendar > .day-card:nth-child(7n + 6), .week-days > .day-card:nth-child(7n + 6) { background: rgba(235,247,252,.88); border-color: rgba(169,211,227,.92); }
 .day-card.sunday, .calendar > .day-card:nth-child(7n), .week-days > .day-card:nth-child(7n) { background: rgba(253,239,247,.9); border-color: rgba(235,185,214,.94); }
+.day-card.odd-day:not(.saturday):not(.sunday) { background: rgba(255,255,255,.78); }
+.day-card.even-day:not(.saturday):not(.sunday) {
+  background: linear-gradient(135deg, rgba(248,252,253,.92), rgba(238,247,255,.86));
+  border-color: rgba(188,210,222,.9);
+}
+.day-card.saturday.even-day {
+  background: linear-gradient(135deg, rgba(224,242,250,.94), rgba(242,250,253,.88));
+  border-color: rgba(139,197,219,.94);
+}
+.day-card.sunday.even-day {
+  background: linear-gradient(135deg, rgba(255,229,243,.94), rgba(255,246,251,.9));
+  border-color: rgba(226,164,201,.96);
+}
 .day-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 900; color: #425762; }
 .saturday .day-head { color: #477b94; }
 .sunday .day-head { color: #a95d89; }
@@ -537,6 +550,18 @@ h2 { font-size: 16px; }
 .slot-editor-current b { color: #344753; font-size: 13px; text-align: right; overflow-wrap: anywhere; }
 .slot-editor-current.empty { background: rgba(247,248,249,.9); }
 .slot-editor-current.empty b { color: #8e2d62; }
+.slot-hour-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(213,225,229,.72);
+  border-radius: 10px;
+  background: rgba(250,253,254,.72);
+}
+.slot-hour-help b { color: #425762; font-size: 12px; }
+.slot-hour-help small { text-align: right; font-size: 10px; font-weight: 800; }
 .slot-hours-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
 .slot-hours-row.compact-hours {
   padding: 8px;
@@ -572,8 +597,7 @@ h2 { font-size: 16px; }
 .worker-pill {
   min-width: 0;
   min-height: 46px;
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -585,7 +609,20 @@ h2 { font-size: 16px; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,.96), 0 6px 14px rgba(84,111,124,.08);
   transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease;
 }
-.worker-pill:hover, .worker-pill:focus-visible {
+.worker-pill-button {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.worker-pill:hover, .worker-pill:focus-within {
   outline: none;
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--worker-color) 52%, #ffffff);
@@ -605,7 +642,7 @@ h2 { font-size: 16px; }
   opacity: .62;
   cursor: default;
 }
-.worker-pill:disabled { cursor: not-allowed; filter: saturate(.75); }
+.worker-pill-button:disabled { cursor: not-allowed; filter: saturate(.75); }
 .worker-pill-dot {
   width: 13px;
   height: 13px;
@@ -631,6 +668,47 @@ h2 { font-size: 16px; }
 }
 .worker-pill.active .worker-pill-main small { color: color-mix(in srgb, var(--worker-text) 70%, #697981); }
 .support-pill-grid .worker-pill { min-height: 40px; padding: 7px 9px; }
+.worker-hour-control {
+  flex: 0 0 auto;
+  min-width: 74px;
+  display: inline-grid;
+  grid-template-columns: minmax(38px, 1fr) auto auto;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--worker-color) 32%, #d7e3e6);
+  border-radius: 999px;
+  background: rgba(255,255,255,.78);
+  color: var(--worker-text);
+  font-size: 10px;
+  font-weight: 900;
+}
+.worker-hour-control input {
+  width: 42px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: right;
+  outline: none;
+}
+.worker-hour-control button {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(240,236,255,.96);
+  color: #493078;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0;
+}
+.worker-hour-control.invalid { border-color: rgba(160,40,40,.64); background: rgba(255,240,240,.94); color: #a02828; }
 .slot-editor-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .meal-planner {
   width: min(980px, 100%);
@@ -742,6 +820,8 @@ h2 { font-size: 16px; }
   .task-form input:first-child { grid-column: 1 / -1; }
   .task-form .btn { grid-column: 1 / -1; }
   .task-list, .group-activity-list { max-height: min(300px, 42vh); }
+  .slot-hour-help { align-items: stretch; flex-direction: column; }
+  .slot-hour-help small { text-align: left; }
   .personal-task-scroll { max-height: min(210px, 30vh); }
   .task-item { grid-template-columns: minmax(0, 1fr) auto; }
   .task-actions { grid-column: 1 / -1; justify-content: flex-start; }

@@ -1,6 +1,6 @@
 import { DEFAULT_QUOTA, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { daysInMonth } from "./dates.js";
-import { slotHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -76,7 +76,7 @@ export function calculateAssignedHours(schedule, auxiliaries) {
     SHIFT_DEFS.forEach(shift => {
       shiftWorkerIds(plan?.[shift.id]).forEach(worker => {
         if (!worker || !hours[worker]) return;
-        const scheduled = slotHours(plan?.[shift.id], shift.id);
+        const scheduled = slotWorkerHours(plan?.[shift.id], shift.id, worker);
         hours[worker][shift.id] = roundHours(hours[worker][shift.id] + scheduled);
         hours[worker].total = roundHours(hours[worker].total + scheduled);
         hours[worker].daily[day] = roundHours((hours[worker].daily[day] || 0) + scheduled);
@@ -122,7 +122,7 @@ export function calculatePerformedHours(schedule, auxiliaries, { year, month, no
         // Secondary workers are completion hours confirmed when the month is closed.
         if (workerIndex > 0 && !period.monthClosed) return;
         if (!worker || !hours[worker]) return;
-        creditScheduledHours({ account: hours[worker], shift: shift.id, scheduledHours: slotHours(plan?.[shift.id], shift.id), day });
+        creditScheduledHours({ account: hours[worker], shift: shift.id, scheduledHours: slotWorkerHours(plan?.[shift.id], shift.id, worker), day });
       });
     });
   });

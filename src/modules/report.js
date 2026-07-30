@@ -4,7 +4,7 @@ import { summarizeHours } from "./hour-accounting.js?v=20260722-custom-hours";
 import { mealForDate } from "./meal-planning.js";
 import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
-import { slotHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const esc = value => String(value ?? "").replace(/[<>&]/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[char]));
 const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
@@ -21,7 +21,7 @@ export function buildReportHtml({ year, month, beneficiaryName = "", auxiliaries
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker: ids[0] });
       const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker: ids[0] });
       const noticeHtml = notice ? `<small class="break ${notice.type}">${esc(notice.label)}</small>` : "";
-      return `<div class="slot"><b>${esc(label)}</b><span>${esc(names)}${noticeHtml}</span><em>${slotHours(plan[shift.id], shift.id)}h</em></div>`;
+      return `<div class="slot"><b>${esc(label)}</b><span>${esc(names)}${noticeHtml}</span><em>${slotWorkerHours(plan[shift.id], shift.id, ids[0])}h</em></div>`;
     }).join("");
     const meal = mealForDate(year, month, day);
     return `<td><div class="date">${day} ${dayName(year, month, day)}</div>${lines}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></td>`;

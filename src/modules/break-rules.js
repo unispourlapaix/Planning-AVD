@@ -1,4 +1,4 @@
-import { slotHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const shiftWorkerIds = entry =>
   Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
@@ -48,8 +48,8 @@ export function breakNoticeForSlot({ shift, schedule = {}, day, worker } = {}) {
   }
   if (shift === "morning") {
     const fullDay = sameWorkerContinuesDay({ schedule, day, worker });
-    const morningHours = slotHours(schedule?.[Number(day)]?.morning, "morning");
-    const afternoonHours = fullDay ? slotHours(schedule?.[Number(day)]?.afternoon, "afternoon") : 0;
+    const morningHours = slotWorkerHours(schedule?.[Number(day)]?.morning, "morning", worker);
+    const afternoonHours = fullDay ? slotWorkerHours(schedule?.[Number(day)]?.afternoon, "afternoon", worker) : 0;
     return pauseNoticeForHours(morningHours + afternoonHours);
   }
   if (shift === "night") {
@@ -61,7 +61,7 @@ export function breakNoticeForSlot({ shift, schedule = {}, day, worker } = {}) {
     };
   }
   if (shift === "afternoon") {
-    return pauseNoticeForHours(slotHours(schedule?.[Number(day)]?.afternoon, "afternoon"));
+    return pauseNoticeForHours(slotWorkerHours(schedule?.[Number(day)]?.afternoon, "afternoon", worker));
   }
   return null;
 }

@@ -1,6 +1,6 @@
 import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { daysInMonth } from "./dates.js";
-import { defaultHoursForShift, normalizeSlotHour, shiftHourKey } from "./shift-hours.js?v=20260722-custom-hours";
+import { defaultHoursForShift, normalizeSlotHour, shiftHourKey, shiftWorkerHourKey } from "./shift-hours.js?v=20260722-custom-hours";
 import { compactManualWorkers, manualWorkerIds, primaryManualWorker } from "./manual-workers.js?v=20260726-empty-slot";
 
 export const scheduleAssignmentKey = (year, month, day, shift) => `${year}-${month}-${day}-${shift}`;
@@ -27,7 +27,10 @@ export function applyManualAssignments({ schedule, assignments = {}, hourOverrid
       const base = plan?.[shift.id] || emptyShift(shift);
       const customHours = normalizeSlotHour(hourOverrides[shiftHourKey(year, month, day, shift.id)]);
       const hours = customHours === null ? defaultHoursForShift(shift.id) : customHours;
-      return [shift.id, worker ? { ...base, worker, workers, hours } : { ...emptyShift(shift), hours }];
+      const workerHours = Object.fromEntries(workers
+        .map(id => [id, normalizeSlotHour(hourOverrides[shiftWorkerHourKey(year, month, day, shift.id, id)])])
+        .filter(([, value]) => value !== null && value !== hours));
+      return [shift.id, worker ? { ...base, worker, workers, hours, workerHours } : { ...emptyShift(shift), hours }];
     })),
   }]));
 }

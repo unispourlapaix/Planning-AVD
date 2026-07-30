@@ -3,7 +3,7 @@ import { dayIndex, monthGrid } from "./dates.js";
 import { mealForDate } from "./meal-planning.js";
 import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
-import { hasCustomSlotHours, slotHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { defaultHoursForShift, hasCustomSlotHours, hasCustomWorkerHours, slotHours, slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
 
 const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",
@@ -35,7 +35,11 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
       const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
       const noticeHtml = notice ? `<small class="break ${notice.type}">${esc(notice.label)}</small>` : "";
-      const hoursHtml = hasCustomSlotHours(plan[shift.id], shift.id) ? `<small class="break hours">${slotHours(plan[shift.id], shift.id)}h</small>` : "";
+      const entry = plan[shift.id];
+      const hoursChanged = worker
+        ? hasCustomWorkerHours(entry, shift.id, worker) || slotHours(entry, shift.id) !== defaultHoursForShift(shift.id)
+        : hasCustomSlotHours(entry, shift.id);
+      const hoursHtml = hoursChanged ? `<small class="break hours">${slotWorkerHours(entry, shift.id, worker)}h</small>` : "";
       return `<div class="slot"><b>${esc(label)}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}${hoursHtml}${noticeHtml}</div></div>`;
     }).join("");
     const meal = mealForDate(year, month, day);
