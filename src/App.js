@@ -914,7 +914,7 @@ function PlanningFillPanel({ assignmentCount, rotationDays, onApplyExample, onCo
     ),
     h("div", { className: "summary", style: { marginTop: 8 } },
       h("span", null, `Exemple sélectionné : ${selected.label}`),
-      h(Button, { onClick: onCopyPreviousMonth }, "Reprendre le mois dernier"),
+      h(Button, { onClick: onCopyPreviousMonth }, "Reprendre les jours"),
       h(Button, { active: true, onClick: onApplyExample }, "Remplir avec l'exemple"),
       h(Button, { onClick: onClearMonth }, "Vider le mois"),
     ),

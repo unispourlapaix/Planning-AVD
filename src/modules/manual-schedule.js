@@ -1,5 +1,5 @@
 import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
-import { daysInMonth } from "./dates.js";
+import { dayIndex, daysInMonth } from "./dates.js";
 import { defaultHoursForShift, normalizeSlotHour, shiftHourKey, shiftWorkerHourKey } from "./shift-hours.js?v=20260722-custom-hours";
 import { compactManualWorkers, manualWorkerIds, primaryManualWorker } from "./manual-workers.js?v=20260726-empty-slot";
 
@@ -12,13 +12,41 @@ const previousMonthOf = (year, month) => {
   return { year: date.getFullYear(), month: date.getMonth() };
 };
 
-const remapMonthKey = ({ key, sourceYear, sourceMonth, targetYear, targetMonth, maxDay }) => {
+const parseMonthKey = key => {
   const [baseKey, workerSuffix = ""] = String(key || "").split("::");
   const [rawYear, rawMonth, rawDay, shift] = baseKey.split("-");
-  const day = Number(rawDay);
-  if (Number(rawYear) !== sourceYear || Number(rawMonth) !== sourceMonth || !Number.isInteger(day) || day < 1 || day > maxDay || !shift) return "";
-  const nextKey = scheduleAssignmentKey(targetYear, targetMonth, day, shift);
-  return workerSuffix ? `${nextKey}::${workerSuffix}` : nextKey;
+  return {
+    year: Number(rawYear),
+    month: Number(rawMonth),
+    day: Number(rawDay),
+    shift,
+    workerSuffix,
+  };
+};
+
+const monthDaysByWeekday = (year, month) => {
+  const groups = Array.from({ length: 7 }, () => []);
+  for (let day = 1; day <= daysInMonth(year, month); day += 1) {
+    groups[dayIndex(year, month, day)].push(day);
+  }
+  return groups;
+};
+
+const targetToSourceDayMap = ({ sourceYear, sourceMonth, targetYear, targetMonth }) => {
+  const sourceGroups = monthDaysByWeekday(sourceYear, sourceMonth);
+  const targetGroups = monthDaysByWeekday(targetYear, targetMonth);
+  const pairs = [];
+  targetGroups.forEach((days, weekday) => {
+    const sourceDays = sourceGroups[weekday] || [];
+    days.forEach((targetDay, index) => {
+      const sourceIndex = sourceDays.length > days.length && index === days.length - 1
+        ? sourceDays.length - 1
+        : Math.min(index, sourceDays.length - 1);
+      const sourceDay = sourceDays[sourceIndex] || 0;
+      if (sourceDay) pairs.push({ targetDay, sourceDay });
+    });
+  });
+  return pairs;
 };
 
 export function buildEmptySchedule({ year, month }) {
@@ -88,17 +116,24 @@ export function clearMonthAssignments({ current = {}, year, month }) {
 
 export function copyPreviousMonthAssignments({ current = {}, year, month }) {
   const source = previousMonthOf(year, month);
-  const maxDay = daysInMonth(year, month);
-  const copied = Object.fromEntries(Object.entries(current)
-    .map(([key, value]) => [remapMonthKey({
-      key,
-      sourceYear: source.year,
-      sourceMonth: source.month,
-      targetYear: year,
-      targetMonth: month,
-      maxDay,
-    }), value])
-    .filter(([key]) => key));
+  const sourceByDay = new Map();
+  Object.entries(current).forEach(([key, value]) => {
+    const parsed = parseMonthKey(key);
+    if (parsed.year !== source.year || parsed.month !== source.month || !Number.isInteger(parsed.day) || !parsed.shift) return;
+    const items = sourceByDay.get(parsed.day) || [];
+    items.push({ ...parsed, value });
+    sourceByDay.set(parsed.day, items);
+  });
+  const copiedEntries = targetToSourceDayMap({
+    sourceYear: source.year,
+    sourceMonth: source.month,
+    targetYear: year,
+    targetMonth: month,
+  }).flatMap(({ targetDay, sourceDay }) => (sourceByDay.get(sourceDay) || []).map(item => {
+    const nextKey = scheduleAssignmentKey(year, month, targetDay, item.shift);
+    return [item.workerSuffix ? `${nextKey}::${item.workerSuffix}` : nextKey, item.value];
+  }));
+  const copied = Object.fromEntries(copiedEntries);
   return {
     current: {
       ...clearMonthAssignments({ current, year, month }),
@@ -107,5 +142,6 @@ export function copyPreviousMonthAssignments({ current = {}, year, month }) {
     count: Object.keys(copied).length,
     sourceYear: source.year,
     sourceMonth: source.month,
+    strategy: "weekday-position",
   };
 }
