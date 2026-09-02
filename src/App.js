@@ -38,7 +38,7 @@ import { buildManualOverrideList, manualOverrideKey } from "./modules/manual-ove
 import { buildReportHtml } from "./modules/report.js?v=20260722-custom-hours";
 import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260726-manual-weekend-free";
 import { calculateAssignedHours, calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js?v=20260722-custom-hours";
-import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, removeAutomaticNightMorningAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260726-empty-slot";
+import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, copyPreviousMonthAssignments, removeAutomaticNightMorningAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260726-empty-slot";
 import { emptyManualSlot, isManualEmptySlot, manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker } from "./modules/manual-workers.js?v=20260726-empty-slot";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
@@ -902,7 +902,7 @@ function ManualOverridesPanel({ items, onReset }) {
   );
 }
 
-function PlanningFillPanel({ assignmentCount, rotationDays, onApplyExample, onClearMonth }) {
+function PlanningFillPanel({ assignmentCount, rotationDays, onApplyExample, onCopyPreviousMonth, onClearMonth }) {
   const selected = ROTATION_OPTIONS.find(option => normalizeRotationMode(rotationDays) === option.value) || ROTATION_OPTIONS[0];
   return h("section", { className: "panel manual-mode-panel" },
     h("div", { className: "title-row" },
@@ -914,6 +914,7 @@ function PlanningFillPanel({ assignmentCount, rotationDays, onApplyExample, onCl
     ),
     h("div", { className: "summary", style: { marginTop: 8 } },
       h("span", null, `Exemple sélectionné : ${selected.label}`),
+      h(Button, { onClick: onCopyPreviousMonth }, "Reprendre le mois dernier"),
       h(Button, { active: true, onClick: onApplyExample }, "Remplir avec l'exemple"),
       h(Button, { onClick: onClearMonth }, "Vider le mois"),
     ),
@@ -2257,6 +2258,19 @@ export default function App() {
     setHourOverrides(current => clearMonthAssignments({ current, year, month }));
     setCloudStatus({ kind: "local", text: "Exemple appliqué" });
   };
+  const copyPreviousMonthPlanning = () => {
+    const previous = new Date(year, month - 1, 1);
+    if (manualOverrides.length && !window.confirm(`Remplacer les créneaux déjà saisis de ${MONTHS[month]} ${year} par ceux de ${MONTHS[previous.getMonth()]} ${previous.getFullYear()} ?`)) return;
+    const copiedOverrides = copyPreviousMonthAssignments({ current: overrides, year, month });
+    if (!copiedOverrides.count) {
+      alert(`Aucun planning saisi trouvé sur ${MONTHS[copiedOverrides.sourceMonth]} ${copiedOverrides.sourceYear}.`);
+      return;
+    }
+    const copiedHours = copyPreviousMonthAssignments({ current: hourOverrides, year, month });
+    setOverrides(copiedOverrides.current);
+    setHourOverrides(copiedHours.current);
+    setCloudStatus({ kind: "local", text: "Mois précédent repris" });
+  };
   const clearMonthPlanning = () => {
     const confirmed = window.confirm("Vider tous les créneaux saisis de ce mois ?");
     if (!confirmed) return;
@@ -2647,7 +2661,7 @@ export default function App() {
       sessionRole.isAdmin ? h(CloudConflictNotice, { conflict: cloudConflict, onReload: () => window.location.reload() }) : null,
       sessionRole.isAdmin ? h(ShareReminder, { dashboard: groupDashboard, year, month, onSharePlanning: sharePlanningEmail }) : null,
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
-      planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onClearMonth: clearMonthPlanning }) : null,
+      planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onCopyPreviousMonth: copyPreviousMonthPlanning, onClearMonth: clearMonthPlanning }) : null,
       planningView ? h(AssignmentProgress, { auxiliaries: activeAux, assignedHours }) : null,
       planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,

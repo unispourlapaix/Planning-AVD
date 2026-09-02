@@ -9,6 +9,7 @@
     "check:personal": "node scripts/check-personal-view.mjs",
     "check:tasks": "node scripts/check-task-calendar.mjs",
     "check:pill-hours": "node scripts/check-worker-pill-hours.mjs",
+    "check:copy-month": "node scripts/check-copy-previous-month.mjs",
     "check:rotation": "node scripts/check-rotation.mjs",
     "preview": "vite preview"
   },

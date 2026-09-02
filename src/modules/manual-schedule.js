@@ -7,6 +7,19 @@ export const scheduleAssignmentKey = (year, month, day, shift) => `${year}-${mon
 
 const emptyShift = shift => ({ id: shift.id, worker: "", workers: [], hours: defaultHoursForShift(shift.id) });
 const monthPrefix = (year, month) => `${year}-${month}-`;
+const previousMonthOf = (year, month) => {
+  const date = new Date(year, month - 1, 1);
+  return { year: date.getFullYear(), month: date.getMonth() };
+};
+
+const remapMonthKey = ({ key, sourceYear, sourceMonth, targetYear, targetMonth, maxDay }) => {
+  const [baseKey, workerSuffix = ""] = String(key || "").split("::");
+  const [rawYear, rawMonth, rawDay, shift] = baseKey.split("-");
+  const day = Number(rawDay);
+  if (Number(rawYear) !== sourceYear || Number(rawMonth) !== sourceMonth || !Number.isInteger(day) || day < 1 || day > maxDay || !shift) return "";
+  const nextKey = scheduleAssignmentKey(targetYear, targetMonth, day, shift);
+  return workerSuffix ? `${nextKey}::${workerSuffix}` : nextKey;
+};
 
 export function buildEmptySchedule({ year, month }) {
   return Object.fromEntries(Array.from({ length: daysInMonth(year, month) }, (_, index) => {
@@ -71,4 +84,28 @@ export function replaceMonthAssignments({ current = {}, next = {}, year, month }
 export function clearMonthAssignments({ current = {}, year, month }) {
   const prefix = monthPrefix(year, month);
   return Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix)));
+}
+
+export function copyPreviousMonthAssignments({ current = {}, year, month }) {
+  const source = previousMonthOf(year, month);
+  const maxDay = daysInMonth(year, month);
+  const copied = Object.fromEntries(Object.entries(current)
+    .map(([key, value]) => [remapMonthKey({
+      key,
+      sourceYear: source.year,
+      sourceMonth: source.month,
+      targetYear: year,
+      targetMonth: month,
+      maxDay,
+    }), value])
+    .filter(([key]) => key));
+  return {
+    current: {
+      ...clearMonthAssignments({ current, year, month }),
+      ...copied,
+    },
+    count: Object.keys(copied).length,
+    sourceYear: source.year,
+    sourceMonth: source.month,
+  };
 }
