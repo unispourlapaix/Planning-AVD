@@ -83,6 +83,7 @@ export const AUXILIARY_JOB_SECTIONS = [
         title: "Fiabilité et communication",
         items: [
           "Respecter scrupuleusement les horaires, car l'équipe dépend de votre ponctualité pour les relèves.",
+          "Prévenir immédiatement le bénéficiaire et l'équipe en cas d'absence, même justifiée, et autant que possible à l'avance. Tout abandon de poste met en danger une personne dépendante et peut créer une situation de maltraitance grave.",
           "Remplir le cahier de liaison ou l'outil de transmission pour que vos collègues aient les informations importantes pour la suite de la journée.",
         ],
       },

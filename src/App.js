@@ -1610,6 +1610,29 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
     }
   };
 
+  const changeRole = async (member, nextRole) => {
+    const memberEmail = String(member.email || "").trim().toLowerCase();
+    if (!MEMBER_EMAIL_PATTERN.test(memberEmail)) {
+      alert("Cet acces n'a pas d'email valide. Réinvitez la personne avec son adresse complete.");
+      return;
+    }
+    if (String(connectedEmail || "").toLowerCase() === memberEmail && nextRole !== "admin") {
+      alert("Votre propre acces administrateur reste protege.");
+      return;
+    }
+    const nextLabel = ACCESS_ROLE_LABELS[nextRole] || nextRole;
+    if (nextRole === "auxiliary" && !window.confirm(`Retirer les droits administrateur de ${member.name || member.email} et garder son accès auxiliaire ?`)) return;
+    setMemberBusy(memberEmail);
+    try {
+      const result = await onSaveMember({ email: memberEmail, name: member.name || "", role: nextRole });
+      alert(`${result.email} est maintenant ${ACCESS_ROLE_LABELS[result.role] || nextLabel}.`);
+    } catch (error) {
+      alert(`Changement de role impossible : ${error.message}`);
+    } finally {
+      setMemberBusy("");
+    }
+  };
+
   const deleteAccess = async member => {
     const memberEmail = String(member.email || "").trim().toLowerCase();
     if (!MEMBER_EMAIL_PATTERN.test(memberEmail)) {
@@ -1718,6 +1741,11 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
                     h("small", null, member.email),
                   ),
                   h("span", { className: `role-pill ${member.role === "admin" || member.role === "owner" ? "saved" : member.role === "viewer" ? "saving" : "local"}` }, ACCESS_ROLE_LABELS[member.role] || member.role),
+                  member.active !== false && member.role === "admin" ? h(Button, {
+                    disabled: isSelf || rowBusy,
+                    title: isSelf ? "Votre propre acces reste protege" : "Retirer les droits admin sans supprimer l'auxiliaire",
+                    onClick: () => changeRole(member, "auxiliary"),
+                  }, rowBusy ? "..." : "Rendre auxiliaire") : null,
                   h(Checkbox, {
                     checked: member.active,
                     disabled: isSelf || member.role === "owner" || rowBusy,

@@ -28,6 +28,7 @@ assert(jobText.includes("Nom de l'employeur : Payet Emmanuel"), "La fiche de pos
 assert(jobText.includes("Lieu de travail : Domicile principal du bénéficiaire et déplacements extérieurs"), "Le lieu de travail générique doit etre present");
 assert(jobText.includes("Objectif général du poste"), "L'objectif général doit etre present");
 assert(jobText.includes("Écoute et adaptabilité"), "Les regles professionnelles doivent etre presentes");
+assert(jobText.includes("Tout abandon de poste met en danger une personne dépendante"), "L'avertissement abandon de poste doit etre present");
 assert(AUXILIARY_JOB_SECTIONS.length === 2, "Les missions et les regles d'or doivent etre conservees");
 assert(meta.some(item => item.label === "Nom de l'employeur" && item.text === "Payet Emmanuel"), "La meta employeur doit etre dynamique");
 assert(!genericJobText.includes("Payet Emmanuel"), "La fiche ne doit pas figer un bénéficiaire dans le code");

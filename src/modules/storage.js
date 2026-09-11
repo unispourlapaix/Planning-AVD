@@ -560,6 +560,19 @@ const ACCESS_ROLES = ["admin", "auxiliary", "viewer"];
 
 const normalizeAccessRole = role => ACCESS_ROLES.includes(role) ? role : "auxiliary";
 
+export function resolveMemberRoleUpdate({ requestedRole = "auxiliary", existingAdminActive = false, existingBootstrapActiveForBeneficiary = false } = {}) {
+  const role = normalizeAccessRole(requestedRole);
+  return {
+    role,
+    requestedRole: role,
+    keepBeneficiaryMemberActive: true,
+    shouldWriteActiveGlobalAdmin: role === "admin",
+    shouldWriteInactiveGlobalAdmin: role !== "admin",
+    shouldDeactivateBootstrapAdmin: role !== "admin" && existingBootstrapActiveForBeneficiary,
+    wasAdmin: existingAdminActive || existingBootstrapActiveForBeneficiary,
+  };
+}
+
 const roleRank = role => ({ owner: 0, admin: 1, auxiliary: 2, viewer: 3 }[role] ?? 4);
 
 const accessFromSnapshots = ({ uidAdmin, emailAdmin, adminEmail, bootstrapAdmin, teamMember, beneficiaryShares }) => {
@@ -955,11 +968,19 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
   if (!clean) throw new Error("Email invalide.");
   if (clean === adminEmail && cleanRole !== "admin") throw new Error("Votre propre acces administrateur reste protege.");
   const canWriteGlobalAccess = await isAdminUser({ db, user });
-  const existingAdmin = cleanRole === "admin" || !canWriteGlobalAccess
-    ? null
-    : await db.collection("planning-avd-admins").doc(clean).get().catch(() => null);
-  const targetIsActiveAdmin = !!existingAdmin?.exists && existingAdmin.data()?.active !== false;
-  const effectiveRole = targetIsActiveAdmin ? "admin" : cleanRole;
+  const [existingAdmin, existingBootstrap] = await Promise.all([
+    canWriteGlobalAccess ? db.collection("planning-avd-admins").doc(clean).get().catch(() => null) : null,
+    safeBeneficiaryId ? db.collection("planning-avd-admin-bootstraps").doc(clean).get().catch(() => null) : null,
+  ]);
+  const existingBootstrapData = existingBootstrap?.exists ? existingBootstrap.data() || {} : {};
+  const roleUpdate = resolveMemberRoleUpdate({
+    requestedRole: cleanRole,
+    existingAdminActive: !!existingAdmin?.exists && existingAdmin.data()?.active !== false,
+    existingBootstrapActiveForBeneficiary: !!existingBootstrap?.exists
+      && existingBootstrapData.active !== false
+      && String(existingBootstrapData.beneficiaryId || "") === safeBeneficiaryId,
+  });
+  const effectiveRole = roleUpdate.role;
   const common = {
     email: clean,
     emailLower: clean,
@@ -1006,14 +1027,25 @@ export async function grantMemberRole({ db, user, email, role = "auxiliary", nam
       }, { merge: true }),
     );
   }
+  if (roleUpdate.shouldDeactivateBootstrapAdmin) {
+    writes.push(db.collection("planning-avd-admin-bootstraps").doc(clean).set({
+      email: clean,
+      emailLower: clean,
+      active: false,
+      role: "admin",
+      beneficiaryId: safeBeneficiaryId,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: adminEmail,
+    }, { merge: true }));
+  }
   if (canWriteGlobalAccess) {
-    if (effectiveRole === "admin") {
+    if (roleUpdate.shouldWriteActiveGlobalAdmin) {
       writes.push(db.collection("planning-avd-admins").doc(clean).set({
         ...common,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         createdBy: adminEmail,
       }, { merge: true }));
-    } else {
+    } else if (roleUpdate.shouldWriteInactiveGlobalAdmin) {
       writes.push(db.collection("planning-avd-admins").doc(clean).set({
         email: clean,
         emailLower: clean,
