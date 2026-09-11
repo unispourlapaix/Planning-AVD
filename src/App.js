@@ -1622,6 +1622,7 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
     }
     const nextLabel = ACCESS_ROLE_LABELS[nextRole] || nextRole;
     if (nextRole === "auxiliary" && !window.confirm(`Retirer les droits administrateur de ${member.name || member.email} et garder son accès auxiliaire ?`)) return;
+    if (nextRole === "admin" && !window.confirm(`Donner les droits administrateur à ${member.name || member.email} ?`)) return;
     setMemberBusy(memberEmail);
     try {
       const result = await onSaveMember({ email: memberEmail, name: member.name || "", role: nextRole });
@@ -1746,6 +1747,11 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
                     title: isSelf ? "Votre propre acces reste protege" : "Retirer les droits admin sans supprimer l'auxiliaire",
                     onClick: () => changeRole(member, "auxiliary"),
                   }, rowBusy ? "..." : "Rendre auxiliaire") : null,
+                  member.active !== false && !["admin", "owner"].includes(member.role) ? h(Button, {
+                    disabled: rowBusy,
+                    title: "Donner les droits admin à ce membre",
+                    onClick: () => changeRole(member, "admin"),
+                  }, rowBusy ? "..." : "Rendre admin") : null,
                   h(Checkbox, {
                     checked: member.active,
                     disabled: isSelf || member.role === "owner" || rowBusy,
