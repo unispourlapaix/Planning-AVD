@@ -47,6 +47,7 @@ import { breakNoticeForSlot, personalBreakNoticeForSlot } from "./modules/break-
 import { defaultHoursForShift, hasCustomSlotHours, hasCustomWorkerHours, normalizeHourOverrides, normalizeSlotHour, shiftWorkerHourKey, slotHours, slotWorkerHours } from "./modules/shift-hours.js?v=20260722-custom-hours";
 import { TaskPanel } from "./modules/task-panel.js?v=20260627-beneficiary-scope";
 import { subscribeTasks, taskScheduleLabel } from "./modules/tasks.js?v=20260702-scroll-lists";
+import { AUXILIARY_JOB_OBJECTIVE_TEXT, AUXILIARY_JOB_OBJECTIVE_TITLE, AUXILIARY_JOB_SECTIONS, AUXILIARY_JOB_TITLE, AUXILIARY_WELCOME_CLOSE, AUXILIARY_WELCOME_CONTEXT, AUXILIARY_WELCOME_INTRO, AUXILIARY_WELCOME_PILLARS, AUXILIARY_WELCOME_QUOTE, AUXILIARY_WELCOME_TITLE, buildAuxiliaryJobMeta } from "./modules/auxiliary-welcome.js?v=20260911-onboarding";
 import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=20260702-member-actions";
 
 const { useEffect, useMemo, useRef, useState } = React;
@@ -1254,6 +1255,53 @@ const FIRST_ROLE_CHOICES = [
   },
 ];
 
+function AuxiliaryWelcomePanel() {
+  return h("details", { className: "auxiliary-welcome", open: true },
+    h("summary", null,
+      h("span", null, "Message d'accueil"),
+      h("b", null, AUXILIARY_WELCOME_TITLE),
+    ),
+    h("div", { className: "auxiliary-welcome-body" },
+      AUXILIARY_WELCOME_INTRO.map((text, index) => h("p", { key: `intro-${index}` }, text)),
+      h("blockquote", null, AUXILIARY_WELCOME_QUOTE),
+      AUXILIARY_WELCOME_CONTEXT.map((text, index) => h("p", { key: `context-${index}` }, text)),
+      h("p", null, "Votre rôle d'Assistant de vie se découpe en trois piliers fondamentaux :"),
+      h("div", { className: "auxiliary-welcome-pillars" }, AUXILIARY_WELCOME_PILLARS.map(item => h("article", { key: item.title },
+        h("b", null, item.title),
+        h("span", null, item.text),
+      ))),
+      h("p", { className: "auxiliary-welcome-close" }, AUXILIARY_WELCOME_CLOSE),
+    ),
+  );
+}
+
+function AuxiliaryJobPostPanel({ beneficiaryName }) {
+  const meta = buildAuxiliaryJobMeta({ beneficiaryName });
+  return h("details", { className: "auxiliary-welcome auxiliary-job-post" },
+    h("summary", null,
+      h("span", null, "Fiche de poste"),
+      h("b", null, AUXILIARY_JOB_TITLE),
+    ),
+    h("div", { className: "auxiliary-welcome-body" },
+      h("div", { className: "job-meta-grid" }, meta.map(item => h("article", { key: item.label },
+        h("small", null, item.label),
+        h("b", null, item.text),
+      ))),
+      h("article", { className: "job-objective" },
+        h("b", null, AUXILIARY_JOB_OBJECTIVE_TITLE),
+        h("p", null, AUXILIARY_JOB_OBJECTIVE_TEXT),
+      ),
+      AUXILIARY_JOB_SECTIONS.map(section => h("section", { key: section.title, className: "job-section" },
+        h("h4", null, section.title),
+        section.groups.map(group => h("article", { key: group.title },
+          h("b", null, group.title),
+          h("ul", null, group.items.map(item => h("li", { key: item }, item))),
+        )),
+      )),
+    ),
+  );
+}
+
 function FirstConnectionPanel({ authState, onLogout }) {
   const [role, setRole] = useState("auxiliary");
   const [beneficiaryName, setBeneficiaryName] = useState("");
@@ -1345,6 +1393,10 @@ function FirstConnectionPanel({ authState, onLogout }) {
         h("b", null, choice.title),
         h("small", null, choice.detail),
       ))),
+      role === "auxiliary" ? h(React.Fragment, null,
+        h(AuxiliaryWelcomePanel),
+        h(AuxiliaryJobPostPanel, { beneficiaryName }),
+      ) : null,
       h("div", { className: "form-grid" },
         h(Field, { label: "Bénéficiaire concerné" }, h(TextInput, {
           value: beneficiaryName,

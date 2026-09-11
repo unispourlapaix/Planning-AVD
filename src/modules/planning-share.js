@@ -4,6 +4,7 @@ import { publishPersonalPlannings } from "./storage.js?v=20260722-custom-hours";
 import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
 import { defaultHoursForShift, hasCustomSlotHours, hasCustomWorkerHours, slotHours, slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { buildAuxiliaryJobPostEmailText, buildAuxiliaryWelcomeEmailText } from "./auxiliary-welcome.js?v=20260911-onboarding";
 
 const SHARE_SHIFT_ORDER = ["morning", "afternoon", "night"];
 
@@ -60,10 +61,16 @@ export async function sharePlanningByEmail({ db, user, year, month, beneficiaryI
 
   const appUrl = `${window.location.origin}${window.location.pathname}`;
   const beneficiaryLine = beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "";
+  const welcomeText = buildAuxiliaryWelcomeEmailText({ beneficiaryName });
+  const jobPostText = buildAuxiliaryJobPostEmailText({ beneficiaryName });
   const simplifiedPlanning = buildSimplifiedPlanning({ year, month, auxiliaries, schedule });
   const subject = `Votre planning Planning-AVD - ${MONTHS[month]} ${year}`;
   const body = [
     "Bonjour,",
+    "",
+    welcomeText,
+    "",
+    jobPostText,
     "",
     `Votre planning personnel pour ${MONTHS[month]} ${year} est disponible.`,
     beneficiaryLine,
