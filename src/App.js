@@ -827,18 +827,6 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   );
 }
 
-function Summary({ auxiliaries, hours }) {
-  return h("section", { className: "summary" }, auxiliaries.map((aux, index) => {
-    const hData = displayHours(hours[aux.id], aux.quota);
-    const c = colorFor(index);
-    return h("div", { className: "panel", key: aux.id },
-      h("div", { className: "pill", style: { background: c.light, color: c.text } }, aux.lead ? "Chef" : "Auxiliaire", " · ", aux.name),
-      h("div", { className: "muted", style: { marginTop: 8 } }, `${hData.total}h effectuees / ${hData.quota}h`),
-      h("div", { className: "progress" }, h("span", { style: { width: `${Math.min(100, Math.round((hData.total / Math.max(1, hData.quota)) * 100))}%`, background: c.solid } })),
-    );
-  }));
-}
-
 function AssignmentProgress({ auxiliaries, assignedHours }) {
   return h("section", { className: "assignment-progress" }, auxiliaries.map((aux, index) => {
     const data = assignmentSummary(assignedHours[aux.id], aux.quota);
@@ -2749,7 +2737,6 @@ export default function App() {
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onCopyPreviousMonth: copyPreviousMonthPlanning, onClearMonth: clearMonthPlanning }) : null,
       planningView ? h(AssignmentProgress, { auxiliaries: activeAux, assignedHours }) : null,
-      planningView ? h(Summary, { auxiliaries: activeAux, hours }) : null,
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
       planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: (key, alreadyEmpty) => {
