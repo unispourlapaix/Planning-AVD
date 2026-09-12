@@ -16,6 +16,7 @@ import {
   grantMemberRole,
   loadRestoreBackup,
   loadState,
+  markMonthCleared,
   publishPersonalPlannings,
   requestAccessRole,
   repairBeneficiaryMembers,
@@ -384,6 +385,20 @@ const normalizeDayOutings = value => Object.fromEntries(Object.entries(value && 
     })
     .filter(item => item.title)])
   .filter(([, items]) => items.length));
+const normalizeClearedMonths = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
+  .filter(([key, clearedAt]) => /^\d{4}-\d{2}$/.test(key) && clearedAt)
+  .map(([key, clearedAt]) => [key, String(clearedAt)]));
+const withoutClearedMonth = (clearedMonths, year, month) => {
+  const next = normalizeClearedMonths(clearedMonths);
+  delete next[periodKey(year, month)];
+  return next;
+};
+const overridePeriodKey = key => {
+  const [rawYear, rawMonth] = String(key || "").split("-");
+  const parsedYear = Number(rawYear);
+  const parsedMonth = Number(rawMonth);
+  return Number.isInteger(parsedYear) && Number.isInteger(parsedMonth) ? periodKey(parsedYear, parsedMonth) : "";
+};
 const stateSignature = state => JSON.stringify(state);
 const ADMIN_ROLE_TIMEOUT_MS = 4500;
 const normalizeTypedEmail = value => String(value || "").trim().toLowerCase();
@@ -1950,6 +1965,7 @@ export default function App() {
   const [auxiliaries, setAuxiliaries] = useState(cloneDefaultAux);
   const [overrides, setOverrides] = useState({});
   const [hourOverrides, setHourOverrides] = useState({});
+  const [clearedMonths, setClearedMonths] = useState({});
   const [dayOutings, setDayOutings] = useState({});
   const [slotEdit, setSlotEdit] = useState(null);
   const [mealDate, setMealDate] = useState(null);
@@ -2219,10 +2235,11 @@ export default function App() {
       auxiliaries,
       overrides,
       hourOverrides,
+      clearedMonths,
       dayOutings: personalMode ? personalPlanning?.dayOutings || {} : dayOutings,
       personal: personalMode,
     };
-  }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings, personalMode, personalBeneficiaryId, personalPlanning, personalAccess]);
+  }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings, personalMode, personalBeneficiaryId, personalPlanning, personalAccess]);
 
   useEffect(() => {
     if (!authState.ready || stateLoaded) return;
@@ -2238,6 +2255,7 @@ export default function App() {
         auxiliaries: identifiedSaved?.auxiliaries || identifiedSaved?.names ? normalizeAuxiliaries(identifiedSaved) : auxiliaries,
         overrides: identifiedSaved?.overrides && typeof identifiedSaved.overrides === "object" ? identifiedSaved.overrides : overrides,
         hourOverrides: normalizeHourOverrides(identifiedSaved?.hourOverrides || hourOverrides),
+        clearedMonths: normalizeClearedMonths(identifiedSaved?.clearedMonths),
         dayOutings: identifiedSaved?.dayOutings && typeof identifiedSaved.dayOutings === "object" ? normalizeDayOutings(identifiedSaved.dayOutings) : dayOutings,
       };
       const cloudMeta = saved?.__cloud || {};
@@ -2262,6 +2280,7 @@ export default function App() {
       setAuxiliaries(nextState.auxiliaries);
       setOverrides(nextState.overrides);
       setHourOverrides(nextState.hourOverrides);
+      setClearedMonths(nextState.clearedMonths);
       setDayOutings(nextState.dayOutings);
       setStateLoaded(true);
     });
@@ -2277,7 +2296,7 @@ export default function App() {
       setCloudStatus({ kind: "local", text: "Mode auxiliaire" });
       return;
     }
-    const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings };
+    const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings };
     const signature = stateSignature(currentState);
     if (signature === lastSavedSignatureRef.current) return;
     if (hasIncompleteAuxEmail(auxiliaries)) {
@@ -2308,7 +2327,7 @@ export default function App() {
       if (result?.cloud || result?.reason === "not-connected") lastSavedSignatureRef.current = signature;
     }), 450);
     return () => clearTimeout(id);
-  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings]);
+  }, [stateLoaded, authState.user, authState.db, sessionRole.ready, sessionRole.isAdmin, year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings]);
 
   const rotationExample = useMemo(() => buildSchedule({ year, month, auxiliaries: activeAux, rotationDays }), [year, month, activeAux, rotationDays]);
   const emptySchedule = useMemo(() => buildEmptySchedule({ year, month }), [year, month]);
@@ -2330,6 +2349,7 @@ export default function App() {
     });
     setOverrides(current => replaceMonthAssignments({ current, next: nextAssignments, year, month }));
     setHourOverrides(current => clearMonthAssignments({ current, year, month }));
+    setClearedMonths(current => withoutClearedMonth(current, year, month));
     setCloudStatus({ kind: "local", text: "Exemple appliqué" });
   };
   const copyPreviousMonthPlanning = () => {
@@ -2343,6 +2363,7 @@ export default function App() {
     const copiedHours = copyPreviousMonthAssignments({ current: hourOverrides, year, month });
     setOverrides(copiedOverrides.current);
     setHourOverrides(copiedHours.current);
+    setClearedMonths(current => withoutClearedMonth(current, year, month));
     setCloudStatus({ kind: "local", text: "Mois précédent repris" });
   };
   const clearMonthPlanning = () => {
@@ -2350,6 +2371,7 @@ export default function App() {
     if (!confirmed) return;
     setOverrides(current => clearMonthAssignments({ current, year, month }));
     setHourOverrides(current => clearMonthAssignments({ current, year, month }));
+    setClearedMonths(current => markMonthCleared({ clearedMonths: current, year, month }));
     setCloudStatus({ kind: "local", text: "Mois vidé" });
   };
   const requireSafeCloudWrite = () => {
@@ -2422,7 +2444,7 @@ export default function App() {
     }
     try {
       setCloudStatus({ kind: "saving", text: "Sauvegarde cloud..." });
-      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings };
+      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings };
       const signature = stateSignature(currentState);
       const cloudResult = await saveStateWithOverwriteOption(currentState);
       setCloudResult(cloudResult);
@@ -2456,7 +2478,7 @@ export default function App() {
     }
     try {
       setCloudStatus({ kind: "saving", text: "Préparation partage..." });
-      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings };
+      const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings };
       const signature = stateSignature(currentState);
       const cloudResult = await saveStateWithOverwriteOption(currentState);
       setCloudResult(cloudResult);
@@ -2505,9 +2527,10 @@ export default function App() {
     try {
       const key = overrideKey(request.year, request.month, request.day, request.shift);
       const nextOverrides = { ...overrides, [key]: setManualPrimaryWorker(overrides[key], worker.id) };
+      const nextClearedMonths = withoutClearedMonth(clearedMonths, request.year, request.month);
       const nextSchedule = applyManualAssignments({ schedule: emptySchedule, assignments: nextOverrides, hourOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
-      const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, hourOverrides, dayOutings };
+      const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, hourOverrides, clearedMonths: nextClearedMonths, dayOutings };
       const signature = stateSignature(nextState);
       const cloudResult = await saveStateWithOverwriteOption(nextState);
       setCloudResult(cloudResult);
@@ -2521,6 +2544,7 @@ export default function App() {
       }
       rememberCloudVersion(cloudResult);
       lastSavedSignatureRef.current = signature;
+      setClearedMonths(nextClearedMonths);
       setOverrides(nextOverrides);
       await publishPersonalPlannings({ db: authState.db, user: authState.user, year, month, beneficiaryId, beneficiaryName, auxiliaries: activeAux, schedule: nextSchedule, hours: nextHours, dayOutings });
       await resolvePlanningChangeRequest({
@@ -2566,6 +2590,7 @@ export default function App() {
       auxiliaries: normalizeAuxiliaries({ auxiliaries: next.auxiliaries }),
       overrides: next.overrides && typeof next.overrides === "object" ? next.overrides : {},
       hourOverrides: normalizeHourOverrides(next.hourOverrides),
+      clearedMonths: normalizeClearedMonths(next.clearedMonths),
       dayOutings: normalizeDayOutings(next.dayOutings),
     };
     setYear(restoredState.year);
@@ -2577,6 +2602,7 @@ export default function App() {
     setAuxiliaries(restoredState.auxiliaries);
     setOverrides(restoredState.overrides);
     setHourOverrides(restoredState.hourOverrides);
+    setClearedMonths(restoredState.clearedMonths);
     setDayOutings(restoredState.dayOutings);
     return restoredState;
   };
@@ -2619,6 +2645,7 @@ export default function App() {
       auxiliaries: cloneDefaultAux(),
       overrides: {},
       hourOverrides: {},
+      clearedMonths: {},
       dayOutings: {},
     };
     applyRestoredPlanningState(next);
@@ -2634,7 +2661,7 @@ export default function App() {
       app: "Planning-AVD",
       version: 1,
       exportedAt: new Date().toISOString(),
-      state: { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, dayOutings },
+      state: { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings },
     };
     const content = JSON.stringify(backup, null, 2);
     const fileName = `planning-avd-sauvegarde-${year}-${String(month + 1).padStart(2, "0")}.json`;
@@ -2766,14 +2793,26 @@ export default function App() {
       assignedHours,
       onChoose: (key, worker) => {
         const nextValue = setManualPrimaryWorker(overrides[key], worker);
+        const markerKey = overridePeriodKey(key);
         setOverrides(current => ({ ...current, [key]: setManualPrimaryWorker(current[key], worker) }));
+        if (markerKey) setClearedMonths(current => {
+          const next = normalizeClearedMonths(current);
+          delete next[markerKey];
+          return next;
+        });
         setHourOverrides(current => pruneSlotWorkerHourOverrides(current, key, manualWorkerIds(nextValue)));
       },
       onToggleDouble: (key, worker) => {
         const nextValue = toggleManualDoubleWorker(overrides[key], worker);
+        const markerKey = overridePeriodKey(key);
         setOverrides(current => {
           const value = toggleManualDoubleWorker(current[key], worker);
           return value ? { ...current, [key]: value } : current;
+        });
+        if (markerKey) setClearedMonths(current => {
+          const next = normalizeClearedMonths(current);
+          delete next[markerKey];
+          return next;
         });
         setHourOverrides(current => pruneSlotWorkerHourOverrides(current, key, manualWorkerIds(nextValue)));
       },

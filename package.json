@@ -11,6 +11,7 @@
     "check:pill-hours": "node scripts/check-worker-pill-hours.mjs",
     "check:welcome": "node scripts/check-auxiliary-welcome.mjs",
     "check:admin-demotion": "node scripts/check-admin-demotion.mjs",
+    "check:clear-cloud": "node scripts/check-clear-month-cloud.mjs",
     "check:copy-month": "node scripts/check-copy-previous-month.mjs",
     "check:rotation": "node scripts/check-rotation.mjs",
     "preview": "vite preview"

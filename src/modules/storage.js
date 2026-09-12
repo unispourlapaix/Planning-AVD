@@ -112,6 +112,34 @@ const stateRestoreKey = value => `${String(value?.beneficiaryId || "legacy")}-${
 const hasAuxiliaries = state => Array.isArray(state?.auxiliaries) && state.auxiliaries.length > 0;
 const hasIncompleteAuxiliaryEmail = state => Array.isArray(state?.auxiliaries)
   && state.auxiliaries.some(aux => aux?.active !== false && cleanEmail(aux.email) && !firstValidEmail(aux.email));
+const normalizedClearedMonths = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
+  .filter(([key, clearedAt]) => /^\d{4}-\d{2}$/.test(key) && clearedAt)
+  .map(([key, clearedAt]) => [key, String(clearedAt)]));
+const assignmentPeriodKey = key => {
+  const [rawYear, rawMonth] = String(key || "").split("-");
+  const year = Number(rawYear);
+  const month = Number(rawMonth);
+  return Number.isInteger(year) && Number.isInteger(month) && month >= 0 && month <= 11 ? monthKey(year, month) : "";
+};
+const mergeClearedMonths = (localCleared, cloudCleared) => {
+  const merged = {};
+  [normalizedClearedMonths(cloudCleared), normalizedClearedMonths(localCleared)].forEach(source => {
+    Object.entries(source).forEach(([key, value]) => {
+      if (!merged[key] || timestampScore(value) >= timestampScore(merged[key])) merged[key] = value;
+    });
+  });
+  return merged;
+};
+const shouldKeepLocalClear = ({ period, localClearedMonths, cloudUpdatedAt }) => {
+  const clearScore = timestampScore(localClearedMonths?.[period]);
+  if (!period || !clearScore) return false;
+  const cloudScore = timestampScore(cloudUpdatedAt);
+  return !cloudScore || clearScore >= cloudScore;
+};
+export const markMonthCleared = ({ clearedMonths = {}, year, month, clearedAt = new Date().toISOString() }) => ({
+  ...normalizedClearedMonths(clearedMonths),
+  [monthKey(year, month)]: String(clearedAt),
+});
 const beneficiaryRoot = (db, beneficiaryId) => db.collection("planning-avd-beneficiaries").doc(String(beneficiaryId || "").trim());
 const userBeneficiaryRef = (db, user, beneficiaryId) =>
   db.collection("planning-avd-users").doc(user.uid).collection("beneficiaries").doc(String(beneficiaryId || "").trim());
@@ -137,27 +165,40 @@ const buildSyncedAuxiliaryMember = ({ email, name = "", active = true, updatedBy
   if (!role) delete payload.role;
   return payload;
 };
-const mergeOverrides = (localOverrides, cloudOverrides) => {
+const mergeOverrides = (localOverrides, cloudOverrides, localClearedMonths = {}, cloudUpdatedAt = "") => {
   const local = localOverrides && typeof localOverrides === "object" ? localOverrides : {};
   if (!cloudOverrides || typeof cloudOverrides !== "object") return local;
-  const cloud = cloudOverrides;
+  const cloud = Object.fromEntries(Object.entries(cloudOverrides)
+    .filter(([key]) => !shouldKeepLocalClear({ period: assignmentPeriodKey(key), localClearedMonths, cloudUpdatedAt })));
   return {
     ...cloud,
     ...Object.fromEntries(Object.entries(local).filter(([, value]) => isManualEmptySlot(value))),
   };
 };
+const mergeHourOverrides = (localHourOverrides, cloudHourOverrides, localClearedMonths = {}, cloudUpdatedAt = "") => {
+  if (!cloudHourOverrides || typeof cloudHourOverrides !== "object") {
+    return localHourOverrides && typeof localHourOverrides === "object" ? localHourOverrides : {};
+  }
+  return Object.fromEntries(Object.entries(cloudHourOverrides)
+    .filter(([key]) => !shouldKeepLocalClear({ period: assignmentPeriodKey(key), localClearedMonths, cloudUpdatedAt })));
+};
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
   if (!local) return cloud;
+  const localClearedMonths = normalizedClearedMonths(local.clearedMonths);
+  const cloudUpdatedAt = savedStateUpdatedAt(cloud);
   return {
     ...local,
     ...cloud,
     auxiliaries: hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
-    overrides: mergeOverrides(local.overrides, cloud.overrides),
-    hourOverrides: cloud.hourOverrides && typeof cloud.hourOverrides === "object" ? cloud.hourOverrides : local.hourOverrides,
+    overrides: mergeOverrides(local.overrides, cloud.overrides, localClearedMonths, cloudUpdatedAt),
+    hourOverrides: mergeHourOverrides(local.hourOverrides, cloud.hourOverrides, localClearedMonths, cloudUpdatedAt),
+    clearedMonths: mergeClearedMonths(local.clearedMonths, cloud.clearedMonths),
     dayOutings: cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
   };
 };
+
+export const mergePlanningStateForCloudLoad = ({ local, cloud }) => mergeSavedState(local, cloud);
 
 export async function ensureBeneficiaryGroup({ db, user, state }) {
   const identified = ensureBeneficiaryIdentity(state);
@@ -222,6 +263,7 @@ export const defaultState = () => {
     beneficiaryName: "",
     auxiliaries: null,
     hourOverrides: {},
+    clearedMonths: {},
     dayOutings: {},
     updatedAt: "",
   };
@@ -245,7 +287,7 @@ export async function loadState({ db, user }) {
       beneficiaryCloud = beneficiaryData?.value ? migrateState(beneficiaryData.value) : null;
     }
     const cloud = latestSavedState(beneficiaryCloud, userCloud);
-    const merged = ensureBeneficiaryIdentity(beneficiaryCloud ? beneficiaryCloud : userCloud ? mergeSavedState(local, userCloud) : local);
+    const merged = ensureBeneficiaryIdentity(cloud ? mergeSavedState(local, cloud) : local);
     const beneficiaryUpdatedAt = beneficiaryDocumentUpdatedAt(beneficiaryData) || savedStateUpdatedAt(cloud);
     return withLoadMeta(merged, {
       ready: true,
