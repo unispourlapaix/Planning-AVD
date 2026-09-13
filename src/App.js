@@ -399,6 +399,13 @@ const overridePeriodKey = key => {
   const parsedMonth = Number(rawMonth);
   return Number.isInteger(parsedYear) && Number.isInteger(parsedMonth) ? periodKey(parsedYear, parsedMonth) : "";
 };
+const withoutClearedSlotPeriod = (clearedMonths, key) => {
+  const markerKey = overridePeriodKey(key);
+  if (!markerKey) return clearedMonths;
+  const next = normalizeClearedMonths(clearedMonths);
+  delete next[markerKey];
+  return next;
+};
 const stateSignature = state => JSON.stringify(state);
 const ADMIN_ROLE_TIMEOUT_MS = 4500;
 const normalizeTypedEmail = value => String(value || "").trim().toLowerCase();
@@ -2014,6 +2021,25 @@ export default function App() {
     }
     setCloudStatus({ kind: "error", text: "Cloud non sauvegardé" });
   };
+  const buildPlanningState = updates => ({
+    year,
+    month,
+    view,
+    rotationDays,
+    beneficiaryId,
+    beneficiaryName,
+    auxiliaries,
+    overrides,
+    hourOverrides,
+    clearedMonths,
+    dayOutings,
+    ...updates,
+  });
+  const persistLocalDraft = nextState => {
+    saveState({ db: null, user: null, state: nextState }).catch(error => {
+      console.warn("Sauvegarde locale immediate impossible.", error);
+    });
+  };
 
   useEffect(() => {
     initGoogleAuth(next => setAuthState(next)).catch(error => setAuthState({ user: null, auth: null, db: null, ready: true, error: error.message }));
@@ -2347,9 +2373,13 @@ export default function App() {
       year,
       month,
     });
-    setOverrides(current => replaceMonthAssignments({ current, next: nextAssignments, year, month }));
-    setHourOverrides(current => clearMonthAssignments({ current, year, month }));
-    setClearedMonths(current => withoutClearedMonth(current, year, month));
+    const nextOverrides = replaceMonthAssignments({ current: overrides, next: nextAssignments, year, month });
+    const nextHourOverrides = clearMonthAssignments({ current: hourOverrides, year, month });
+    const nextClearedMonths = withoutClearedMonth(clearedMonths, year, month);
+    persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
+    setOverrides(nextOverrides);
+    setHourOverrides(nextHourOverrides);
+    setClearedMonths(nextClearedMonths);
     setCloudStatus({ kind: "local", text: "Exemple appliqué" });
   };
   const copyPreviousMonthPlanning = () => {
@@ -2361,17 +2391,23 @@ export default function App() {
       return;
     }
     const copiedHours = copyPreviousMonthAssignments({ current: hourOverrides, year, month });
+    const nextClearedMonths = withoutClearedMonth(clearedMonths, year, month);
+    persistLocalDraft(buildPlanningState({ overrides: copiedOverrides.current, hourOverrides: copiedHours.current, clearedMonths: nextClearedMonths }));
     setOverrides(copiedOverrides.current);
     setHourOverrides(copiedHours.current);
-    setClearedMonths(current => withoutClearedMonth(current, year, month));
+    setClearedMonths(nextClearedMonths);
     setCloudStatus({ kind: "local", text: "Mois précédent repris" });
   };
   const clearMonthPlanning = () => {
     const confirmed = window.confirm("Vider tous les créneaux saisis de ce mois ?");
     if (!confirmed) return;
-    setOverrides(current => clearMonthAssignments({ current, year, month }));
-    setHourOverrides(current => clearMonthAssignments({ current, year, month }));
-    setClearedMonths(current => markMonthCleared({ clearedMonths: current, year, month }));
+    const nextOverrides = clearMonthAssignments({ current: overrides, year, month });
+    const nextHourOverrides = clearMonthAssignments({ current: hourOverrides, year, month });
+    const nextClearedMonths = markMonthCleared({ clearedMonths, year, month });
+    persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
+    setOverrides(nextOverrides);
+    setHourOverrides(nextHourOverrides);
+    setClearedMonths(nextClearedMonths);
     setCloudStatus({ kind: "local", text: "Mois vidé" });
   };
   const requireSafeCloudWrite = () => {
@@ -2767,13 +2803,13 @@ export default function App() {
       planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
       planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: (key, alreadyEmpty) => {
-        setOverrides(current => {
-          const next = { ...current };
-          if (alreadyEmpty) delete next[key];
-          else next[key] = emptyManualSlot();
-          return next;
-        });
-        setHourOverrides(current => clearSlotHourOverrides(current, key));
+        const nextOverrides = { ...overrides };
+        if (alreadyEmpty) delete nextOverrides[key];
+        else nextOverrides[key] = emptyManualSlot();
+        const nextHourOverrides = clearSlotHourOverrides(hourOverrides, key);
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
+        setOverrides(nextOverrides);
+        setHourOverrides(nextHourOverrides);
       } }) : null,
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
@@ -2793,53 +2829,49 @@ export default function App() {
       assignedHours,
       onChoose: (key, worker) => {
         const nextValue = setManualPrimaryWorker(overrides[key], worker);
-        const markerKey = overridePeriodKey(key);
-        setOverrides(current => ({ ...current, [key]: setManualPrimaryWorker(current[key], worker) }));
-        if (markerKey) setClearedMonths(current => {
-          const next = normalizeClearedMonths(current);
-          delete next[markerKey];
-          return next;
-        });
-        setHourOverrides(current => pruneSlotWorkerHourOverrides(current, key, manualWorkerIds(nextValue)));
+        const nextOverrides = { ...overrides, [key]: nextValue };
+        const nextClearedMonths = withoutClearedSlotPeriod(clearedMonths, key);
+        const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
+        setOverrides(nextOverrides);
+        setClearedMonths(nextClearedMonths);
+        setHourOverrides(nextHourOverrides);
       },
       onToggleDouble: (key, worker) => {
         const nextValue = toggleManualDoubleWorker(overrides[key], worker);
-        const markerKey = overridePeriodKey(key);
-        setOverrides(current => {
-          const value = toggleManualDoubleWorker(current[key], worker);
-          return value ? { ...current, [key]: value } : current;
-        });
-        if (markerKey) setClearedMonths(current => {
-          const next = normalizeClearedMonths(current);
-          delete next[markerKey];
-          return next;
-        });
-        setHourOverrides(current => pruneSlotWorkerHourOverrides(current, key, manualWorkerIds(nextValue)));
+        if (!nextValue) return;
+        const nextOverrides = { ...overrides, [key]: nextValue };
+        const nextClearedMonths = withoutClearedSlotPeriod(clearedMonths, key);
+        const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
+        setOverrides(nextOverrides);
+        setClearedMonths(nextClearedMonths);
+        setHourOverrides(nextHourOverrides);
       },
       onReset: (key, alreadyEmpty) => {
-        setOverrides(current => {
-          const next = { ...current };
-          if (alreadyEmpty) delete next[key];
-          else next[key] = emptyManualSlot();
-          return next;
-        });
-        setHourOverrides(current => clearSlotHourOverrides(current, key));
+        const nextOverrides = { ...overrides };
+        if (alreadyEmpty) delete nextOverrides[key];
+        else nextOverrides[key] = emptyManualSlot();
+        const nextHourOverrides = clearSlotHourOverrides(hourOverrides, key);
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
+        setOverrides(nextOverrides);
+        setHourOverrides(nextHourOverrides);
         setSlotEdit(null);
       },
       onSetHours: (key, hours, fallbackHours) => {
         const defaultHours = normalizeSlotHour(fallbackHours);
-        setHourOverrides(current => {
-          const next = { ...current };
-          if (defaultHours !== null && hours === defaultHours) delete next[key];
-          else next[key] = hours;
-          return next;
-        });
+        const nextHourOverrides = { ...hourOverrides };
+        if (defaultHours !== null && hours === defaultHours) delete nextHourOverrides[key];
+        else nextHourOverrides[key] = hours;
+        persistLocalDraft(buildPlanningState({ hourOverrides: nextHourOverrides }));
+        setHourOverrides(nextHourOverrides);
       },
-      onResetHours: key => setHourOverrides(current => {
-        const next = { ...current };
-        delete next[key];
-        return next;
-      }),
+      onResetHours: key => {
+        const nextHourOverrides = { ...hourOverrides };
+        delete nextHourOverrides[key];
+        persistLocalDraft(buildPlanningState({ hourOverrides: nextHourOverrides }));
+        setHourOverrides(nextHourOverrides);
+      },
       onClose: () => setSlotEdit(null),
     }),
     h(MealPlannerModal, { selectedDate: mealDate, onClose: () => setMealDate(null), dayOutings, onDayOutingsChange: updateDayOutings }),
