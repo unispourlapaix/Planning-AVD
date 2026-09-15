@@ -165,36 +165,52 @@ const buildSyncedAuxiliaryMember = ({ email, name = "", active = true, updatedBy
   if (!role) delete payload.role;
   return payload;
 };
-const mergeOverrides = (localOverrides, cloudOverrides, localClearedMonths = {}, cloudUpdatedAt = "") => {
+const mergeOverrides = (localOverrides, cloudOverrides, localClearedMonths = {}, cloudUpdatedAt = "", preferLocal = false) => {
   const local = localOverrides && typeof localOverrides === "object" ? localOverrides : {};
   if (!cloudOverrides || typeof cloudOverrides !== "object") return local;
   const cloud = Object.fromEntries(Object.entries(cloudOverrides)
     .filter(([key]) => !shouldKeepLocalClear({ period: assignmentPeriodKey(key), localClearedMonths, cloudUpdatedAt })));
+  if (preferLocal) return { ...cloud, ...local };
   return {
     ...cloud,
-    ...Object.fromEntries(Object.entries(local).filter(([, value]) => isManualEmptySlot(value))),
+    ...Object.fromEntries(Object.entries(local).filter(([key, value]) =>
+      isManualEmptySlot(value)
+      || shouldKeepLocalClear({ period: assignmentPeriodKey(key), localClearedMonths, cloudUpdatedAt }))),
   };
 };
-const mergeHourOverrides = (localHourOverrides, cloudHourOverrides, localClearedMonths = {}, cloudUpdatedAt = "") => {
+const mergeHourOverrides = (localHourOverrides, cloudHourOverrides, localClearedMonths = {}, cloudUpdatedAt = "", preferLocal = false) => {
+  const local = localHourOverrides && typeof localHourOverrides === "object" ? localHourOverrides : {};
   if (!cloudHourOverrides || typeof cloudHourOverrides !== "object") {
-    return localHourOverrides && typeof localHourOverrides === "object" ? localHourOverrides : {};
+    return local;
   }
-  return Object.fromEntries(Object.entries(cloudHourOverrides)
+  const cloud = Object.fromEntries(Object.entries(cloudHourOverrides)
     .filter(([key]) => !shouldKeepLocalClear({ period: assignmentPeriodKey(key), localClearedMonths, cloudUpdatedAt })));
+  if (preferLocal) return { ...cloud, ...local };
+  return {
+    ...cloud,
+    ...Object.fromEntries(Object.entries(local).filter(([key]) =>
+      shouldKeepLocalClear({ period: assignmentPeriodKey(key), localClearedMonths, cloudUpdatedAt }))),
+  };
 };
 const mergeSavedState = (local, cloud) => {
   if (!cloud) return local;
   if (!local) return cloud;
   const localClearedMonths = normalizedClearedMonths(local.clearedMonths);
+  const localUpdatedAt = savedStateUpdatedAt(local);
   const cloudUpdatedAt = savedStateUpdatedAt(cloud);
+  const preferLocal = timestampScore(localUpdatedAt) > timestampScore(cloudUpdatedAt);
   return {
-    ...local,
-    ...cloud,
-    auxiliaries: hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
-    overrides: mergeOverrides(local.overrides, cloud.overrides, localClearedMonths, cloudUpdatedAt),
-    hourOverrides: mergeHourOverrides(local.hourOverrides, cloud.hourOverrides, localClearedMonths, cloudUpdatedAt),
+    ...(preferLocal ? cloud : local),
+    ...(preferLocal ? local : cloud),
+    auxiliaries: preferLocal
+      ? hasAuxiliaries(local) ? local.auxiliaries : cloud.auxiliaries
+      : hasAuxiliaries(cloud) ? cloud.auxiliaries : local.auxiliaries,
+    overrides: mergeOverrides(local.overrides, cloud.overrides, localClearedMonths, cloudUpdatedAt, preferLocal),
+    hourOverrides: mergeHourOverrides(local.hourOverrides, cloud.hourOverrides, localClearedMonths, cloudUpdatedAt, preferLocal),
     clearedMonths: mergeClearedMonths(local.clearedMonths, cloud.clearedMonths),
-    dayOutings: cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
+    dayOutings: preferLocal
+      ? local.dayOutings && typeof local.dayOutings === "object" ? local.dayOutings : cloud.dayOutings
+      : cloud.dayOutings && typeof cloud.dayOutings === "object" ? cloud.dayOutings : local.dayOutings,
   };
 };
 

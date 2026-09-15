@@ -393,19 +393,6 @@ const withoutClearedMonth = (clearedMonths, year, month) => {
   delete next[periodKey(year, month)];
   return next;
 };
-const overridePeriodKey = key => {
-  const [rawYear, rawMonth] = String(key || "").split("-");
-  const parsedYear = Number(rawYear);
-  const parsedMonth = Number(rawMonth);
-  return Number.isInteger(parsedYear) && Number.isInteger(parsedMonth) ? periodKey(parsedYear, parsedMonth) : "";
-};
-const withoutClearedSlotPeriod = (clearedMonths, key) => {
-  const markerKey = overridePeriodKey(key);
-  if (!markerKey) return clearedMonths;
-  const next = normalizeClearedMonths(clearedMonths);
-  delete next[markerKey];
-  return next;
-};
 const stateSignature = state => JSON.stringify(state);
 const ADMIN_ROLE_TIMEOUT_MS = 4500;
 const normalizeTypedEmail = value => String(value || "").trim().toLowerCase();
@@ -2558,12 +2545,12 @@ export default function App() {
 
   const approveChangeRequest = async (request, workerId) => {
     if (!requireSafeCloudWrite()) return;
-    const worker = activeAux.find(aux => aux.id === workerId);
-    if (!worker) return alert("Choisissez l'auxiliaire qui reprend le créneau.");
+      const worker = activeAux.find(aux => aux.id === workerId);
+      if (!worker) return alert("Choisissez l'auxiliaire qui reprend le créneau.");
     try {
       const key = overrideKey(request.year, request.month, request.day, request.shift);
       const nextOverrides = { ...overrides, [key]: setManualPrimaryWorker(overrides[key], worker.id) };
-      const nextClearedMonths = withoutClearedMonth(clearedMonths, request.year, request.month);
+      const nextClearedMonths = clearedMonths;
       const nextSchedule = applyManualAssignments({ schedule: emptySchedule, assignments: nextOverrides, hourOverrides, year, month });
       const nextHours = calculatePerformedHours(nextSchedule, auxiliaries, { year, month, now: accountingNow });
       const nextState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides: nextOverrides, hourOverrides, clearedMonths: nextClearedMonths, dayOutings };
@@ -2830,22 +2817,18 @@ export default function App() {
       onChoose: (key, worker) => {
         const nextValue = setManualPrimaryWorker(overrides[key], worker);
         const nextOverrides = { ...overrides, [key]: nextValue };
-        const nextClearedMonths = withoutClearedSlotPeriod(clearedMonths, key);
         const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
-        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
         setOverrides(nextOverrides);
-        setClearedMonths(nextClearedMonths);
         setHourOverrides(nextHourOverrides);
       },
       onToggleDouble: (key, worker) => {
         const nextValue = toggleManualDoubleWorker(overrides[key], worker);
         if (!nextValue) return;
         const nextOverrides = { ...overrides, [key]: nextValue };
-        const nextClearedMonths = withoutClearedSlotPeriod(clearedMonths, key);
         const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
-        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
         setOverrides(nextOverrides);
-        setClearedMonths(nextClearedMonths);
         setHourOverrides(nextHourOverrides);
       },
       onReset: (key, alreadyEmpty) => {

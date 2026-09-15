@@ -41,6 +41,36 @@ assert(merged.overrides["2026-4-1-morning"] === "A", "Les autres mois doivent re
 assert(merged.hourOverrides["2026-4-1-morning"] === 7, "Les heures des autres mois doivent rester intactes");
 assert(merged.clearedMonths["2026-06"] === localClearedAt, "La marque de vidage doit rester dans l'état");
 
+const localWithNewSlotAfterClear = {
+  ...local,
+  overrides: {
+    ...local.overrides,
+    "2026-5-4-morning": "M",
+  },
+  hourOverrides: {
+    "2026-5-4-morning": 7,
+  },
+  updatedAt: "2026-09-12T09:45:00.000Z",
+};
+const mergedWithNewSlot = mergePlanningStateForCloudLoad({ local: localWithNewSlotAfterClear, cloud: olderCloud });
+assert(mergedWithNewSlot.overrides["2026-5-4-morning"] === "M", "Un creneau remis apres vidage doit rester apres actualisation");
+assert(mergedWithNewSlot.hourOverrides["2026-5-4-morning"] === 7, "Les heures du creneau remis apres vidage doivent rester");
+assert(!mergedWithNewSlot.overrides["2026-5-3-morning"], "Le vieux cloud ne doit pas revenir quand un nouveau creneau est ajoute apres vidage");
+
+const localNewerDraft = {
+  ...olderCloud,
+  overrides: {
+    "2026-5-3-morning": "M",
+  },
+  hourOverrides: {
+    "2026-5-3-morning": 7,
+  },
+  clearedMonths: {},
+  updatedAt: "2026-09-12T09:45:00.000Z",
+};
+const mergedLocalDraft = mergePlanningStateForCloudLoad({ local: localNewerDraft, cloud: olderCloud });
+assert(mergedLocalDraft.overrides["2026-5-3-morning"] === "M", "Un brouillon local plus recent doit gagner sur un cloud ancien");
+
 const newerCloud = {
   ...olderCloud,
   updatedAt: "2026-09-12T10:00:00.000Z",
