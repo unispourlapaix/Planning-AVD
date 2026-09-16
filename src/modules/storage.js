@@ -91,6 +91,11 @@ const readLocalState = () => {
     return null;
   }
 };
+export const discardLocalState = () => {
+  try {
+    localStorage.removeItem(LOCAL_KEY);
+  } catch {}
+};
 export const ensureBeneficiaryIdentity = state => {
   if (!state) return state;
   const beneficiaryId = String(state.beneficiaryId || "").trim();
@@ -130,11 +135,10 @@ const mergeClearedMonths = (localCleared, cloudCleared) => {
   });
   return merged;
 };
-const shouldKeepLocalClear = ({ period, localClearedMonths, cloudUpdatedAt }) => {
+const shouldKeepLocalClear = ({ period, localClearedMonths }) => {
   const clearScore = timestampScore(localClearedMonths?.[period]);
   if (!period || !clearScore) return false;
-  const cloudScore = timestampScore(cloudUpdatedAt);
-  return !cloudScore || clearScore >= cloudScore;
+  return true;
 };
 export const markMonthCleared = ({ clearedMonths = {}, year, month, clearedAt = new Date().toISOString() }) => ({
   ...normalizedClearedMonths(clearedMonths),

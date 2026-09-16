@@ -9,6 +9,7 @@ import {
   createBeneficiaryId,
   defaultState,
   deleteMemberAccess,
+  discardLocalState,
   ensureBeneficiaryIdentity,
   ensureBeneficiaryGroup,
   getUserAccess,
@@ -1496,7 +1497,7 @@ function GroupDashboard({ dashboard, beneficiaryName, pendingExchangeCount = 0 }
   );
 }
 
-function CloudConflictNotice({ conflict, onReload }) {
+function CloudConflictNotice({ conflict, onKeepCloud, onKeepLocal }) {
   if (!conflict) return null;
   const actor = String(conflict.updatedBy || "").trim();
   const dateText = formatDashboardDate(conflict.currentBeneficiaryUpdatedAt || conflict.currentUpdatedAt);
@@ -1506,9 +1507,12 @@ function CloudConflictNotice({ conflict, onReload }) {
       h("div", { className: "muted" }, actor
         ? `Dernière modification par ${actor} · ${dateText}`
         : `Une autre version existe dans le cloud · ${dateText}`),
-      h("small", null, "Rechargez pour récupérer la version partagée. Le bouton Sauvegarder cloud demandera une confirmation avant tout écrasement volontaire."),
+      h("small", null, "Choisissez la version à garder avant toute sauvegarde. Garder le local écrase volontairement le cloud."),
     ),
-    h(Button, { active: true, onClick: onReload }, h(IconLabel, { icon: "restore", label: "Recharger" })),
+    h("div", { className: "cloud-conflict-actions" },
+      h(Button, { onClick: onKeepCloud }, h(IconLabel, { icon: "cloud", label: "Garder le cloud" })),
+      h(Button, { active: true, onClick: onKeepLocal }, h(IconLabel, { icon: "save", label: "Garder le local" })),
+    ),
   );
 }
 
@@ -2404,29 +2408,43 @@ export default function App() {
     return false;
   };
   const saveStateWithOverwriteOption = async currentState => {
-    const baseResult = await saveState({
+    return saveState({
       db: authState.db,
       user: authState.user,
       state: currentState,
       expectedUpdatedAt: authState.user ? cloudBaseUpdatedAtRef.current : undefined,
       expectedBeneficiaryUpdatedAt: authState.user ? cloudBeneficiaryUpdatedAtRef.current : undefined,
     });
-    if (baseResult?.reason !== "conflict") return baseResult;
-    const overwrite = window.confirm([
-      "Une version cloud plus récente existe.",
-      "",
-      "Voulez-vous écraser le cloud avec la version affichée sur cet appareil ?",
-      "À utiliser seulement si cette version est la bonne.",
-    ].join("\n"));
-    if (!overwrite) return { ...baseResult, reason: "overwrite-cancelled", error: "Écrasement cloud annulé." };
-    setCloudStatus({ kind: "saving", text: "Écrasement cloud..." });
-    const forcedResult = await saveState({
-      db: authState.db,
-      user: authState.user,
-      state: currentState,
-      force: true,
-    });
-    return forcedResult?.cloud ? { ...forcedResult, forced: true } : forcedResult;
+  };
+  const keepCloudVersion = () => {
+    discardLocalState();
+    window.location.reload();
+  };
+  const keepLocalVersion = async () => {
+    if (!authState.user) return;
+    const currentState = buildPlanningState({});
+    const signature = stateSignature(currentState);
+    try {
+      setCloudStatus({ kind: "saving", text: "Écrasement cloud..." });
+      const forcedResult = await saveState({
+        db: authState.db,
+        user: authState.user,
+        state: currentState,
+        force: true,
+      });
+      const result = forcedResult?.cloud ? { ...forcedResult, forced: true } : forcedResult;
+      setCloudResult(result);
+      if (!result?.cloud) {
+        alert(`Écrasement cloud impossible : ${result?.error || "réessayez plus tard."}`);
+        return;
+      }
+      rememberCloudVersion(result);
+      lastSavedSignatureRef.current = signature;
+      alert("Version locale gardée : le cloud a été écrasé volontairement.");
+    } catch (error) {
+      alert(`Écrasement cloud impossible : ${error.message}`);
+      setCloudStatus({ kind: "error", text: "Cloud non sauvegardé" });
+    }
   };
   const updateDayOutings = (key, items) => setDayOutings(current => {
     const cleaned = normalizeDayOutings({ [key]: items })[key] || [];

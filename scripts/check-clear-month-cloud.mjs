@@ -76,6 +76,10 @@ const newerCloud = {
   updatedAt: "2026-09-12T10:00:00.000Z",
 };
 const mergedNewer = mergePlanningStateForCloudLoad({ local, cloud: newerCloud });
-assert(mergedNewer.overrides["2026-5-3-morning"] === "A", "Un cloud plus récent que le vidage local doit rester prioritaire");
+assert(!mergedNewer.overrides["2026-5-3-morning"], "Un vieux planning cloud ne doit pas remplir un mois vidé même si sa date est plus récente");
+
+const mergedNewerWithNewSlot = mergePlanningStateForCloudLoad({ local: localWithNewSlotAfterClear, cloud: newerCloud });
+assert(mergedNewerWithNewSlot.overrides["2026-5-4-morning"] === "M", "Le creneau remis apres vidage doit rester meme face a un cloud plus recent");
+assert(!mergedNewerWithNewSlot.overrides["2026-5-3-morning"], "Le reste du vieux cloud doit rester bloque par le mois vide");
 
 console.log("Controle vidage cloud OK: mois vidé mémorisé sans casser les autres mois");
