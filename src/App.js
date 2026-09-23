@@ -1,6 +1,9 @@
 import React from "react";
+import { showShortcutHelp } from "./modules/web-only.js";
+import { listedAuxiliaries, retireAuxiliaries } from "./modules/auxiliary-membership.js";
+import { TWO_DAY_MODE } from "./modules/two-day-template.js";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js?v=20260726-normal-slots";
-import { dayName, monthGrid, weekStarts } from "./modules/dates.js";
+import { dayName, monthGrid, monthWeeks } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260726-normal-slots";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260702-login-refresh";
 import {
@@ -55,6 +58,7 @@ import { Button, Checkbox, Field, h, Select, TextInput } from "./ui.js?v=2026070
 const { useEffect, useMemo, useRef, useState } = React;
 
 const ROTATION_OPTIONS = [
+  { value: TWO_DAY_MODE, label: "2 jours · week-end sur 3", detail: "Lun-mar / jeu-ven / sam-dim. Relais mercredi. Mise au lit 2 h par une autre personne." },
   { value: 1, label: "Jour par jour", detail: "Matin, apres-midi et nuit recalcules chaque jour." },
   { value: "split-day", label: "Journée + soir", detail: "Même auxiliaire matin/apres-midi, puis un autre le soir." },
   { value: 2, label: "Roulement 2 jours", detail: "La personne finit le matin, la suivante commence l'apres-midi." },
@@ -78,6 +82,7 @@ const AUX_SHIFT_OPTIONS = [
 ];
 const AUX_WEEKDAY_OPTIONS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const normalizeRotationMode = value => {
+  if (value === TWO_DAY_MODE) return TWO_DAY_MODE;
   if (value === "split-day") return "split-day";
   const number = Number(value);
   return [1, 2, 3, 4].includes(number) ? number : 1;
@@ -460,6 +465,7 @@ function TopBar({ authState, sessionRole, isAdmin, roleReady, cloudStatus, view,
         ),
       ),
       h("div", { className: "action-row" },
+        h(Button, { className: "web-shortcut", title: "Créer un raccourci vers le site", onClick: showShortcutHelp }, h(IconLabel, { icon: "star", label: "Raccourci" })),
         h(MenuIconButton, { icon: "print", textKey: "action.print", action: "print", onClick: onCleanView }),
         h(MenuIconButton, { icon: "file", textKey: "action.report", action: "report", onClick: onReport }),
         h(MenuIconButton, { icon: "save", textKey: "action.backup", action: "backup", onClick: onShareBackup }),
@@ -608,7 +614,7 @@ function PersonalDayCard({ day, entries, entriesByDay = {}, calendarByDay = {}, 
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === Number(day);
   return h("div", { className: `day-card personal-day${alternateDayTone(day)}${dayTone(year, month, day)}${hasPresence ? " presence-day" : " rest-day"}${isToday ? " today" : ""}${currentWeek ? " current-week-day" : ""}` },
-    h("div", { className: "day-head" }, h("span", null, day), h(EvenDayStar, { day })),
+    h("div", { className: "day-head" }, h("span", null, day), h("span", null, dayName(year, month, day))),
     SHIFT_DEFS.map(shift => {
       const entry = entries.find(item => item.shift === shift.id);
       const request = requestBySlot?.[requestSlotKey(day, shift.id)];
@@ -716,7 +722,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
   const workedDays = Object.entries(byDay).filter(([, entries]) => entries.length);
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
-  const weekGroups = weekStarts(year, month).map(start => Array.from({ length: 7 }, (_, index) => start + index).filter(item => byDay[item]));
+  const weekGroups = monthWeeks(year, month).map(days => days.filter(day => day && byDay[day]));
   const currentWeekIndex = isCurrentMonth ? weekGroups.findIndex(days => days.includes(today.getDate())) : -1;
   const orderedWeekGroups = currentWeekIndex > -1
     ? [...weekGroups.slice(currentWeekIndex), ...weekGroups.slice(0, currentWeekIndex)]
@@ -772,6 +778,7 @@ function PersonalView({ authState, sessionRole, year, month, setYear, setMonth, 
           ),
         ),
         h("div", { className: "action-row" },
+          h(Button, { className: "web-shortcut", title: "Créer un raccourci vers le site", onClick: showShortcutHelp }, h(IconLabel, { icon: "star", label: "Raccourci" })),
           h(MenuIconButton, { icon: "print", textKey: "action.print", action: "print", onClick: () => window.print() }),
           h(MenuIconButton, { icon: "logout", textKey: "action.logout", action: "logout", active: true, onClick: logout, disabled: loggingOut }),
         ),
@@ -959,12 +966,14 @@ function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onR
   );
 }
 
-function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
+export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   if (!day) return h("div", { className: "day-card empty" });
-  return h("div", { className: `day-card${alternateDayTone(day)}${dayTone(year, month, day)}` },
+  const today = new Date();
+  const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+  return h("article", { className: `day-card${alternateDayTone(day)}${dayTone(year, month, day)}${isToday ? " today" : ""}`, "aria-label": `${dayName(year, month, day)} ${day} ${MONTHS[month]}` },
     h("div", { className: "day-head" },
       h("span", null, day),
-      h("span", { className: "day-head-meta" }, h("span", null, dayName(year, month, day)), h(EvenDayStar, { day })),
+      h("span", { className: "day-head-meta" }, h("span", null, dayName(year, month, day)), isToday ? h("small", null, "Aujourd’hui") : null),
     ),
     SHIFT_DEFS.map(shift => {
       const workers = shiftWorkerIds(plan?.[shift.id]);
@@ -983,23 +992,23 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
         : hasCustomSlotHours(entry, shift.id);
       const visibleHours = worker ? slotWorkerHours(entry, shift.id, worker) : slotHours(entry, shift.id);
       return h("button", {
-        className: `slot editable-slot${manual ? " manual-slot" : ""}`,
+        className: `slot editable-slot${!worker ? " unassigned-slot" : ""}`,
         key: shift.id,
         title: [manual ? "Créneau saisi" : "", label, notice?.title].filter(Boolean).join(" · "),
         onClick: () => onEditSlot({ day, shift: shift.id }),
+        "aria-label": `${day} ${MONTHS[month]}, ${label}, ${worker ? auxName(auxiliaries, worker) : "non attribué"} : modifier`,
       },
         h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
           h("span", {
             className: `slot-name slot-person-pill${worker ? "" : " empty"}`,
             style: workerColor ? { color: workerColor.text, background: workerColor.light, borderColor: workerColor.solid } : null,
-          }, workers.length ? planningNames(auxiliaries, workers) : "A definir"),
+          }, workers.length ? planningNames(auxiliaries, workers) : "Non attribué"),
           extraWorkers.length ? h("span", { className: "double-stack", title: `Doublon : ${extraWorkers.map(id => auxName(auxiliaries, id)).join(", ")}` },
             extraWorkers.map(id => h("span", { className: "double-chip", key: id }, shortAuxName(auxiliaries, id))),
           ) : null,
-          customHours ? h("span", { className: "hour-badge", title: "Durée réelle modifiée" }, `${visibleHours}h`) : null,
+          worker ? h("span", { className: "hour-badge", title: customHours ? "Durée personnalisée" : "Durée prévue" }, `${visibleHours} h`) : null,
           notice ? h("span", { className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
-          manual ? h("span", { className: "manual-badge" }, manualEmpty ? "Vidé" : "Saisi") : null,
         ),
       );
     }),
@@ -1007,21 +1016,21 @@ function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onE
   );
 }
 
-function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
+export function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
   return h("section", { className: "layout" },
     h("div", { className: "calendar" },
-      DAYS_SHORT.map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
+      ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
       monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, schedule, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal })),
     ),
   );
 }
 
 function WeekView({ year, month, schedule, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
-  return h("section", { className: "week-grid" }, weekStarts(year, month).map(start => {
-    const days = Array.from({ length: 7 }, (_, i) => start + i).filter(day => schedule[day]);
-    return h("div", { className: "panel", key: start },
-      h("h3", null, `Semaine du ${start} ${MONTHS[month]}`),
-      h("div", { className: "week-days" }, days.map(day => h(DayCard, { key: day, day, year, month, schedule, plan: schedule[day], auxiliaries, overrides, onEditSlot, onOpenMeal }))),
+  return h("section", { className: "week-grid" }, monthWeeks(year, month).map((days, index) => {
+    const visible = days.filter(Boolean);
+    return h("div", { className: "calendar-week", key: index },
+      h("h3", null, `${visible[0]}–${visible.at(-1)} ${MONTHS[month]}`),
+      h("div", { className: "week-days" }, days.map((day, cell) => h(DayCard, { key: cell, day, year, month, schedule, plan: schedule[day], auxiliaries, overrides, onEditSlot, onOpenMeal }))),
     );
   }));
 }
@@ -1802,7 +1811,7 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
   );
 }
 
-function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays, onApplyRotationExample }) {
+function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary, rotationDays, setRotationDays, onApplyRotationExample }) {
   const beneficiaryChoices = [
     ...beneficiaryOptions,
     ...(beneficiaryId && !beneficiaryOptions.some(item => item.beneficiaryId === beneficiaryId)
@@ -1826,7 +1835,7 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
     setEmailDrafts(current => ({ ...current, [id]: value }));
   };
   const addAux = () => setAuxiliaries(list => {
-    if (list.length >= MAX_AUXILIARIES) return list;
+    if (listedAuxiliaries(list).length >= MAX_AUXILIARIES) return list;
     const id = `P${list.length + 1}`;
     return [...list, {
       ...DEFAULT_AUXILIARIES[0],
@@ -1892,14 +1901,15 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
     h("div", { className: "panel title-row" },
       h("div", null,
         h("h3", null, "Auxiliaires affectés"),
-        h("div", { className: "muted" }, `${auxiliaries.filter(aux => aux.active !== false).length}/${auxiliaries.length} affecté(s) au bénéficiaire, maximum ${MAX_AUXILIARIES}`),
+        h("div", { className: "muted" }, `${listedAuxiliaries(auxiliaries).filter(aux => aux.active !== false).length}/${listedAuxiliaries(auxiliaries).length} affecté(s) au bénéficiaire, maximum ${MAX_AUXILIARIES}`),
       ),
       h(Button, { onClick: addAux }, "+ Ajouter"),
     ),
-    h("div", { className: "aux-grid" }, auxiliaries.map((aux, index) => h("div", { className: "aux-card", key: aux.id },
+    h("div", { className: "aux-grid" }, auxiliaries.map((aux, index) => aux.removedFromGroup ? null : h("div", { className: "aux-card", key: aux.id },
       h("div", { className: "title-row" },
         h("b", { style: { color: colorFor(index).text } }, aux.name || aux.id),
         h(Checkbox, { checked: aux.active, onChange: value => patchAux(aux.id, { active: value }), label: "Affecté" }),
+        h(Button, { title: "Retirer cet auxiliaire du groupe", "aria-label": `Retirer ${aux.name || aux.id} du groupe`, onClick: () => onRemoveAuxiliary(aux.id) }, h(IconLabel, { icon: "close", label: "Retirer" })),
       ),
       h("div", { className: "form-grid" },
         h(Field, { label: "Prenom complet" }, h(TextInput, { value: aux.name, onChange: value => patchAux(aux.id, { name: value }) })),
@@ -1916,6 +1926,19 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
         h(Field, { label: "Quota mensuel" }, h(TextInput, { type: "number", value: aux.quota, onChange: value => patchAux(aux.id, { quota: Number(value) || 0 }) })),
       ),
       h(Field, { label: "Adresse complete" }, h("textarea", { value: aux.address || "", onChange: event => patchAux(aux.id, { address: event.target.value }), rows: 2 })),
+      h("details", null,
+        h("summary", null, "Placement des heures · modèle 2 jours"),
+        h(Checkbox, { checked: aux.templatePlaceHours !== false, onChange: value => patchAux(aux.id, { templatePlaceHours: value }), label: "Placer les heures dans cet exemple" }),
+        h("div", { className: "form-grid" },
+          h(Field, { label: "Matin (h)" }, h(TextInput, { type: "number", min: 0, max: 12, step: 0.5, value: aux.templateMorningHours ?? 7, onChange: value => patchAux(aux.id, { templateMorningHours: Math.max(0, Math.min(12, Number(value) || 0)), templateAfternoonHours: Math.min(aux.templateAfternoonHours ?? 5, 12 - Math.max(0, Math.min(12, Number(value) || 0))) }) })),
+          h(Field, { label: "Après-midi (h)" }, h(TextInput, { type: "number", min: 0, max: 12 - (aux.templateMorningHours ?? 7), step: 0.5, value: aux.templateAfternoonHours ?? 5, onChange: value => patchAux(aux.id, { templateAfternoonHours: Math.max(0, Math.min(12 - (aux.templateMorningHours ?? 7), Number(value) || 0)) }) })),
+          h(Field, { label: "Groupe week-end" }, h(Select, { value: aux.templateWeekendPhase ?? "", onChange: value => patchAux(aux.id, { templateWeekendPhase: value === "" ? null : Number(value) }) },
+            h("option", { value: "" }, "Selon l'ordre de l'équipe"),
+            [0, 1, 2].map(value => h("option", { key: value, value }, `Groupe ${value + 1} sur 3`)),
+          )),
+        ),
+        h("small", { className: "muted" }, "Journée : 12 h maximum dans ce modèle. Mise au lit : 19 h 30–21 h 30, autre intervenant autorisé le soir. Pause à organiser avec un relais ; aucune déduction automatique. Repos réservé : 11 h entre services et 35 h par semaine. À vérifier selon le contrat, les autres employeurs et les horaires réels."),
+      ),
       h("div", { className: "form-grid" },
         h(Field, { label: "Jours autorises" }, h(Select, { value: aux.days, onChange: value => patchAux(aux.id, { days: value }) },
           h("option", { value: "all" }, "Tous les jours"),
@@ -2359,19 +2382,20 @@ export default function App() {
   const planningView = ["month", "week", "hours"].includes(view);
   const applyRotationExample = () => {
     if (manualOverrides.length && !window.confirm("Remplacer les créneaux déjà saisis de ce mois par l'exemple sélectionné ?")) return;
-    const nextAssignments = removeAutomaticNightMorningAssignments({
+    const nextAssignments = rotationDays === TWO_DAY_MODE ? assignmentsFromSchedule({ schedule: rotationExample.schedule, year, month }) : removeAutomaticNightMorningAssignments({
       assignments: assignmentsFromSchedule({ schedule: rotationExample.schedule, year, month }),
       year,
       month,
     });
     const nextOverrides = replaceMonthAssignments({ current: overrides, next: nextAssignments, year, month });
-    const nextHourOverrides = clearMonthAssignments({ current: hourOverrides, year, month });
+    const nextHourOverrides = { ...clearMonthAssignments({ current: hourOverrides, year, month }), ...(rotationExample.hourOverrides || {}) };
     const nextClearedMonths = withoutClearedMonth(clearedMonths, year, month);
     persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides, clearedMonths: nextClearedMonths }));
     setOverrides(nextOverrides);
     setHourOverrides(nextHourOverrides);
     setClearedMonths(nextClearedMonths);
     setCloudStatus({ kind: "local", text: "Exemple appliqué" });
+    if (rotationExample.warnings?.length) alert(rotationExample.warnings.join("\n"));
   };
   const copyPreviousMonthPlanning = () => {
     const previous = new Date(year, month - 1, 1);
@@ -2550,7 +2574,21 @@ export default function App() {
   };
 
   const removeAccessMember = async ({ email }) => {
-    return deleteMemberAccess({ db: authState.db, user: authState.user, email, beneficiaryId, beneficiaryName });
+    const result = await deleteMemberAccess({ db: authState.db, user: authState.user, email, beneficiaryId, beneficiaryName });
+    const ids = auxiliaries.filter(aux => String(aux.email || "").trim().toLowerCase() === email.trim().toLowerCase()).map(aux => aux.id);
+    const next = retireAuxiliaries(auxiliaries, ids);
+    persistLocalDraft(buildPlanningState({ auxiliaries: next }));
+    setAuxiliaries(next);
+    return result;
+  };
+
+  const removeAuxiliary = id => {
+    const aux = auxiliaries.find(item => item.id === id);
+    if (!aux || !sessionRole.isAdmin) return;
+    if (!window.confirm(`Retirer ${aux.name || aux.id} du groupe de ${beneficiaryName || "ce bénéficiaire"} ?\n\nSa fiche disparaîtra de la liste et son accès auxiliaire sera retiré à la sauvegarde cloud. Ses créneaux existants restent conservés pour l'historique et peuvent être réattribués manuellement. Ses éventuels droits admin et ses autres groupes restent inchangés.`)) return;
+    const next = retireAuxiliaries(auxiliaries, [id]);
+    persistLocalDraft(buildPlanningState({ auxiliaries: next }));
+    setAuxiliaries(next);
   };
 
   const repairAccessMembers = async () => {
@@ -2821,7 +2859,7 @@ export default function App() {
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
       view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onDeleteMember: removeAccessMember, onRepairMembers: repairAccessMembers, onResolveAccessRequest: answerAccessRequest }) : null,
-      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
+      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary: removeAuxiliary, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
     ),
     h(SlotEditor, {
       edit: slotEdit,

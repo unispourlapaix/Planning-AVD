@@ -3,7 +3,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && !exists(/databases/$(database)/documents/planning-avd-revoked-accounts/$(authEmail()));
     }
 
     function authEmail() {
@@ -72,6 +73,11 @@ service cloud.firestore {
       return (hasBeneficiaryMemberDoc(beneficiaryId)
           && get(/databases/$(database)/documents/planning-avd-beneficiaries/$(beneficiaryId)/members/$(authEmail())).data.role in ["admin", "owner"])
         || hasBeneficiaryBootstrap(beneficiaryId);
+    }
+
+    // Revocation takes precedence over every legacy or beneficiary role.
+    match /planning-avd-revoked-accounts/{email} {
+      allow read, write: if isAdmin();
     }
 
     match /planning-avd-users/{userId}/{document=**} {
@@ -177,7 +183,7 @@ service cloud.firestore {
         && request.resource.data.requesterEmail == authEmail()
         && request.resource.data.beneficiaryId == beneficiaryId
         && request.resource.data.status == "pending";
-      allow read: if request.auth != null
+      allow read: if signedIn()
         && (resource.data.requesterEmail == authEmail() || isAdmin() || isBeneficiaryAdmin(beneficiaryId));
       allow update: if isAdmin() || isBeneficiaryAdmin(beneficiaryId);
       allow delete: if false;

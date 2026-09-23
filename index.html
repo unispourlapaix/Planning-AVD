@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f8f5ef" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="no" />
+    <meta name="apple-mobile-web-app-capable" content="no" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Planning-AVD" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=20260606-transparent-icons" />
@@ -14,19 +14,7 @@
     <title>Planning-AVD</title>
     <link rel="stylesheet" href="./src/styles.css?v=20260722-admin-free-placement" />
     <script>
-      window.__planningAvdInstallPrompt = null;
-      window.addEventListener("beforeinstallprompt", event => {
-        event.preventDefault();
-        window.__planningAvdInstallPrompt = event;
-        window.dispatchEvent(new Event("planning-avd-install-ready"));
-      });
-      window.addEventListener("DOMContentLoaded", () => {
-        if (document.querySelector('link[rel="manifest"]')) return;
-        const manifestLink = document.createElement("link");
-        manifestLink.rel = "manifest";
-        manifestLink.href = "./manifest.json?v=20260615-github-update";
-        document.head.appendChild(manifestLink);
-      });
+      // The web version deliberately has no installable manifest.
     </script>
   </head>
   <body>

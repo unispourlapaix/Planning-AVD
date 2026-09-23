@@ -1,0 +1,104 @@
+/* Shared calendar presentation, including legacy personal-calendar markup. */
+.personal-app.team-calendar-ready > .layout > .personal-month-list { display: none !important; }
+.app .calendar, .app .week-days, .app .personal-month-list {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  overflow: visible !important;
+  border-top: 1px solid #dbe2e6;
+  border-left: 1px solid #dbe2e6;
+  padding: 0 !important;
+}
+.app .dow { border-radius: 0; font-size: 11px; text-transform: none; padding: 12px 2px; background: #fff; }
+.app .calendar .day-card, .app .week-days .day-card, .app .personal-month-list .day-card {
+  min-width: 0;
+  min-height: 260px;
+  padding: 9px !important;
+  gap: 7px !important;
+  border: 0;
+  border-right: 1px solid #dbe2e6;
+  border-bottom: 1px solid #dbe2e6;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+  align-content: start;
+}
+.app .calendar .day-card.even-day, .app .week-days .day-card.even-day { background: #f7f9fa; }
+.app .calendar .day-card.saturday, .app .week-days .day-card.saturday { background: #edf6fb; }
+.app .calendar .day-card.sunday, .app .week-days .day-card.sunday { background: #fcf0f6; }
+.app .day-card.today { outline: 2px solid #417d9d; outline-offset: -2px; }
+.app .day-card .day-head { min-height: 34px; align-items: center; font-size: 11px; flex-wrap: wrap; gap: 4px; }
+.app .day-card .day-head > span:first-child { font-size: 20px; font-weight: 700; }
+.app .day-card .day-head-meta { flex-wrap: wrap; }
+.app .day-card .day-head small { font-size: 9px; color: #286781; }
+.app .day-card .slot, .app .day-card .personal-slot {
+  position: relative;
+  min-height: 55px;
+  padding: 6px !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  gap: 4px !important;
+  line-height: 1.35;
+}
+.app .day-card .editable-slot:hover, .app .day-card .editable-slot:focus-visible {
+  background: #fff !important;
+  border-color: #7da6bb !important;
+  outline: 2px solid #b3d4e4;
+  transform: none;
+}
+.app .day-card .editable-slot::after { display: none; }
+.app .day-card .slot-label {
+  font-size: 10px !important;
+  line-height: 1.3 !important;
+  font-weight: 600;
+  color: #61727a !important;
+  text-transform: none;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.app .day-card .slot-name {
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.app .day-card .slot-person-pill { padding: 2px 5px; border-radius: 4px; border: 0; box-shadow: none; }
+.app .day-card .slot-content { gap: 4px; }
+.app .day-card .hour-badge { color: #576b76; background: transparent; border: 0; font-size: 10px; padding: 0 2px; }
+.app .day-card .break-badge { font-size: 9px; font-weight: 500; background: transparent; border: 0; padding: 0; color: #66766f; }
+.app .day-card .unassigned-slot .slot-name { background: transparent; font-size: 11px !important; color: #77838a; font-weight: 400; }
+.app .day-card .meal-tag { min-height: 30px; margin-top: 4px; background: transparent; box-shadow: none; border-radius: 4px; }
+.app .calendar-week { padding: 0; background: transparent; }
+.app .calendar-week h3 { font-size: 14px; margin: 18px 0 10px; }
+.app .personal-planning-scroll { max-height: none; overflow: visible; }
+.app .day-card .slot.other { opacity: .65; }
+.app .day-card .slot.mine { background: #e5f2fb !important; border-left: 3px solid #4d88af !important; }
+.app .day-card.presence-day .day-head span::after { content: none; }
+.app::before { display: none !important; }
+@media (max-width: 1000px) {
+  .app .calendar, .app .week-days, .app .personal-month-list { grid-template-columns: 1fr !important; border: 0; gap: 8px !important; }
+  .app .calendar > .dow, .app .day-card.empty { display: none !important; }
+  .app .calendar .day-card, .app .week-days .day-card, .app .personal-month-list .day-card {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-height: 0;
+    border: 1px solid #dbe2e6;
+    border-radius: 6px;
+    padding: 10px !important;
+  }
+  .app .day-card .day-head { grid-column: 1 / -1; justify-content: flex-start; gap: 9px; }
+  .app .day-card > .meal-tag { grid-column: 1 / -1; justify-self: start; }
+  .app .day-card .slot { min-height: 66px; }
+  .app .day-card .editable-slot { min-height: 80px; }
+}
+@media print {
+  .app .calendar, .app .week-days { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; gap: 0 !important; }
+  .app .calendar .day-card, .app .week-days .day-card { display: grid !important; grid-template-columns: 1fr; min-height: 0; break-inside: avoid; }
+  .app .calendar > .dow { display: block !important; }
+  .app .day-card .slot { min-height: 0; }
+}

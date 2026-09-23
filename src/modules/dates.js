@@ -23,3 +23,8 @@ export function weekStarts(year, month) {
   }
   return starts;
 }
+
+export function monthWeeks(year, month) {
+  const cells = monthGrid(year, month);
+  return Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7));
+}

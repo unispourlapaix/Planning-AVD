@@ -2,6 +2,7 @@ import { MONTHS } from "./constants.js?v=20260726-normal-slots";
 import { mealForDate } from "./meal-planning.js";
 import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { personalBreakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
+import { monthWeeks, dayName } from "./dates.js";
 
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const cleanEmail = email => String(email || "").trim();
@@ -46,13 +47,6 @@ const monthGrid = (year, month) => {
     ...Array.from({ length: offset }, () => null),
     ...Array.from({ length: days }, (_, index) => index + 1),
   ];
-};
-
-const weekStarts = (year, month) => {
-  const days = new Date(year, month + 1, 0).getDate();
-  const starts = [];
-  for (let day = 1; day <= days; day += 7) starts.push(day);
-  return starts;
 };
 
 const ensureStyle = () => {
@@ -187,7 +181,7 @@ const slotHtml = (item, shift, personalSlots, calendarByDay, entriesByDay) => {
   // Vue auxiliaire : uniquement le titulaire principal, les doublons restent cotes admin.
   const primaryName = (item?.shifts?.[shift] || []).filter(Boolean)[0];
   const mine = personalSlots.has(slotKey(item.day, shift));
-  const name = primaryName ? escapeHtml(primaryName) : `<span class="slot-rest">Repos</span>`;
+  const name = primaryName ? escapeHtml(primaryName) : `<span class="slot-rest">Non attribué</span>`;
   const label = shiftDisplayLabel({ shift, calendarByDay, day: item.day, name: primaryName });
   const notice = mine ? personalBreakNoticeForSlot({ shift, entriesByDay, day: item.day }) : null;
   const noticeHtml = notice ? `<small class="break-badge ${notice.type}" title="${escapeHtml(notice.title)}">${escapeHtml(notice.label)}</small>` : "";
@@ -204,7 +198,7 @@ const dayHtml = (item, year, month, personalSlots, calendarByDay, entriesByDay) 
   const meal = mealForDate(year, month, item.day);
   const hasOwn = shiftOrder.some(shift => personalSlots.has(slotKey(item.day, shift)));
   return `<div class="day-card${tone}${hasOwn ? " has-own" : ""}">
-    <div class="day-head"><span>${item.day}</span><span>${DAYS_SHORT[(date.getDay() + 6) % 7]}</span></div>
+    <div class="day-head"><span>${item.day}</span><span>${dayName(year, month, item.day)}</span></div>
     ${shiftOrder.map(shift => slotHtml(item, shift, personalSlots, calendarByDay, entriesByDay)).join("")}
     <button class="meal-tag" data-meal-year="${year}" data-meal-month="${month}" data-meal-day="${item.day}" title="Repas : ${escapeHtml(meal.title)}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M15 3v18M15 3c4 2 5 8 0 11"></path></svg>
@@ -234,9 +228,9 @@ const render = ({ calendar = [], entries = [], year, month }) => {
       ${monthGrid(year, month).map(day => day ? dayHtml(byDay[day], year, month, ownSlots, byDay, entriesByDay) : dayHtml(null, year, month, ownSlots, byDay, entriesByDay)).join("")}
     </div>`;
   } else {
-    section.innerHTML = weekStarts(year, month).map(start => {
-      const days = Array.from({ length: 7 }, (_, index) => start + index).filter(day => byDay[day]);
-      return `<section class="panel"><h3>Semaine du ${start} ${MONTHS[month]}</h3><div class="week-days">${days.map(day => dayHtml(byDay[day], year, month, ownSlots, byDay, entriesByDay)).join("")}</div></section>`;
+    section.innerHTML = monthWeeks(year, month).map(days => {
+      const visible = days.filter(Boolean);
+      return `<section class="calendar-week"><h3>${visible[0]}–${visible.at(-1)} ${MONTHS[month]}</h3><div class="week-days">${days.map(day => dayHtml(byDay[day], year, month, ownSlots, byDay, entriesByDay)).join("")}</div></section>`;
     }).join("");
   }
   layout.appendChild(section);

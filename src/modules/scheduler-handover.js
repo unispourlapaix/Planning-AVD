@@ -1,5 +1,6 @@
 import { buildSchedule as buildBaseSchedule, canWorkShift } from "./scheduler.js?base=20260628-split-day";
 import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
+import { buildTwoDayTemplate, TWO_DAY_MODE } from "./two-day-template.js";
 import { createHourAccount, creditScheduledHours } from "./hour-accounting.js?v=20260722-custom-hours";
 
 export * from "./scheduler.js?base=20260628-split-day";
@@ -306,6 +307,7 @@ const balanceThursdayBeforeWeekend = ({ schedule, saturday, weekendWorker, avail
 };
 
 export function buildSchedule(options) {
+  if (options.rotationDays === TWO_DAY_MODE) return buildTwoDayTemplate(options);
   const result = buildBaseSchedule(options);
   const splitDayMode = options.rotationDays === "split-day";
   const schedule = result.schedule;

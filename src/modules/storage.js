@@ -1,5 +1,6 @@
 import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
 import { isManualEmptySlot } from "./manual-workers.js?v=20260726-empty-slot";
+import { listedAuxiliaries, retiredAuxiliaryEmails } from "./auxiliary-membership.js";
 
 const LOCAL_KEY = "planning-avd-state-v2";
 const ROTATION_REVISION = 1;
@@ -227,10 +228,26 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
   const adminEmail = normalizeEmail(user?.email);
   if (!db || !beneficiaryId || !adminEmail) return;
   const root = beneficiaryRoot(db, beneficiaryId);
-  const activeAuxiliaries = (Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
+  const activeAuxiliaries = listedAuxiliaries(Array.isArray(identified.auxiliaries) ? identified.auxiliaries : [])
     .map(aux => ({ ...aux, email: firstValidEmail(aux.email) }))
     .filter(aux => aux.email);
+  const retiredMembers = await Promise.all(retiredAuxiliaryEmails(identified.auxiliaries || [])
+    .filter(email => firstValidEmail(email) && email !== adminEmail)
+    .map(async email => {
+      const ref = root.collection("members").doc(beneficiaryMemberKey(email));
+      const snapshot = await ref.get();
+      return { email, ref, member: snapshot.exists ? snapshot.data() : null };
+    }));
   const batch = db.batch();
+  for (const { email, ref, member } of retiredMembers) {
+    if (member?.role === "admin" || member?.role === "owner") continue;
+    batch.delete(ref);
+    batch.set(db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(beneficiaryId), {
+      beneficiaryId, beneficiaryName, email, emailOriginal: email, readEmails: [email],
+      active: false, deleted: true,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: adminEmail,
+    }, { merge: true });
+  }
   batch.set(root, {
     beneficiaryId,
     beneficiaryName,
@@ -1603,7 +1620,7 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     }), { merge: true });
   }
   auxiliaries
-    .filter(aux => firstValidEmail(aux.email))
+    .filter(aux => !aux.removedFromGroup && firstValidEmail(aux.email))
     .forEach(aux => {
       const rawEmail = firstValidEmail(aux.email);
       const email = rawEmail;
