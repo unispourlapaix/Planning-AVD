@@ -3,7 +3,6 @@ import { applyManualAssignments, buildEmptySchedule } from "./manual-schedule.js
 import { isAdminUser, loadState } from "./storage.js?v=20260726-empty-slot";
 import { sharePlanningByEmail } from "./planning-share.js?v=20260722-custom-hours";
 
-const LOCAL_KEY = "planning-avd-state-v2";
 const lineIcon = path => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
 
 const waitForActions = () => new Promise(resolve => {
@@ -35,15 +34,6 @@ const emailCount = state => (state?.auxiliaries || [])
   .filter(Boolean)
   .length;
 
-const scoreState = state => {
-  if (!state || !Array.isArray(state.auxiliaries)) return -1;
-  return emailCount(state) * 1000 + state.auxiliaries.length;
-};
-
-const bestPlanningSource = (...states) => states
-  .filter(Boolean)
-  .sort((a, b) => scoreState(b) - scoreState(a))[0] || null;
-
 export async function initPlanningShareButton() {
   const initialActions = await waitForActions();
   renameSaveButton(initialActions);
@@ -73,10 +63,9 @@ export async function initPlanningShareButton() {
     button.addEventListener("click", async () => {
       try {
         const current = globalThis.__planningAvdCurrentState || null;
-        const saved = await loadState({ db, user });
+        const saved = current ? null : await loadState({ db, user });
         if (!current && saved?.__cloud?.ready === false) throw new Error("Lecture cloud bloquée : rechargez l'app avant de partager.");
-        const local = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
-        const source = bestPlanningSource(current, saved, local);
+        const source = current || saved;
         const auxiliaries = (source?.auxiliaries || []).filter(aux => aux.active !== false);
         if (!auxiliaries.length) throw new Error("Ajoutez les auxiliaires dans Reglages.");
         if (!emailCount({ auxiliaries })) throw new Error("Aucun email auxiliaire trouve. Ouvrez Reglages puis renseignez le champ Email des auxiliaires.");

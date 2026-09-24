@@ -1,4 +1,5 @@
 /* Shared calendar presentation, including legacy personal-calendar markup. */
+.app .topbar .action-row .web-shortcut { display: inline-flex !important; align-items: center; gap: 4px; }
 .personal-app.team-calendar-ready > .layout > .personal-month-list { display: none !important; }
 .app .calendar, .app .week-days, .app .personal-month-list {
   display: grid;

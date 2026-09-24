@@ -2,7 +2,7 @@ export const ownsAppCache = (name, scope) => name.startsWith("planning-avd-")
   || (name.startsWith("workbox-") && name.includes(scope));
 
 export async function retireInstalledApp() {
-  const scope = new URL(import.meta.env.BASE_URL, location.origin).href;
+  const scope = new URL(import.meta.env?.BASE_URL || "/Planning-AVD/", location.origin).href;
   if ("serviceWorker" in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.filter(registration => registration.scope === scope).map(async registration => {
