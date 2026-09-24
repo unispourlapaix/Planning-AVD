@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { applyDayTemplate, DAY_TEMPLATE } from "../src/modules/day-template.js";
+const before = { "2026-8-1-morning": ["old", "extra"], "2026-8-1-night": "night", "2026-8-2-morning": "other" };
+const hours = { "2026-8-1-morning::old": 7, "2026-8-1-night": 12, "2026-8-2-morning": 4 };
+const result = applyDayTemplate({ year: 2026, month: 8, day: 1, workers: { morning: "a", afternoon: "a", bedtime: "b" }, overrides: before, hourOverrides: hours });
+assert.equal(DAY_TEMPLATE.reduce((sum, slot) => sum + slot.hours, 0), 12);
+assert.equal(result.overrides["2026-8-1-morning"], "a");
+assert.equal(result.hourOverrides["2026-8-1-morning"], 5);
+assert.equal(result.hourOverrides["2026-8-1-afternoon"], 5);
+assert.equal(result.hourOverrides["2026-8-1-bedtime"], 2);
+assert.equal(result.hourOverrides["2026-8-1-morning::old"], undefined);
+assert.equal(result.overrides["2026-8-1-night"], "night");
+assert.equal(result.hourOverrides["2026-8-2-morning"], 4);
+assert.deepEqual(before["2026-8-1-morning"], ["old", "extra"]);
+assert.throws(() => applyDayTemplate({ workers: {} }));
+console.log("Modele journee 12 h : OK");

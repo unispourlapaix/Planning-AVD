@@ -907,3 +907,6 @@ h2 { font-size: 16px; }
   .access-member-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .access-request { grid-template-columns: minmax(0, 1fr); }
 }
+.day-template-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px; margin: 12px 0; }
+.day-template-fields label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.day-template-fields select { width: 100%; min-width: 0; }

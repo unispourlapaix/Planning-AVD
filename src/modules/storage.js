@@ -83,7 +83,7 @@ const nearbyMonths = (year, month) => {
 };
 const migrateState = state => {
   if (!state || state.rotationRevision === ROTATION_REVISION) return state;
-  return { ...state, overrides: {}, rotationRevision: ROTATION_REVISION };
+  return { ...state, rotationRevision: ROTATION_REVISION };
 };
 const readLocalState = () => {
   try {
@@ -94,6 +94,8 @@ const readLocalState = () => {
 };
 export const discardLocalState = () => {
   try {
+    const value = localStorage.getItem(LOCAL_KEY);
+    if (value) localStorage.setItem(`${LOCAL_KEY}-recovery-${Date.now()}`, value);
     localStorage.removeItem(LOCAL_KEY);
   } catch {}
 };
@@ -221,6 +223,18 @@ const mergeSavedState = (local, cloud) => {
 
 export const mergePlanningStateForCloudLoad = ({ local, cloud }) => mergeSavedState(local, cloud);
 
+const stableValue = value => Array.isArray(value) ? value.map(stableValue)
+  : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stableValue(value[key])])) : value;
+const planningContent = state => JSON.stringify(stableValue(Object.fromEntries(
+  ["beneficiaryId", "beneficiaryName", "auxiliaries", "rotationDays", "overrides", "hourOverrides", "clearedMonths", "dayOutings"]
+    .map(key => [key, state?.[key] ?? null]))));
+export function resolvePlanningLoad(local, cloud) {
+  if (!cloud) return { state: local, conflict: false };
+  if (!local || local.beneficiaryId !== cloud.beneficiaryId) return { state: cloud, conflict: false };
+  const conflict = planningContent(local) !== planningContent(cloud);
+  return { state: conflict ? local : cloud, conflict };
+}
+
 export async function ensureBeneficiaryGroup({ db, user, state }) {
   const identified = ensureBeneficiaryIdentity(state);
   const beneficiaryId = String(identified?.beneficiaryId || "").trim();
@@ -310,27 +324,32 @@ export async function loadState({ db, user }) {
   const local = readLocalState();
   if (!db || !user?.uid) return withLoadMeta(local, { ready: false, exists: false, source: local ? "local" : "empty", reason: "not-connected" });
   try {
-    const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get();
+    const snap = await db.collection("planning-avd-users").doc(user.uid).collection("app").doc("state").get({ source: "server" });
     const userCloud = snap.exists ? migrateState(snap.data().value) : null;
     const beneficiaryId = String(userCloud?.beneficiaryId || local?.beneficiaryId || "").trim();
     let beneficiaryCloud = null;
     let beneficiaryData = null;
     if (beneficiaryId) {
-      const beneficiarySnap = await beneficiaryRoot(db, beneficiaryId).get().catch(error => {
+      const beneficiarySnap = await beneficiaryRoot(db, beneficiaryId).get({ source: "server" }).catch(error => {
         console.warn("Lecture dossier bénéficiaire impossible, repli sauvegarde utilisateur.", error);
-        return null;
+        throw error;
       });
       beneficiaryData = beneficiarySnap?.exists ? beneficiarySnap.data() : null;
       beneficiaryCloud = beneficiaryData?.value ? migrateState(beneficiaryData.value) : null;
     }
-    const cloud = latestSavedState(beneficiaryCloud, userCloud);
-    const merged = ensureBeneficiaryIdentity(cloud ? mergeSavedState(local, cloud) : local);
+    const cloud = beneficiaryCloud || userCloud;
+    const resolution = resolvePlanningLoad(local, cloud);
+    if (resolution.conflict) {
+      localStorage.setItem(`${LOCAL_KEY}-recovery-${user.uid}-${Date.now()}`, JSON.stringify({ local, cloud }));
+    }
+    const merged = ensureBeneficiaryIdentity(resolution.state);
     const beneficiaryUpdatedAt = beneficiaryDocumentUpdatedAt(beneficiaryData) || savedStateUpdatedAt(cloud);
     return withLoadMeta(merged, {
-      ready: true,
+      ready: !resolution.conflict,
+      conflict: resolution.conflict,
       exists: snap.exists || !!beneficiaryCloud,
       source: cloud ? beneficiaryCloud === cloud ? "beneficiary-cloud" : "cloud" : local ? "local" : "empty",
-      updatedAt: savedStateUpdatedAt(cloud) || savedStateUpdatedAt(merged),
+      updatedAt: savedStateUpdatedAt(userCloud),
       beneficiaryUpdatedAt,
       updatedBy: beneficiaryData?.updatedBy || snap.data?.()?.updatedBy || "",
     });
@@ -405,26 +424,34 @@ export async function saveState({ db, user, state, expectedUpdatedAt, expectedBe
         ]);
       }
     }
-    await ref.set({
+    const committed = await db.runTransaction(async transaction => {
+      const latestUser = await transaction.get(ref);
+      const latestRoot = await transaction.get(rootRef);
+      if (savedStateUpdatedAt(latestUser.data()?.value) !== currentUpdatedAt
+        || beneficiaryDocumentUpdatedAt(latestRoot.data()) !== currentBeneficiaryUpdatedAt) return false;
+      transaction.set(ref, {
       value,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
-    }, { merge: true });
-    await userBeneficiaryRef(db, user, value.beneficiaryId).set({
+    }, { mergeFields: ["value", "updatedAt", "updatedBy"] });
+    transaction.set(userBeneficiaryRef(db, user, value.beneficiaryId), {
       beneficiaryId: value.beneficiaryId,
       beneficiaryName: String(value.beneficiaryName || "").trim(),
       value,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
-    }, { merge: true });
-    await rootRef.set({
+    }, { mergeFields: ["beneficiaryId", "beneficiaryName", "value", "updatedAt", "updatedBy"] });
+    transaction.set(rootRef, {
       beneficiaryId: value.beneficiaryId,
       beneficiaryName: String(value.beneficiaryName || "").trim(),
       value,
       latestSavedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: user.email || "",
-    }, { merge: true });
+    }, { mergeFields: ["beneficiaryId", "beneficiaryName", "value", "latestSavedAt", "updatedAt", "updatedBy"] });
+      return true;
+    });
+    if (!committed) return { local: true, cloud: false, reason: "conflict", error: "Le cloud a changé pendant la sauvegarde. Aucune version écrasée." };
     await ensureBeneficiaryGroup({ db, user, state: value });
     await addBeneficiaryActivity({
       db,

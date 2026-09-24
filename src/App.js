@@ -1,4 +1,6 @@
 import React from "react";
+import { applyDayTemplate } from "./modules/day-template.js";
+import { DayTemplatePicker } from "./modules/day-template-picker.js";
 import { showShortcutHelp } from "./modules/web-only.js";
 import { listedAuxiliaries, retireAuxiliaries } from "./modules/auxiliary-membership.js";
 import { TWO_DAY_MODE } from "./modules/two-day-template.js";
@@ -1108,7 +1110,7 @@ function WorkerPill({ aux, index, active = false, selected = false, primary = fa
   );
 }
 
-function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onClose }) {
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onApplyDayTemplate, onClose }) {
   const [hourInputs, setHourInputs] = useState({});
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
   const entry = edit ? schedule[edit.day]?.[edit.shift] : null;
@@ -1160,6 +1162,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
+      h(DayTemplatePicker, { key: `${year}-${month}-${edit.day}`, auxiliaries, onApply: onApplyDayTemplate }),
       h("div", { className: `slot-editor-current${manualEmpty ? " empty" : ""}` },
         h("span", null, manualEmpty ? "Créneau vidé" : currentNames.length ? "Actuel" : "À définir"),
         h("b", null, manualEmpty ? "Aucun auxiliaire" : currentNames.length ? currentNames.join(" + ") : "Choisir un titulaire"),
@@ -2019,11 +2022,13 @@ export default function App() {
   };
   const setCloudResult = result => {
     if (result?.cloud) {
+      cloudWriteReadyRef.current = true;
       setCloudConflict(null);
       setCloudStatus({ kind: "saved", text: `Cloud sauvegardé ${formatCloudTime()}` });
       return;
     }
     if (result?.reason === "conflict") {
+      cloudWriteReadyRef.current = false;
       setCloudConflict(result);
       setCloudStatus({ kind: "error", text: "Cloud modifié ailleurs" });
       return;
@@ -2316,8 +2321,10 @@ export default function App() {
       cloudBaseUpdatedAtRef.current = authState.user && cloudMeta.ready === true ? cloudMeta.updatedAt || "" : undefined;
       cloudBeneficiaryUpdatedAtRef.current = authState.user && cloudMeta.ready === true ? cloudMeta.beneficiaryUpdatedAt || cloudMeta.updatedAt || "" : undefined;
       lastSavedSignatureRef.current = stateSignature(nextState);
-      setCloudConflict(null);
-      if (authState.user && cloudMeta.ready === false) {
+      setCloudConflict(cloudMeta.conflict ? { reason: "conflict", updatedBy: cloudMeta.updatedBy, currentUpdatedAt: cloudMeta.updatedAt, currentBeneficiaryUpdatedAt: cloudMeta.beneficiaryUpdatedAt } : null);
+      if (cloudMeta.conflict) {
+        setCloudStatus({ kind: "error", text: "Versions différentes : choisissez local ou cloud" });
+      } else if (authState.user && cloudMeta.ready === false) {
         setCloudStatus({ kind: "error", text: "Lecture cloud bloquée" });
       } else if (authState.user && cloudMeta.ready === true && cloudMeta.exists) {
         setCloudStatus({ kind: "saved", text: "Cloud chargé" });
@@ -2362,6 +2369,8 @@ export default function App() {
         : previous);
       return;
     }
+    // Persist immediately so reconnecting during the cloud debounce cannot lose edits.
+    persistLocalDraft(currentState);
     if (hasIncompleteAuxEmail(auxiliaries)) {
       setCloudStatus({ kind: "local", text: "Email à terminer" });
       const id = setTimeout(() => saveState({
@@ -2374,7 +2383,8 @@ export default function App() {
       return () => clearTimeout(id);
     }
     if (authState.user && !cloudWriteReadyRef.current) {
-      setCloudStatus({ kind: "error", text: "Cloud protégé : rechargez" });
+      persistLocalDraft(currentState);
+      setCloudStatus({ kind: "error", text: "Local conservé · cloud protégé" });
       return;
     }
     setCloudStatus({ kind: authState.user ? "saving" : "local", text: authState.user ? "Sauvegarde cloud..." : "Local enregistré" });
@@ -2464,11 +2474,13 @@ export default function App() {
     });
   };
   const keepCloudVersion = () => {
+    if (!window.confirm("Remplacer le planning affiché par le cloud ? Une copie locale de récupération sera conservée.")) return;
     discardLocalState();
     window.location.reload();
   };
   const keepLocalVersion = async () => {
-    if (!authState.user) return;
+    if (!authState.user || !sessionRole.isAdmin) return;
+    if (!window.confirm("Remplacer le planning cloud par votre version locale ? Les changements des autres administrateurs pourront être remplacés.")) return;
     const currentState = buildPlanningState({});
     const signature = stateSignature(currentState);
     try {
@@ -2864,7 +2876,7 @@ export default function App() {
       onPublish: publishPlanning,
     }),
     h("div", { className: "layout" },
-      sessionRole.isAdmin ? h(CloudConflictNotice, { conflict: cloudConflict, onReload: () => window.location.reload() }) : null,
+      sessionRole.isAdmin ? h(CloudConflictNotice, { conflict: cloudConflict, onKeepCloud: keepCloudVersion, onKeepLocal: keepLocalVersion }) : null,
       sessionRole.isAdmin ? h(ShareReminder, { dashboard: groupDashboard, year, month, onSharePlanning: sharePlanningEmail }) : null,
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onCopyPreviousMonth: copyPreviousMonthPlanning, onClearMonth: clearMonthPlanning }) : null,
@@ -2888,6 +2900,17 @@ export default function App() {
       view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary: removeAuxiliary, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
     ),
     h(SlotEditor, {
+      onApplyDayTemplate: workers => {
+        if (!slotEdit || !sessionRole.isAdmin) return;
+        if (!window.confirm(`Appliquer 5 h le matin, 5 h l'après-midi et 2 h de mise au lit au ${slotEdit.day} ${MONTHS[month]} ? Les affectations et renforts de ces trois créneaux seront remplacés. La veille de nuit reste inchangée.`)) return;
+        const changes = applyDayTemplate({ year, month, day: slotEdit.day, workers, overrides, hourOverrides });
+        const nextClearedMonths = withoutClearedMonth(clearedMonths, year, month);
+        persistLocalDraft(buildPlanningState({ ...changes, clearedMonths: nextClearedMonths }));
+        setOverrides(changes.overrides);
+        setHourOverrides(changes.hourOverrides);
+        setClearedMonths(nextClearedMonths);
+        setSlotEdit(null);
+      },
       edit: slotEdit,
       year,
       month,
