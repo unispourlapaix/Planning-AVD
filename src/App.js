@@ -1977,6 +1977,7 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
 
 export default function App() {
   const [stateLoaded, setStateLoaded] = useState(false);
+  const loadedAccountRef = useRef(null);
   const [authState, setAuthState] = useState({ user: null, auth: null, db: null, ready: false, error: "" });
   const [loginPending, setLoginPending] = useState(false);
   const [year, setYear] = useState(defaultState().year);
@@ -2110,7 +2111,7 @@ export default function App() {
       clearTimeout(timeout);
       unsubscribe?.();
     };
-  }, [authState.ready, authState.user, authState.db]);
+  }, [authState.ready, authState.user?.uid, authState.user?.email, authState.db]);
 
   const firstConnectionMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin && !sessionRole.isMember;
   const personalMode = !!authState.user && sessionRole.ready && !sessionRole.isAdmin && sessionRole.isMember;
@@ -2284,8 +2285,18 @@ export default function App() {
   }, [year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings, personalMode, personalBeneficiaryId, personalPlanning, personalAccess]);
 
   useEffect(() => {
-    if (!authState.ready || stateLoaded) return;
+    if (!authState.ready) return;
+    const accountKey = authState.user?.uid || "guest";
+    if (loadedAccountRef.current === accountKey) return;
+    let active = true;
+    loadedAccountRef.current = null;
+    setStateLoaded(false);
+    cloudWriteReadyRef.current = false;
+    cloudBaseUpdatedAtRef.current = undefined;
+    cloudBeneficiaryUpdatedAtRef.current = undefined;
+    setCloudStatus({ kind: "saving", text: authState.user ? "Chargement du planning cloud..." : "Chargement local..." });
     loadState({ db: authState.db, user: authState.user }).then(saved => {
+      if (!active) return;
       const identifiedSaved = saved ? ensureBeneficiaryIdentity(saved) : null;
       const nextState = {
         year: identifiedSaved?.year || year,
@@ -2324,12 +2335,17 @@ export default function App() {
       setHourOverrides(nextState.hourOverrides);
       setClearedMonths(nextState.clearedMonths);
       setDayOutings(nextState.dayOutings);
+      loadedAccountRef.current = accountKey;
       setStateLoaded(true);
+    }).catch(error => {
+      if (!active) return;
+      setCloudStatus({ kind: "error", text: `Lecture du planning impossible : ${error.message}` });
     });
-  }, [authState.ready, authState.user, stateLoaded]);
+    return () => { active = false; };
+  }, [authState.ready, authState.user?.uid, authState.db]);
 
   useEffect(() => {
-    if (!stateLoaded) return;
+    if (!stateLoaded || loadedAccountRef.current !== (authState.user?.uid || "guest")) return;
     if (authState.user && !sessionRole.ready) {
       setCloudStatus({ kind: "saving", text: "Vérification du compte..." });
       return;
@@ -2340,7 +2356,12 @@ export default function App() {
     }
     const currentState = { year, month, view, rotationDays, beneficiaryId, beneficiaryName, auxiliaries, overrides, hourOverrides, clearedMonths, dayOutings };
     const signature = stateSignature(currentState);
-    if (signature === lastSavedSignatureRef.current) return;
+    if (signature === lastSavedSignatureRef.current) {
+      setCloudStatus(previous => previous.text === "Vérification du compte..."
+        ? { kind: cloudWriteReadyRef.current ? "saved" : "error", text: cloudWriteReadyRef.current ? "Compte vérifié · planning chargé" : "Lecture cloud indisponible" }
+        : previous);
+      return;
+    }
     if (hasIncompleteAuxEmail(auxiliaries)) {
       setCloudStatus({ kind: "local", text: "Email à terminer" });
       const id = setTimeout(() => saveState({
