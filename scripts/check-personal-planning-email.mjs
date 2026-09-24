@@ -12,7 +12,7 @@ assert.equal(result.difference, 2, "Never cap the total at quota");
 assert.equal(result.rows.length, 3);
 assert.ok(result.text.includes("Mardi 29/02/2028"));
 assert.equal(result.rows[0].range, "11:00–18:00");
-assert.equal(result.rows[1].range, "23:00–01:00 (+1 j)");
+assert.equal(result.rows[1].range, "23:30–01:30 (+1 j)");
 assert.ok(result.html.includes("#e0f1ff") && result.html.includes("#f1f2f3"));
 assert.ok(!result.html.includes("Camille <test>"));
 assert.ok(!result.html.includes(other.email));

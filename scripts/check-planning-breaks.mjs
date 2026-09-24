@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import { planningBreakNote } from "../src/modules/planning-breaks.js";
+import { buildPersonalPlanningEmail } from "../src/modules/personal-planning-email.js";
+assert.equal(planningBreakNote(0, "morning"), "");
+assert.equal(planningBreakNote(2, "bedtime"), "");
+assert.match(planningBreakNote(7, "morning"), /30 min/);
+assert.match(planningBreakNote(12, "night"), /20 min/);
+const mail = buildPersonalPlanningEmail({ year: 2026, month: 8, auxiliary: { id: "a", name: "Test", quota: 10 }, schedule: { 1: { morning: { worker: "a", hours: 5 }, afternoon: { worker: "a", hours: 5 } } } });
+assert.equal(mail.total, 10);
+assert.match(mail.text, /20 min/);
+assert.match(mail.html, /Pauses et repas à organiser/);
+assert.match(mail.html, /relais/);
+console.log("Pauses: OK");

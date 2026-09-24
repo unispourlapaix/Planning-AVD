@@ -53,6 +53,8 @@ export function shiftTimeRange({ plan = {}, shift, worker, startTime = "08:00" }
   for (const definition of SHIFT_DEFS) {
     if (definition.id === shift) break;
     if (definition.id !== "bedtime") start += Math.round(slotHours(plan[definition.id], definition.id) * 60);
+    // The lunch break shifts later slots without increasing worked hours.
+    if (definition.id === "morning") start += 30;
   }
   const hours = worker ? slotWorkerHours(plan[shift], shift, worker) : slotHours(plan[shift], shift);
   const clock = minutes => `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}${minutes >= 1440 ? ` (+${Math.floor(minutes / 1440)} j)` : ""}`;
