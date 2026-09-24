@@ -1,5 +1,4 @@
 import React from "react";
-import "./calendar.css";
 import ReactDOM from "react-dom/client";
 import { initVisualShiftLabels } from "./modules/visual-shift-labels.js?v=20260726-normal-slots";
 import { initPlanningShareButton } from "./modules/share-button.js?v=20260726-empty-slot";
