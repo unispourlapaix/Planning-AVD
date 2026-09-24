@@ -45,3 +45,16 @@ export const hasCustomWorkerHours = (entry, shift, worker) => {
 export const normalizeHourOverrides = value => Object.fromEntries(Object.entries(value && typeof value === "object" ? value : {})
   .map(([key, hours]) => [key, normalizeSlotHour(hours)])
   .filter(([, hours]) => hours !== null));
+
+export function shiftTimeRange({ plan = {}, shift, worker, startTime = "08:00" }) {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) throw new Error("Heure de début invalide (HH:MM).");
+  const [hour, minute] = startTime.split(":").map(Number);
+  let start = hour * 60 + minute;
+  for (const definition of SHIFT_DEFS) {
+    if (definition.id === shift) break;
+    if (definition.id !== "bedtime") start += Math.round(slotHours(plan[definition.id], definition.id) * 60);
+  }
+  const hours = worker ? slotWorkerHours(plan[shift], shift, worker) : slotHours(plan[shift], shift);
+  const clock = minutes => `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}${minutes >= 1440 ? ` (+${Math.floor(minutes / 1440)} j)` : ""}`;
+  return `${clock(start)}–${clock(start + Math.round(hours * 60))}`;
+}

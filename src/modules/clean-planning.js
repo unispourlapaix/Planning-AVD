@@ -1,73 +1,41 @@
-import { DAYS_SHORT, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
+import { DAYS_LONG, MONTHS, PALETTE, SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
 import { dayIndex, monthGrid } from "./dates.js";
-import { mealForDate } from "./meal-planning.js";
-import { primaryShiftWorkerId, shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
-import { breakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
-import { defaultHoursForShift, hasCustomSlotHours, hasCustomWorkerHours, slotHours, slotWorkerHours } from "./shift-hours.js?v=20260722-custom-hours";
+import { shiftTimeRange } from "./shift-hours.js";
 
 const esc = value => String(value ?? "").replace(/[<>&"]/g, char => ({
-  "<": "&lt;",
-  ">": "&gt;",
-  "&": "&amp;",
-  "\"": "&quot;",
+  "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;",
 }[char]));
-const shiftWorkerIds = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
-const colorFor = index => PALETTE[index % PALETTE.length];
 
-export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxiliaries = [], schedule = {} }) {
-  const active = auxiliaries.filter(aux => aux.active !== false);
-  const indexById = Object.fromEntries(active.map((aux, index) => [aux.id, index]));
-  const nameById = Object.fromEntries(active.map(aux => [aux.id, aux.name || "A definir"]));
-
-  const formatWorkers = ids => ids.slice(0, 1).map((id, index) => {
-    const name = nameById[id] || "A definir";
-    const color = colorFor(indexById[id] ?? 0);
-    return `<span class="name" style="--fg:${color.text};--bg:${color.light};--bd:${color.solid}">${esc(name)}</span>`;
-  }).join("");
-
+export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxiliaries = [], schedule = {}, startTime = "08:00" }) {
+  // Validate even when the month has no assignments.
+  shiftTimeRange({ shift: "morning", startTime });
+  const names = new Map(auxiliaries.map((aux, index) => [aux.id, { name: aux.name || "Non attribué", color: PALETTE[index % PALETTE.length].text }]));
   const dayHtml = day => {
-    if (!day) return `<div class="day empty"></div>`;
+    if (!day) return '<div class="day empty"></div>';
     const plan = schedule[day] || {};
-    const tone = dayIndex(year, month, day) === 5 ? " saturday" : dayIndex(year, month, day) === 6 ? " sunday" : "";
     const slots = SHIFT_DEFS.map(shift => {
-      const ids = shiftWorkerIds(plan[shift.id]);
-      const worker = ids[0] || primaryShiftWorkerId(plan[shift.id]);
-      const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
-      const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
-      const noticeHtml = notice ? `<small class="break ${notice.type}">${esc(notice.label)}</small>` : "";
       const entry = plan[shift.id];
-      const hoursChanged = worker
-        ? hasCustomWorkerHours(entry, shift.id, worker) || slotHours(entry, shift.id) !== defaultHoursForShift(shift.id)
-        : hasCustomSlotHours(entry, shift.id);
-      const hoursHtml = hoursChanged ? `<small class="break hours">${slotWorkerHours(entry, shift.id, worker)}h</small>` : "";
-      return `<div class="slot"><b>${esc(label)}</b><div>${ids.length ? formatWorkers(ids) : `<span class="rest">A definir</span>`}${hoursHtml}${noticeHtml}</div></div>`;
+      const worker = entry?.workers?.[0] || entry?.worker;
+      const person = names.get(worker);
+      const range = shiftTimeRange({ plan, shift: shift.id, worker, startTime });
+      return `<div class="slot"><span class="label">${esc(shift.label)}</span><div><strong style="color:${person?.color || "#6b747b"}">${esc(person?.name || (worker ? "Intervenant" : "Non attribué"))}</strong><time>${esc(range)}</time></div></div>`;
     }).join("");
-    const meal = mealForDate(year, month, day);
-    return `<div class="day${tone}"><div class="head"><span>${day}</span><em>${DAYS_SHORT[dayIndex(year, month, day)]}</em></div>${slots}<div class="meal"><b>Repas</b><span>${esc(meal.short)}</span></div></div>`;
+    return `<div class="day${dayIndex(year, month, day) >= 5 ? " weekend" : ""}"><div class="date">${day}</div>${slots}</div>`;
   };
-
-  const beneficiaryText = beneficiaryName ? `Bénéficiaire : ${beneficiaryName} · ` : "";
-
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Planning-AVD A4 paysage - ${MONTHS[month]} ${year}</title><style>
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning ${MONTHS[month]} ${year}</title><style>
     @page{size:A4 landscape;margin:8mm}
-    *{box-sizing:border-box}html{background:#fffefa}body{margin:0;padding:14px;font-family:Inter,Arial,sans-serif;color:#26333a;background:#fffefa}
-    .sheet{width:min(100%,281mm);min-height:194mm;margin:0 auto;padding:14px;border:1px solid #d8e3e6;border-radius:14px;background:linear-gradient(135deg,#ffffff,#fbfbf3 55%,#fff7fb);box-shadow:0 16px 42px rgba(84,111,124,.12)}
-    header{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:14px}
-    h1{margin:0;font-size:26px;letter-spacing:.02em;color:#344753}p{margin:5px 0 0;color:#6e7c84;font-weight:700}
-    .badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.badge{padding:8px 12px;border-radius:999px;background:#e7f7fa;color:#17645e;font-weight:900}.badge.white{background:#fff;color:#344753;border:1px solid #d8e3e6}
-    .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.dow{font-size:11px;font-weight:900;text-align:center;color:#697981;text-transform:uppercase;padding:5px;border-radius:8px;background:rgba(255,255,255,.72)}
-    .dow:nth-child(6){color:#4e7f99;background:#e9f6fb}.dow:nth-child(7){color:#a95d89;background:#fdeef6}
-    .day{min-height:128px;padding:7px;border-radius:10px;border:1px solid #dfe8eb;background:rgba(255,255,255,.78);display:grid;gap:5px;align-content:start}
-    .day.empty{background:transparent;border:0}.day.saturday{background:#eef8fc;border-color:#b9ddea}.day.sunday{background:#fff0f7;border-color:#efc2dc}
-    .head{display:flex;justify-content:space-between;align-items:center;font-weight:900;color:#344753}.head span{font-size:17px}.head em{font-size:10px;font-style:normal;text-transform:uppercase;color:#7a858b}
-    .slot{display:grid;grid-template-columns:54px minmax(0,1fr);gap:5px;align-items:center;padding:4px;border-radius:8px;background:rgba(255,255,255,.68);border:1px solid rgba(218,227,230,.82)}
-    .slot b{font-size:8px;line-height:1.1;color:#687a83;text-transform:uppercase}.name{display:inline;font-size:11px;font-weight:900;color:var(--fg);line-height:1.12}.extra,.break{display:inline-flex;margin-left:4px;padding:1px 4px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font-size:8px;font-weight:900;vertical-align:middle}.break{--bd:#a6dcc2;--bg:#e4f8f0;--fg:#1a6a44}.break.rest{--bd:#c9bee8;--bg:#f0ecff;--fg:#3e2a9e}.rest{color:#9a948b;font-size:10px;font-weight:800}
-    .meal{display:grid;grid-template-columns:36px minmax(0,1fr);gap:4px;padding:4px;border-radius:7px;background:#eef9f3;color:#39735b}.meal b{font-size:8px;text-transform:uppercase}.meal span{font-size:9px;font-weight:900}
-    footer{margin-top:10px;color:#6e7c84;font-size:10px;font-weight:700;text-align:right}
-    @media print{html,body{width:297mm;min-height:210mm;background:#fff}body{padding:0}.sheet{width:auto;min-height:194mm;box-shadow:none;border-radius:0;border:0}footer{display:none}}
-  </style></head><body><section class="sheet">
-    <header><div><h1>Planning-AVD</h1><p>${esc(beneficiaryText)}${MONTHS[month]} ${year} · calendrier A4 paysage pret a imprimer</p></div><div class="badges"><div class="badge white">A4 paysage</div><div class="badge">${active.length} auxiliaire(s) affecté(s)</div></div></header>
-    <div class="calendar">${DAYS_SHORT.map(day => `<div class="dow">${day}</div>`).join("")}${monthGrid(year, month).map(dayHtml).join("")}</div>
-    <footer>Planning genere depuis Planning-AVD</footer>
-  </section></body></html>`;
+    *{box-sizing:border-box}body{margin:0;padding:16px;background:#f1f3f4;color:#243641;font-family:Arial,sans-serif}
+    .sheet{max-width:281mm;margin:auto;padding:12px;background:#fff}
+    header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px}
+    h1{font-size:20px;margin:0}header p{font-size:12px;margin:5px 0 0;color:#5e6e78}
+    .print-button{padding:8px 14px;border:1px solid #9bafb9;border-radius:4px;background:white;color:#243641;cursor:pointer}
+    .calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid #ccd6dc;border-left:1px solid #ccd6dc}
+    .dow{padding:7px 2px;text-align:center;font-size:11px;font-weight:bold;background:#f2f5f7;border-right:1px solid #ccd6dc;border-bottom:1px solid #ccd6dc}
+    .day{min-width:0;padding:4px;border-right:1px solid #ccd6dc;border-bottom:1px solid #ccd6dc;break-inside:avoid}
+    .empty{background:#fafbfc}.weekend{background:#f2f7fa}.date{font-size:14px;font-weight:bold;margin-bottom:3px}
+    .slot{display:grid;grid-template-columns:48px minmax(0,1fr);gap:4px;padding:4px 0;border-top:1px solid #edf0f2}
+    .label{font-size:9px;line-height:1.2;color:#60717b}.slot strong{display:block;font-size:10px;line-height:1.2;overflow-wrap:anywhere}
+    time{display:block;font-size:9px;line-height:1.3;color:#364f60}
+    @media print{body{padding:0;background:white}.sheet{max-width:none;padding:0}header{margin-bottom:3mm}h1{font-size:14pt}header p{font-size:8pt}.print-button{display:none}.dow{font-size:7pt;padding:1mm}.day{padding:1mm}.date{font-size:9pt;margin-bottom:.5mm}.slot{padding:.65mm 0;grid-template-columns:12mm minmax(0,1fr);gap:1mm}.label{font-size:6.5pt}.slot strong{font-size:7pt}time{font-size:6.5pt}}
+  </style></head><body><main class="sheet"><header><div><h1>${MONTHS[month]} ${year}</h1><p>${esc(beneficiaryName || "Planning-AVD")} · Début de journée : ${esc(startTime)}</p></div><button type="button" class="print-button" onclick="window.print()">Imprimer</button></header><div class="calendar">${DAYS_LONG.map(day => `<div class="dow">${day}</div>`).join("")}${monthGrid(year, month).map(dayHtml).join("")}</div></main></body></html>`;
 }

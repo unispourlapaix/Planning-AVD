@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { buildCleanPlanningHtml } from "../src/modules/clean-planning.js";
+const options = { year: 2026, month: 7, beneficiaryName: "Test <privé>", auxiliaries: [{ id: "A", name: "Alice" }], schedule: { 1: { morning: { worker: "A", hours: 7 }, afternoon: { worker: "A", hours: 5 }, bedtime: { worker: "A", hours: 2 }, night: { worker: "A", hours: 12 } } } };
+const html = buildCleanPlanningHtml(options);
+for (const range of ["08:00–15:00", "15:00–20:00", "20:00–22:00", "20:00–08:00 (+1 j)"]) assert.ok(html.includes(range));
+assert.ok(!/repas|pause|repos conseillé/i.test(html));
+assert.ok(html.includes("Mise au lit") && html.includes("Veille de nuit"));
+assert.ok(html.includes("Test &lt;privé&gt;"));
+assert.equal((html.match(/class="date"/g) || []).length, 31);
+assert.ok(buildCleanPlanningHtml({ ...options, startTime: "09:00" }).includes("09:00–16:00"));
+assert.throws(() => buildCleanPlanningHtml({ ...options, startTime: "invalid" }));
+console.log("Print OK: four shifts, start/end times, midnight, chosen start and no meals or breaks.");

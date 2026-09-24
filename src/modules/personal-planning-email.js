@@ -1,31 +1,26 @@
 import { DAYS_LONG, MONTHS, SHIFT_DEFS } from "./constants.js";
 import { dayName, daysInMonth, monthWeeks } from "./dates.js";
 import { manualWorkerIds } from "./manual-workers.js";
-import { slotHours, slotWorkerHours } from "./shift-hours.js";
+import { slotHours, slotWorkerHours, shiftTimeRange } from "./shift-hours.js";
 
 export const escapeEmailHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const number = value => Number(value.toFixed(2)).toLocaleString("fr-FR");
-const clock = minutes => `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}${minutes >= 1440 ? ` (+${Math.floor(minutes / 1440)} j)` : ""}`;
 
 export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries = [], schedule = {}, beneficiaryName = "", appUrl = "", startTime = "08:00" }) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) throw new Error("Heure de début invalide.");
-  const [hour, minute] = startTime.split(":").map(Number);
   const rows = [];
   const calendar = {};
   for (let day = 1; day <= daysInMonth(year, month); day++) {
     const plan = schedule[day] || {};
-    let start = hour * 60 + minute;
     calendar[day] = SHIFT_DEFS.map(shift => {
       const entry = plan[shift.id];
       const workers = manualWorkerIds(entry?.workers || entry?.worker || []);
       const own = workers.includes(auxiliary.id);
       const hours = own ? slotWorkerHours(entry, shift.id, auxiliary.id) : slotHours(entry, shift.id);
-      const range = `${clock(start)}–${clock(start + Math.round(hours * 60))}`;
+      const range = shiftTimeRange({ plan, shift: shift.id, worker: own ? auxiliary.id : null, startTime });
       const row = { day, label: shift.label, own, hours, range,
         name: own ? auxiliary.name : auxiliaries.find(aux => aux.id === workers[0])?.name || (workers.length ? "Autre intervenant" : "Non attribué") };
       if (own) rows.push(row);
-      // Bedtime and night watch start in the evening, independently of each other.
-      if (shift.id !== "bedtime") start += Math.round(slotHours(entry, shift.id) * 60);
       return row;
     });
   }

@@ -2511,7 +2511,10 @@ export default function App() {
   };
 
   const openCleanView = () => {
-    const html = buildCleanPlanningHtml({ year, month, beneficiaryName, auxiliaries: activeAux, schedule });
+    const startTime = window.prompt("Heure de début de journée pour l'impression (HH:MM)", "08:00");
+    if (startTime === null) return;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime.trim())) return alert("Saisissez une heure valide, par exemple 08:00.");
+    const html = buildCleanPlanningHtml({ year, month, beneficiaryName, auxiliaries, schedule, startTime: startTime.trim() });
     openHtmlDocument({
       html,
       fileName: `planning-avd-impression-${year}-${String(month + 1).padStart(2, "0")}.html`,
