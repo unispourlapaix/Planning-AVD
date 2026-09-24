@@ -15,7 +15,7 @@ const uniqueShareKeys = email => {
 };
 const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, "0")}`;
 const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const shiftOrder = ["morning", "afternoon", "night"];
+const shiftOrder = ["morning", "afternoon", "bedtime", "night"];
 const slotKey = (day, shift) => `${day}-${shift}`;
 const escapeHtml = value => String(value ?? "").replace(/[<>&"]/g, char => ({
   "<": "&lt;",

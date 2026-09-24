@@ -1545,7 +1545,7 @@ export function buildPersonalSharePayloads({ year, month, beneficiaryId = "", be
   }));
   const calendar = Object.values(schedule).map(plan => ({
     day: plan.day,
-    shifts: Object.fromEntries(["morning", "afternoon", "night"].map(shift => {
+    shifts: Object.fromEntries(["morning", "afternoon", "bedtime", "night"].map(shift => {
       const worker = primaryWorkerId(plan?.[shift]);
       return [shift, worker ? [findName(worker)] : []];
     })),
@@ -1553,7 +1553,7 @@ export function buildPersonalSharePayloads({ year, month, beneficiaryId = "", be
   return active.map(aux => {
     const entries = [];
     Object.values(schedule).forEach(plan => {
-      ["morning", "afternoon", "night"].forEach(shift => {
+      ["morning", "afternoon", "bedtime", "night"].forEach(shift => {
         if (primaryWorkerId(plan?.[shift]) === aux.id) {
           const notice = breakNoticeForSlot({ shift, schedule, day: plan.day, worker: aux.id });
           entries.push({ day: plan.day, shift, ...(notice ? { notice } : {}) });

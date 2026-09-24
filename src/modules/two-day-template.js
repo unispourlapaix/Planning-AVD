@@ -70,18 +70,18 @@ export function buildTwoDayTemplate({ year, month, auxiliaries = [] }) {
     const week = Math.floor((stamp - ANCHOR) / (7 * DAY));
     const weekday = mod((stamp - ANCHOR) / DAY, 7);
     const owner = plans.get(stamp)?.morning?.worker;
-    const candidates = team.filter(aux => aux.id !== owner && available(aux, "night", stamp))
+    const candidates = team.filter(aux => aux.id !== owner && available(aux, "bedtime", stamp))
       .filter(aux => weekday < 5 || phase(aux) === mod(week, 3))
       .filter(aux => canAddBedtime(aux, stamp))
       .sort((a, b) => work.get(a.id).length - work.get(b.id).length || a.id.localeCompare(b.id));
-    add(candidates[0], stamp, "night", 2, 19.5);
+    add(candidates[0], stamp, "bedtime", 2, 19.5);
   }
   const hourOverrides = {};
   let missing = 0;
   for (const plan of Object.values(schedule)) {
     const generated = plans.get(Date.UTC(year, month, plan.day)) || {};
-    for (const shift of ["morning", "afternoon", "night"]) {
-      plan[shift] = generated[shift] || { ...plan[shift], hours: shift === "night" ? 2 : plan[shift].hours };
+    for (const shift of ["morning", "afternoon", "bedtime"]) {
+      plan[shift] = generated[shift] || plan[shift];
       hourOverrides[`${year}-${month}-${plan.day}-${shift}`] = plan[shift].hours;
       if (!plan[shift].worker) missing += 1;
     }

@@ -31,7 +31,7 @@ export function buildReportHtml({ year, month, beneficiaryName = "", auxiliaries
 
   const hourRows = auxiliaries.map(aux => {
     const h = displayHours(hours[aux.id], aux.quota);
-    return `<tr><td>${esc(aux.name)}</td><td>${h.morning}</td><td>${h.afternoon}</td><td>${h.night}</td><td>${h.total}</td><td>${h.quota}</td><td>${h.pause}</td></tr>`;
+    return `<tr><td>${esc(aux.name)}</td><td>${h.morning}</td><td>${h.afternoon}</td><td>${h.bedtime}</td><td>${h.night}</td><td>${h.total}</td><td>${h.quota}</td><td>${h.pause}</td></tr>`;
   }).join("");
 
   const completedThrough = Math.max(0, ...auxiliaries.map(aux => Number(hours[aux.id]?.completedThrough) || 0));
@@ -54,5 +54,5 @@ export function buildReportHtml({ year, month, beneficiaryName = "", auxiliaries
     .hours{margin-top:18px}.hours td,.hours th{font-size:12px}
   </style></head><body><h1>Planning-AVD - ${MONTHS[month]} ${year}</h1>${beneficiaryLine}<table>${rows.join("")}</table>
   <p>${accountingNote}</p>
-  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Soir</th><th>Effectue</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
+  <table class="hours"><tr><th>Auxiliaire</th><th>Matin</th><th>Apres-midi</th><th>Mise au lit</th><th>Veille de nuit</th><th>Effectue</th><th>Quota</th><th>En pause</th></tr>${hourRows}</table></body></html>`;
 }

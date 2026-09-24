@@ -10,7 +10,7 @@ export function openPlanningEmailDialog(options) {
   dialog.setAttribute("aria-label", "Partager un planning personnel");
   dialog.innerHTML = `<form method="dialog"><header><h2>Partager un planning personnel</h2><button class="btn" aria-label="Fermer">Fermer</button></header></form>
     <div class="email-controls"><label>Auxiliaire<select data-recipient></select></label><label>Début de journée pour ce mail<input data-start type="time" required></label></div>
-    <p>Les horaires suivants sont calculés selon les durées saisies au planning.</p>
+    <p>Les horaires sont calculés selon les durées du planning. Mise au lit et veille de nuit commencent toutes deux à la fin de l'après-midi.</p>
     <div class="email-actions"><button class="btn" data-gmail>Préparer dans Gmail</button><button class="btn" data-copy>Copier le mail avec les couleurs</button><button class="btn" data-download>Télécharger le mail (.eml)</button></div>
     <p data-status role="status" aria-live="polite">Choisissez l'heure de début pour afficher le mail.</p>
     <iframe title="Aperçu du mail personnel" sandbox="" hidden></iframe>`;
@@ -22,6 +22,7 @@ export function openPlanningEmailDialog(options) {
     selector.append(option);
   }
   const input = dialog.querySelector("[data-start]");
+  input.value = "08:00";
   const status = dialog.querySelector("[data-status]");
   const frame = dialog.querySelector("iframe");
   const buttons = [...dialog.querySelectorAll(".email-actions button")];

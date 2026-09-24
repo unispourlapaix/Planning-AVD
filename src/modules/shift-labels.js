@@ -1,7 +1,8 @@
 const FALLBACK_LABELS = {
   morning: "Matin",
   afternoon: "Après-midi",
-  night: "Soir",
+  bedtime: "Mise au lit",
+  night: "Veille de nuit",
 };
 
 export const primaryShiftWorkerId = entry => {

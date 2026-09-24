@@ -10,6 +10,7 @@ export const quotaFor = auxiliary => {
 };
 
 export const createHourAccount = auxiliary => ({
+  bedtime: 0,
   morning: 0,
   afternoon: 0,
   night: 0,
@@ -37,7 +38,7 @@ export const creditScheduledHours = ({ account, shift, scheduledHours, day }) =>
 export const summarizeHours = (raw = {}, fallbackQuota = 0) => {
   const quotaValue = Number(raw.quota ?? fallbackQuota);
   const quota = Number.isFinite(quotaValue) && quotaValue > 0 ? quotaValue : DEFAULT_QUOTA;
-  const summary = { morning: 0, afternoon: 0, night: 0 };
+  const summary = { morning: 0, afternoon: 0, bedtime: 0, night: 0 };
   let remaining = quota;
 
   SHIFT_DEFS.forEach(shift => {
@@ -61,6 +62,7 @@ const shiftWorkerIds = entry =>
 
 export function calculateAssignedHours(schedule, auxiliaries) {
   const hours = Object.fromEntries(auxiliaries.map(aux => [aux.id, {
+    bedtime: 0,
     morning: 0,
     afternoon: 0,
     night: 0,

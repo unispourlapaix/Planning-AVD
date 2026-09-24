@@ -861,7 +861,8 @@ function AssignmentProgress({ auxiliaries, assignedHours }) {
       h("div", { className: "assignment-meta" },
         h("span", null, `Matin ${data.morning || 0}h`),
         h("span", null, `Après-midi ${data.afternoon || 0}h`),
-        h("span", null, `Soir ${data.night || 0}h`),
+        h("span", null, `Mise au lit ${data.bedtime || 0}h`),
+        h("span", null, `Veille ${data.night || 0}h`),
       ),
     );
   }));
@@ -1052,7 +1053,8 @@ function HoursView({ auxiliaries, hours }) {
         h("div", { className: "summary", style: { marginTop: 8 } },
           h("span", null, `Matin : ${hData.morning || 0}h`),
           h("span", null, `Apres-midi : ${hData.afternoon || 0}h`),
-          h("span", null, `Soir : ${hData.night || 0}h`),
+          h("span", null, `Mise au lit : ${hData.bedtime || 0}h`),
+          h("span", null, `Veille de nuit : ${hData.night || 0}h`),
           h("span", null, `En pause : ${hData.pause}h`),
         ),
       );

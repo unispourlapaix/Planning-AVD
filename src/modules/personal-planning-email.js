@@ -7,7 +7,7 @@ export const escapeEmailHtml = value => String(value ?? "").replace(/[&<>"']/g, 
 const number = value => Number(value.toFixed(2)).toLocaleString("fr-FR");
 const clock = minutes => `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}${minutes >= 1440 ? ` (+${Math.floor(minutes / 1440)} j)` : ""}`;
 
-export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries = [], schedule = {}, beneficiaryName = "", appUrl = "", startTime = "07:30" }) {
+export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries = [], schedule = {}, beneficiaryName = "", appUrl = "", startTime = "08:00" }) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) throw new Error("Heure de début invalide.");
   const [hour, minute] = startTime.split(":").map(Number);
   const rows = [];
@@ -24,7 +24,8 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
       const row = { day, label: shift.label, own, hours, range,
         name: own ? auxiliary.name : auxiliaries.find(aux => aux.id === workers[0])?.name || (workers.length ? "Autre intervenant" : "Non attribué") };
       if (own) rows.push(row);
-      start += Math.round(slotHours(entry, shift.id) * 60);
+      // Bedtime and night watch start in the evening, independently of each other.
+      if (shift.id !== "bedtime") start += Math.round(slotHours(entry, shift.id) * 60);
       return row;
     });
   }

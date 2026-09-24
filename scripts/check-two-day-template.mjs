@@ -11,8 +11,9 @@ for (const [year, month] of [[2026, 0], [2026, 1], [2028, 1], [2026, 7], [2026, 
   for (const plan of Object.values(result.schedule)) {
     assert.equal(plan.morning.worker, plan.afternoon.worker);
     assert.equal(plan.morning.hours + plan.afternoon.hours, 12);
-    assert.equal(persisted[plan.day].night.hours, 2, "Bedtime must stay 2h after applying and restoring the example");
-    if (plan.night.worker) assert.notEqual(plan.night.worker, plan.morning.worker);
+    assert.equal(persisted[plan.day].bedtime.hours, 2, "Bedtime must stay 2h after applying and restoring the example");
+    assert.equal(persisted[plan.day].night.hours, 12);
+    if (plan.bedtime.worker) assert.notEqual(plan.bedtime.worker, plan.morning.worker);
     const weekday = new Date(year, month, plan.day).getDay();
     if ([1, 4, 6].includes(weekday) && result.schedule[plan.day + 1]) {
       assert.equal(plan.morning.worker, result.schedule[plan.day + 1].morning.worker, "Two-day block must remain intact");
@@ -20,8 +21,8 @@ for (const [year, month] of [[2026, 0], [2026, 1], [2028, 1], [2026, 7], [2026, 
     if (weekday === 6 && result.schedule[plan.day + 21]) {
       assert.equal(team.find(aux => aux.id === plan.morning.worker).templateWeekendPhase, team.find(aux => aux.id === result.schedule[plan.day + 21].morning.worker).templateWeekendPhase, "Weekend group repeats every three weeks");
     }
-    if (plan.night.worker && result.schedule[plan.day + 1]) {
-      assert.notEqual(plan.night.worker, result.schedule[plan.day + 1].morning.worker, "No 10h rest between bedtime and next morning");
+    if (plan.bedtime.worker && result.schedule[plan.day + 1]) {
+      assert.notEqual(plan.bedtime.worker, result.schedule[plan.day + 1].morning.worker, "No 10h rest between bedtime and next morning");
     }
   }
 }
@@ -38,7 +39,7 @@ for (const month of [7, 8, 9]) {
   for (const day of Object.values(schedule)) {
     const base = Date.UTC(2026, month, day.day) / 3600000;
     if (day.morning.worker) duties.get(day.morning.worker).push([base + 7.5, base + 19.5]);
-    if (day.night.worker) duties.get(day.night.worker).push([base + 19.5, base + 21.5]);
+    if (day.bedtime.worker) duties.get(day.bedtime.worker).push([base + 19.5, base + 21.5]);
   }
 }
 for (const entries of duties.values()) {

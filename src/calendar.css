@@ -86,7 +86,7 @@
   .app .calendar > .dow, .app .day-card.empty { display: none !important; }
   .app .calendar .day-card, .app .week-days .day-card, .app .personal-month-list .day-card {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     min-height: 0;
     border: 1px solid #dbe2e6;
     border-radius: 6px;
