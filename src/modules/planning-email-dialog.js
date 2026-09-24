@@ -1,4 +1,4 @@
-import { buildPersonalPlanningEmail, buildPlanningEml } from "./personal-planning-email.js";
+import { buildPersonalPlanningEmail, buildPlanningEml, buildSelectedPlanningEmails } from "./personal-planning-email.js";
 
 export function openPlanningEmailDialog(options) {
   document.getElementById("planning-email-dialog")?.remove();
@@ -9,17 +9,29 @@ export function openPlanningEmailDialog(options) {
   dialog.className = "planning-email-dialog";
   dialog.setAttribute("aria-label", "Partager un planning personnel");
   dialog.innerHTML = `<form method="dialog"><header><h2>Partager un planning personnel</h2><button class="btn" aria-label="Fermer">Fermer</button></header></form>
-    <div class="email-controls"><label>Auxiliaire<select data-recipient></select></label><label>Début de journée pour ce mail<input data-start type="time" required></label></div>
+    <fieldset class="email-recipients"><legend>Destinataires</legend><label><input type="checkbox" data-all> Toute l'équipe</label><div data-recipient-list></div><small data-count></small></fieldset>
+    <div class="email-controls"><label>Aperçu du mail de<select data-recipient></select></label><label>Début de journée pour ces mails<input data-start type="time" required></label></div>
     <p>Les horaires sont calculés selon les durées du planning. Mise au lit et veille de nuit commencent toutes deux à la fin de l'après-midi.</p>
-    <div class="email-actions"><button class="btn" data-gmail>Préparer dans Gmail</button><button class="btn" data-copy>Copier le mail avec les couleurs</button><button class="btn" data-download>Télécharger le mail (.eml)</button></div>
+    <div class="email-actions"><button class="btn" data-gmail>Préparer les mails sélectionnés</button><button class="btn" data-copy>Copier le mail affiché avec les couleurs</button><button class="btn" data-download>Télécharger le mail affiché (.eml)</button></div>
+    <div data-drafts class="email-drafts"></div>
     <p data-status role="status" aria-live="polite">Choisissez l'heure de début pour afficher le mail.</p>
     <iframe title="Aperçu du mail personnel" sandbox="" hidden></iframe>`;
   const selector = dialog.querySelector("[data-recipient]");
+  const selectedIds = new Set([recipients[0].id]);
+  const all = dialog.querySelector("[data-all]");
+  const recipientList = dialog.querySelector("[data-recipient-list]");
   for (const aux of recipients) {
-    const option = document.createElement("option");
-    option.value = aux.id;
-    option.textContent = `${aux.name} · ${aux.email}`;
-    selector.append(option);
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = aux.id;
+    checkbox.checked = selectedIds.has(aux.id);
+    label.append(checkbox, document.createTextNode(`${aux.name} · ${aux.email}`));
+    recipientList.append(label);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selectedIds.add(aux.id); else selectedIds.delete(aux.id);
+      updateSelection();
+    });
   }
   const input = dialog.querySelector("[data-start]");
   input.value = "08:00";
@@ -29,26 +41,55 @@ export function openPlanningEmailDialog(options) {
   let draft = null;
   const selected = () => recipients.find(aux => aux.id === selector.value);
   const refresh = () => {
-    dialog.querySelector("[data-gmail-link]")?.remove();
-    draft = input.value ? buildPersonalPlanningEmail({ ...options, auxiliary: selected(), startTime: input.value }) : null;
+    dialog.querySelector("[data-drafts]").replaceChildren();
+    draft = input.value && selected() ? buildPersonalPlanningEmail({ ...options, auxiliary: selected(), startTime: input.value }) : null;
     buttons.forEach(button => { button.disabled = !draft; });
     frame.hidden = !draft;
     frame.srcdoc = draft?.html || "";
-    status.textContent = draft ? draft.summary : "Choisissez l'heure de début pour afficher le mail.";
+    status.textContent = draft ? draft.summary : "Sélectionnez au moins un destinataire et une heure de début.";
   };
+  const updateSelection = () => {
+    const previous = selector.value;
+    selector.replaceChildren();
+    for (const aux of recipients.filter(aux => selectedIds.has(aux.id))) {
+      const option = document.createElement("option");
+      option.value = aux.id;
+      option.textContent = `${aux.name} · ${aux.email}`;
+      selector.append(option);
+    }
+    if (selectedIds.has(previous)) selector.value = previous;
+    selector.disabled = selectedIds.size === 0;
+    all.checked = selectedIds.size === recipients.length;
+    all.indeterminate = selectedIds.size > 0 && !all.checked;
+    recipientList.querySelectorAll("input").forEach(checkbox => { checkbox.checked = selectedIds.has(checkbox.value); });
+    dialog.querySelector("[data-count]").textContent = `${selectedIds.size} destinataire(s) sélectionné(s) sur ${recipients.length}`;
+    refresh();
+  };
+  all.addEventListener("change", () => {
+    selectedIds.clear();
+    if (all.checked) recipients.forEach(aux => selectedIds.add(aux.id));
+    updateSelection();
+  });
   selector.addEventListener("change", refresh);
   input.addEventListener("input", refresh);
   dialog.querySelector("[data-gmail]").addEventListener("click", () => {
     if (!draft) return;
-    const url = new URL("https://mail.google.com/mail/");
-    for (const [key, value] of Object.entries({ view: "cm", fs: "1", to: selected().email.trim(), su: draft.subject, body: draft.text })) url.searchParams.set(key, value);
-    window.open(url.href, "_blank", "noopener");
-    status.textContent = "Brouillon texte demandé dans Gmail. Pour les couleurs, copiez le mail puis collez-le dans le corps du message. Aucun email envoyé automatiquement.";
-    // A visible link also works when the browser silently blocks the popup.
-    let link = dialog.querySelector("[data-gmail-link]");
-    if (!link) { link = document.createElement("a"); link.dataset.gmailLink = ""; link.target = "_blank"; link.rel = "noopener"; status.after(link); }
-    link.href = url.href;
-    link.textContent = "Ouvrir le brouillon Gmail";
+    const drafts = buildSelectedPlanningEmails({ ...options, startTime: input.value }, selectedIds);
+    const container = dialog.querySelector("[data-drafts]");
+    container.replaceChildren();
+    for (const mail of drafts) {
+      const url = new URL("https://mail.google.com/mail/");
+      for (const [key, value] of Object.entries({ view: "cm", fs: "1", to: mail.auxiliary.email.trim(), su: mail.subject, body: mail.text })) url.searchParams.set(key, value);
+      const link = document.createElement("a");
+      link.href = url.href;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = `Ouvrir le mail de ${mail.auxiliary.name}`;
+      link.addEventListener("click", () => { selector.value = mail.auxiliary.id; draft = mail; frame.srcdoc = mail.html; });
+      container.append(link);
+      if (drafts.length === 1) window.open(url.href, "_blank", "noopener");
+    }
+    status.textContent = `${drafts.length} mail(s) personnel(s) prêt(s). Ouvrez chaque lien pour envoyer depuis Gmail. Aucun envoi automatique. Pour les couleurs, copiez le mail affiché puis collez-le dans Gmail.`;
   });
   dialog.querySelector("[data-copy]").addEventListener("click", async () => {
     if (!draft) return;
@@ -72,6 +113,6 @@ export function openPlanningEmailDialog(options) {
   });
   dialog.addEventListener("close", () => dialog.remove());
   document.body.append(dialog);
-  refresh();
+  updateSelection();
   dialog.showModal();
 }

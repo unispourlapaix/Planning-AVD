@@ -44,6 +44,14 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
 }
 
 const base64 = text => btoa(Array.from(new TextEncoder().encode(text), byte => String.fromCharCode(byte)).join(""));
+export function buildSelectedPlanningEmails(options, selectedIds) {
+  const ids = new Set(selectedIds);
+  return options.auxiliaries
+    .filter(aux => ids.has(aux.id) && aux.active !== false && !aux.removedFromGroup)
+    .filter(aux => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(aux.email || "").trim()))
+    .map(auxiliary => ({ auxiliary, ...buildPersonalPlanningEmail({ ...options, auxiliary }) }));
+}
+
 export function buildPlanningEml({ email, subject, text, html }) {
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) throw new Error("Email invalide.");
   const boundary = "planning-avd-alternative";

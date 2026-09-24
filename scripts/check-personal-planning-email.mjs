@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildPersonalPlanningEmail, buildPlanningEml } from "../src/modules/personal-planning-email.js";
+import { buildPersonalPlanningEmail, buildPlanningEml, buildSelectedPlanningEmails } from "../src/modules/personal-planning-email.js";
 const auxiliary = { id: "A", name: "Camille <test>", email: "camille@example.test", quota: 10 };
 const other = { id: "B", name: "Alex", email: "private@example.test", quota: 151 };
 const options = { year: 2028, month: 1, auxiliary, auxiliaries: [auxiliary, other], startTime: "11:00", beneficiaryName: "Dossier <test>", appUrl: "https://example.test/Planning-AVD/", schedule: {
@@ -29,3 +29,15 @@ assert.ok(eml.includes("Content-Type: text/plain"));
 assert.ok(!eml.includes("Bcc:"));
 assert.throws(() => buildPlanningEml({ ...result, email: "x@test.fr\r\nBcc: other@test.fr" }));
 console.log("Personal email OK: dates, chosen start, midnight, custom durations, quota difference, colors, privacy and EML.");
+assert.equal(buildSelectedPlanningEmails(options, []).length, 0);
+assert.deepEqual(buildSelectedPlanningEmails(options, ["A"]).map(item => item.auxiliary.id), ["A"]);
+const all = buildSelectedPlanningEmails(options, new Set(["A", "B"]));
+assert.equal(all.length, 2);
+assert.equal(all[0].total, 12);
+assert.equal(all[1].total, 12);
+assert.equal(all[0].quota, 10);
+assert.equal(all[1].quota, 151);
+assert.ok(!all[0].text.includes(other.email));
+const filtered = buildSelectedPlanningEmails({ ...options, auxiliaries: [...options.auxiliaries, { id: "C", email: "c@example.test", active: false }, { id: "D", email: "d@example.test", removedFromGroup: true }, { id: "E", email: "incomplete" }] }, ["A", "A", "C", "D", "E"]);
+assert.deepEqual(filtered.map(item => item.auxiliary.id), ["A"]);
+console.log("Recipient selection OK: one, several, all, empty selection and unavailable recipients.");

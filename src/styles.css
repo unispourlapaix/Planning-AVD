@@ -11,6 +11,12 @@
 .planning-email-dialog iframe { width: 100%; height: 55vh; border: 1px solid #dce2e6; margin-top: 12px; background: white; }
 .planning-email-dialog p { font-size: 13px; line-height: 1.5; }
 .email-actions .btn { min-height: 42px; }
+.email-recipients { margin: 12px 0; padding: 12px; border: 1px solid #cad9e1; border-radius: 4px; }
+.email-recipients [data-recipient-list] { display: grid; gap: 8px; max-height: 180px; overflow-y: auto; margin: 10px 0; }
+.email-recipients label { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; font-size: 13px; }
+.email-recipients input { flex: 0 0 auto; }
+.email-drafts { display: grid; gap: 8px; max-height: 200px; overflow-y: auto; margin-top: 10px; }
+.email-drafts a { color: #185981; padding: 8px; border-bottom: 1px solid #dce2e6; }
 body {
   margin: 0;
   min-height: 100vh;
