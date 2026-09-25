@@ -32,7 +32,7 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
   const date = day => `${dayName(year, month, day)} ${String(day).padStart(2, "0")}/${String(month + 1).padStart(2, "0")}/${year}`;
   const subject = `Planning de ${auxiliary.name} · ${MONTHS[month]} ${year}`;
   const timingNote = `Horaires calculés à partir de ${startTime}, selon les durées des créneaux. Heures planifiées, non réalisées. Pauses non déduites automatiquement.`;
-  const breakReminder = "Pensez à prendre votre pause déjeuner du midi et une pause de 20 minutes après 5 heures de travail, en organisant le relais.";
+  const breakReminder = "En journée, pensez à prendre votre pause déjeuner du midi et une pause de 20 minutes après 5 heures de travail, en organisant le relais. Mise au lit : début à 20 h, durée habituelle de 2 h, sans pause.";
   const text = [`Bonjour ${auxiliary.name},`, "", subject, beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "", breakReminder, "", timingNote, "",
     ...rows.map(row => `${date(row.day)} · ${row.label} · ${row.range} · ${number(row.hours)} h`),
     ...(!rows.length ? ["Aucun créneau attribué ce mois-ci."] : []), "", summary, "", `Planning actualisé après connexion : ${appUrl}`].filter(line => line !== undefined).join("\n");

@@ -12,7 +12,7 @@ export function openPlanningEmailDialog(options) {
   dialog.innerHTML = `<form method="dialog"><header><h2>Partager un planning personnel</h2><button class="btn" aria-label="Fermer">Fermer</button></header></form>
     <fieldset class="email-recipients"><legend>Destinataires</legend><label><input type="checkbox" data-all> Toute l'équipe</label><div data-recipient-list></div><small data-count></small></fieldset>
     <div class="email-controls"><label>Aperçu du mail de<select data-recipient></select></label><label>Début de journée pour ces mails<input data-start type="time" required></label></div>
-    <p>Les horaires sont calculés selon les durées du planning. Mise au lit et veille de nuit commencent toutes deux à la fin de l'après-midi.</p>
+    <p>Début de journée : 8 h par défaut. Mise au lit : 20 h–22 h par défaut, sans pause. Les durées personnalisées restent prises en compte.</p>
     <div class="email-actions"><button class="btn" data-gmail>Préparer les mails sélectionnés</button><button class="btn" data-copy>Copier le mail affiché avec les couleurs</button><button class="btn" data-download>Télécharger le mail affiché (.eml)</button></div>
     <div data-drafts class="email-drafts"></div>
     <p data-status role="status" aria-live="polite">Choisissez l'heure de début pour afficher le mail.</p>

@@ -14,7 +14,7 @@ assert.equal(accounts.A.total, 2);
 assert.equal(accounts.B.total, 12);
 assert.equal(summarizeHours(accounts.A).bedtime, 2);
 const mail = buildPersonalPlanningEmail({ ...params, schedule, auxiliaries, auxiliary: auxiliaries[0] });
-assert.equal(mail.rows[0].range, "20:30–22:30");
+assert.equal(mail.rows[0].range, "20:00–22:00");
 const nightMail = buildPersonalPlanningEmail({ ...params, schedule, auxiliaries, auxiliary: auxiliaries[1] });
 assert.equal(nightMail.rows[0].range, "20:30–08:30 (+1 j)");
 const payloads = buildPersonalSharePayloads({ ...params, schedule, auxiliaries, beneficiaryId: "test" });
