@@ -2,7 +2,6 @@ import { DAYS_LONG, MONTHS, SHIFT_DEFS } from "./constants.js";
 import { dayName, daysInMonth, monthWeeks } from "./dates.js";
 import { manualWorkerIds } from "./manual-workers.js";
 import { slotHours, slotWorkerHours, shiftTimeRange } from "./shift-hours.js";
-import { planningBreakNote } from "./planning-breaks.js";
 
 export const escapeEmailHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const number = value => Number(value.toFixed(2)).toLocaleString("fr-FR");
@@ -19,19 +18,13 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
       const own = workers.includes(auxiliary.id);
       const hours = own ? slotWorkerHours(entry, shift.id, auxiliary.id) : slotHours(entry, shift.id);
       const range = shiftTimeRange({ plan, shift: shift.id, worker: own ? auxiliary.id : null, startTime });
-      const row = { day, label: shift.label, own, hours, range, breakNote: own ? planningBreakNote(hours, shift.id) : "",
+      const row = { day, label: shift.label, own, hours, range,
         name: own ? auxiliary.name : auxiliaries.find(aux => aux.id === workers[0])?.name || (workers.length ? "Autre intervenant" : "Non attribué") };
       if (own) rows.push(row);
       return row;
     });
   }
   const total = Math.round(rows.reduce((sum, row) => sum + row.hours, 0) * 100) / 100;
-  for (const day of new Set(rows.map(row => row.day))) {
-    const dailyRows = rows.filter(row => row.day === day);
-    if (dailyRows.reduce((sum, row) => sum + row.hours, 0) >= 6 && !dailyRows.some(row => row.hours >= 6)) {
-      dailyRows[0].breakNote = planningBreakNote(6, dailyRows[0].label === "Matin" ? "morning" : "day");
-    }
-  }
   const quota = Number.isFinite(Number(auxiliary.quota)) ? Math.max(0, Number(auxiliary.quota)) : 0;
   const difference = Math.round((total - quota) * 100) / 100;
   const balance = difference > 0 ? `Dépassement : ${number(difference)} h` : difference < 0 ? `Reste à attribuer : ${number(-difference)} h` : "Quota atteint";
@@ -39,16 +32,16 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
   const date = day => `${dayName(year, month, day)} ${String(day).padStart(2, "0")}/${String(month + 1).padStart(2, "0")}/${year}`;
   const subject = `Planning de ${auxiliary.name} · ${MONTHS[month]} ${year}`;
   const timingNote = `Horaires calculés à partir de ${startTime}, selon les durées des créneaux. Heures planifiées, non réalisées. Pauses non déduites automatiquement.`;
-  const text = [`Bonjour ${auxiliary.name},`, "", subject, beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "", timingNote, "",
-    ...rows.map(row => `${date(row.day)} · ${row.label} · ${row.range} · ${number(row.hours)} h${row.breakNote ? `\n  ${row.breakNote}` : ""}`),
+  const breakReminder = "Pensez à prendre votre pause déjeuner du midi et une pause de 20 minutes après 5 heures de travail, en organisant le relais.";
+  const text = [`Bonjour ${auxiliary.name},`, "", subject, beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "", breakReminder, "", timingNote, "",
+    ...rows.map(row => `${date(row.day)} · ${row.label} · ${row.range} · ${number(row.hours)} h`),
     ...(!rows.length ? ["Aucun créneau attribué ce mois-ci."] : []), "", summary, "", `Planning actualisé après connexion : ${appUrl}`].filter(line => line !== undefined).join("\n");
   const esc = escapeEmailHtml;
   const cellStyle = "border:1px solid #dce2e6;padding:6px;vertical-align:top;width:14.28%;font-size:11px;";
   const calendarHtml = `<table role="table" aria-label="Calendrier du mois" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;table-layout:fixed"><thead><tr>${DAYS_LONG.map(day => `<th style="${cellStyle}background:#f3f5f6">${day}</th>`).join("")}</tr></thead><tbody>${monthWeeks(year, month).map(week => `<tr>${week.map(day => `<td style="${cellStyle}">${day ? `<strong>${day}</strong>${calendar[day].map(row => `<div style="margin-top:5px;padding:5px;background:${row.own ? "#e0f1ff" : "#f1f2f3"};color:${row.own ? "#185981" : "#69727a"};border-left:3px solid ${row.own ? "#488cb5" : "#cdd2d6"};overflow-wrap:anywhere"><small>${esc(row.label)}${row.own ? " · Vous" : ""}</small><br><strong>${esc(row.name)}</strong>${row.own ? `<br>${esc(row.range)}<br>${number(row.hours)} h` : ""}</div>`).join("")}` : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   const detailHtml = `<table cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;text-align:left"><thead><tr><th>Date</th><th>Créneau</th><th>Horaire</th><th>Durée</th></tr></thead><tbody>${rows.map(row => `<tr><td style="border-top:1px solid #ddd">${esc(date(row.day))}</td><td>${esc(row.label)}</td><td>${esc(row.range)}</td><td>${number(row.hours)} h</td></tr>`).join("")}</tbody></table>`;
   const html = `<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Arial,sans-serif;color:#273842;background:#fff;margin:16px"><h2>${esc(subject)}</h2><p>${esc(beneficiaryName)}</p><p>Bleu : vos créneaux. Gris : les autres intervenants.</p>${calendarHtml}<h3>Vos horaires du mois</h3><p style="font-size:12px;color:#576670">${esc(timingNote)}</p>${rows.length ? detailHtml : "<p>Aucun créneau attribué.</p>"}<p><strong>${esc(summary)}</strong></p><p>Planning actualisé après connexion : ${esc(appUrl)}</p></body></html>`;
-  const breaksHtml = rows.filter(row => row.breakNote).map(row => `<p><strong>${esc(date(row.day))} · ${esc(row.label)}</strong><br>${esc(row.breakNote)}</p>`).join("");
-  const htmlWithBreaks = breaksHtml ? html.replace("</body>", `<section><h3>Pauses et repas à organiser</h3>${breaksHtml}</section></body>`) : html;
+  const htmlWithBreaks = html.replace("</h2>", `</h2><p>${esc(breakReminder)}</p>`);
   return { subject, text, html: htmlWithBreaks, rows, total, quota, difference, summary };
 }
 
