@@ -1,4 +1,5 @@
 import { buildPersonalPlanningEmail, buildPlanningEml, buildSelectedPlanningEmails } from "./personal-planning-email.js";
+import { gmailComposeUrl } from "./gmail-compose.js";
 
 export function openPlanningEmailDialog(options) {
   document.getElementById("planning-email-dialog")?.remove();
@@ -78,18 +79,20 @@ export function openPlanningEmailDialog(options) {
     const container = dialog.querySelector("[data-drafts]");
     container.replaceChildren();
     for (const mail of drafts) {
-      const url = new URL("https://mail.google.com/mail/");
-      for (const [key, value] of Object.entries({ view: "cm", fs: "1", to: mail.auxiliary.email.trim(), su: mail.subject, body: mail.text })) url.searchParams.set(key, value);
+      const url = gmailComposeUrl(mail.auxiliary.email, mail.subject);
       const link = document.createElement("a");
-      link.href = url.href;
+      link.href = url;
       link.target = "_blank";
       link.rel = "noopener";
       link.textContent = `Ouvrir le mail de ${mail.auxiliary.name}`;
-      link.addEventListener("click", () => { selector.value = mail.auxiliary.id; draft = mail; frame.srcdoc = mail.html; });
+      link.addEventListener("click", () => {
+        selector.value = mail.auxiliary.id; draft = mail; frame.srcdoc = mail.html;
+        status.textContent = `Gmail ouvert pour ${mail.auxiliary.name}. Copiez le mail affiché puis collez-le dans le corps du message avant de l'envoyer.`;
+      });
       container.append(link);
-      if (drafts.length === 1) window.open(url.href, "_blank", "noopener");
+      if (drafts.length === 1) window.open(url, "_blank", "noopener");
     }
-    status.textContent = `${drafts.length} mail(s) personnel(s) prêt(s). Ouvrez chaque lien pour envoyer depuis Gmail. Aucun envoi automatique. Pour les couleurs, copiez le mail affiché puis collez-le dans Gmail.`;
+    status.textContent = `${drafts.length} destinataire(s) prêt(s). Gmail ouvre seulement le destinataire et l'objet. Pour chacun, copiez le mail affiché puis collez-le dans Gmail avant l'envoi. Si aucune fenêtre ne s'ouvre, utilisez le lien. Aucun envoi automatique.`;
   });
   dialog.querySelector("[data-copy]").addEventListener("click", async () => {
     if (!draft) return;
