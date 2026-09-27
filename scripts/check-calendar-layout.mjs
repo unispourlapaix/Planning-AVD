@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { MonthView } from "../src/App.js";
-import { daysInMonth, monthWeeks, dayIndex } from "../src/modules/dates.js";
+import { daysInMonth, monthWeeks, dayIndex, monthContextCells } from "../src/modules/dates.js";
 import { buildEmptySchedule } from "../src/modules/manual-schedule.js";
 
 for (const year of [2026, 2028]) for (let month = 0; month < 12; month++) {
@@ -24,7 +24,15 @@ Object.values(schedule).forEach(plan => {
   }
 });
 const markup = renderToStaticMarkup(React.createElement(MonthView, { year, month, schedule, auxiliaries, overrides: {}, onEditSlot() {}, onOpenMeal() {} }));
-assert.equal((markup.match(/<article /g) || []).length, 30);
+assert.equal((markup.match(/<article /g) || []).length, 31);
+const context = monthContextCells(2026, 0);
+assert.deepEqual(context[0], { year: 2025, month: 11, day: 29, previous: true });
+assert.equal(monthContextCells(2026, 5)[0].previous, false);
+assert.equal(monthContextCells(2028, 2).filter(cell => cell?.previous).at(-1).day, 29);
+const historyMarkup = renderToStaticMarkup(React.createElement(MonthView, { year, month, schedule, auxiliaries: [{ id: "old", name: "Historique" }], overrides: { "2026-7-31-morning": "old" }, hourOverrides: { "2026-7-31-morning": 4 }, onEditSlot() {}, onOpenMeal() {} }));
+assert.ok(historyMarkup.includes("Historique"));
+assert.ok(historyMarkup.includes("4 h"));
+assert.ok(historyMarkup.includes("previous-month"));
 assert.ok(markup.includes("Jean-Christophe") && markup.includes("Non attribué") && markup.includes("2 h"));
 assert.ok(!markup.includes("manual-badge"));
 console.log("Calendar OK: aligned Monday-Sunday weeks, no duplicate dates, leap years, full names and durations.");

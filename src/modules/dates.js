@@ -28,3 +28,12 @@ export function monthWeeks(year, month) {
   const cells = monthGrid(year, month);
   return Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7));
 }
+
+export function monthContextCells(year, month) {
+  const start = dayIndex(year, month, 1);
+  return monthGrid(year, month).map((day, index) => {
+    if (!day && index >= start) return null;
+    const date = new Date(year, month, index - start + 1);
+    return { year: date.getFullYear(), month: date.getMonth(), day: date.getDate(), previous: index < start };
+  });
+}

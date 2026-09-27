@@ -2,7 +2,7 @@ import { MONTHS } from "./constants.js?v=20260726-normal-slots";
 import { mealForDate } from "./meal-planning.js";
 import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { personalBreakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
-import { monthWeeks, dayName } from "./dates.js";
+import { monthWeeks, dayName, monthContextCells } from "./dates.js";
 
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const cleanEmail = email => String(email || "").trim();
@@ -207,7 +207,7 @@ const dayHtml = (item, year, month, personalSlots, calendarByDay, entriesByDay) 
   </div>`;
 };
 
-const render = ({ calendar = [], entries = [], year, month }) => {
+const render = ({ calendar = [], entries = [], year, month, previousCalendar = [] }) => {
   const layout = document.querySelector(".personal-app .layout");
   const app = document.querySelector(".personal-app");
   if (!layout) return;
@@ -225,7 +225,12 @@ const render = ({ calendar = [], entries = [], year, month }) => {
   if (view === "month") {
     section.innerHTML = `<div class="calendar">
       ${DAYS_SHORT.map((day, index) => `<div class="dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}">${day}</div>`).join("")}
-      ${monthGrid(year, month).map(day => day ? dayHtml(byDay[day], year, month, ownSlots, byDay, entriesByDay) : dayHtml(null, year, month, ownSlots, byDay, entriesByDay)).join("")}
+      ${monthContextCells(year, month).map(cell => {
+        if (!cell) return dayHtml(null, year, month, ownSlots, byDay, entriesByDay);
+        if (!cell.previous) return dayHtml(byDay[cell.day], year, month, ownSlots, byDay, entriesByDay);
+        const item = previousCalendar.find(day => day.day === cell.day);
+        return `<div class="day-card previous-month"><div class="day-head">${cell.day} ${MONTHS[cell.month]}</div>${item ? shiftOrder.map(shift => slotHtml(item, shift, new Set(), {}, {})).join("") : '<small>Planning précédent non partagé</small>'}</div>`;
+      }).join("")}
     </div>`;
   } else {
     section.innerHTML = monthWeeks(year, month).map(days => {
@@ -301,11 +306,22 @@ export async function initPersonalTeamCalendar() {
     let directPending = refs.length;
     let queryUnsubscribe = null;
     let hasDirectPlanning = false;
+    let previousCalendar = [];
+    const previousDate = new Date(visible.year, visible.month - 1, 1);
+    const previousId = monthKey(previousDate.getFullYear(), previousDate.getMonth());
+    Promise.all(uniqueShareKeys(rawEmail).map(emailId => db.collection("planning-avd-shares").doc(emailId)
+      .collection("beneficiaries").doc(beneficiaryId).collection("months").doc(previousId).get().catch(() => null)))
+      .then(snapshots => {
+        if (!active) return;
+        previousCalendar = snapshots.find(snap => snap?.exists)?.data()?.calendar || [];
+        if (lastPayload) { lastPayload = { ...lastPayload, previousCalendar }; render(lastPayload); }
+      });
     const renderSnapshot = snap => {
       if (!active) return;
       const data = snap.data() || {};
       lastPayload = {
         calendar: data.calendar || [],
+        previousCalendar,
         entries: data.entries || [],
         name: data.name || "",
         ...visible,

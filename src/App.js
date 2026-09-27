@@ -5,7 +5,7 @@ import { showShortcutHelp } from "./modules/web-only.js";
 import { listedAuxiliaries, retireAuxiliaries } from "./modules/auxiliary-membership.js";
 import { TWO_DAY_MODE } from "./modules/two-day-template.js";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js?v=20260726-normal-slots";
-import { dayName, monthGrid, monthWeeks } from "./modules/dates.js";
+import { dayName, monthGrid, monthWeeks, monthContextCells } from "./modules/dates.js";
 import { buildSchedule, canWorkShift } from "./modules/scheduler-handover.js?v=20260726-normal-slots";
 import { initGoogleAuth, signInWithGoogle, signOut } from "./modules/auth.js?v=20260702-login-refresh";
 import {
@@ -969,13 +969,13 @@ function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onR
   );
 }
 
-export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
+export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal, previous = false }) {
   if (!day) return h("div", { className: "day-card empty" });
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
-  return h("article", { className: `day-card${alternateDayTone(day)}${dayTone(year, month, day)}${isToday ? " today" : ""}`, "aria-label": `${dayName(year, month, day)} ${day} ${MONTHS[month]}` },
+  return h("article", { className: `day-card${previous ? " previous-month" : ""}${alternateDayTone(day)}${dayTone(year, month, day)}${isToday ? " today" : ""}`, "aria-label": `${dayName(year, month, day)} ${day} ${MONTHS[month]}` },
     h("div", { className: "day-head" },
-      h("span", null, day),
+      h("span", null, previous ? `${day} ${MONTHS[month]}` : day),
       h("span", { className: "day-head-meta" }, h("span", null, dayName(year, month, day)), isToday ? h("small", null, "Aujourd’hui") : null),
     ),
     SHIFT_DEFS.map(shift => {
@@ -998,8 +998,9 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
         className: `slot editable-slot${!worker ? " unassigned-slot" : ""}`,
         key: shift.id,
         title: [manual ? "Créneau saisi" : "", label, notice?.title].filter(Boolean).join(" · "),
-        onClick: () => onEditSlot({ day, shift: shift.id }),
-        "aria-label": `${day} ${MONTHS[month]}, ${label}, ${worker ? auxName(auxiliaries, worker) : "non attribué"} : modifier`,
+        onClick: previous ? undefined : () => onEditSlot({ day, shift: shift.id }),
+        disabled: previous,
+        "aria-label": `${day} ${MONTHS[month]}, ${label}, ${worker ? auxName(auxiliaries, worker) : "non attribué"}${previous ? " : mois précédent" : " : modifier"}`,
       },
         h("span", { className: "slot-label", title: label }, label),
         h("span", { className: "slot-content" },
@@ -1015,15 +1016,21 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
         ),
       );
     }),
-    h(DayActivityButton, { year, month, day, onOpen: onOpenMeal }),
+    previous ? null : h(DayActivityButton, { year, month, day, onOpen: onOpenMeal }),
   );
 }
 
-export function MonthView({ year, month, schedule, auxiliaries, overrides, onEditSlot, onOpenMeal }) {
+export function MonthView({ year, month, schedule, auxiliaries, overrides, hourOverrides = {}, onEditSlot, onOpenMeal }) {
+  const previousDate = new Date(year, month - 1, 1);
+  const previousParams = { year: previousDate.getFullYear(), month: previousDate.getMonth() };
+  const previousSchedule = applyManualAssignments({ ...previousParams, schedule: buildEmptySchedule(previousParams), assignments: overrides || {}, hourOverrides });
   return h("section", { className: "layout" },
     h("div", { className: "calendar" },
       ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
-      monthGrid(year, month).map((day, index) => h(DayCard, { key: `${day || "empty"}-${index}`, day, year, month, schedule, plan: day ? schedule[day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal })),
+      monthContextCells(year, month).map((cell, index) => {
+        const visibleSchedule = cell?.previous ? previousSchedule : schedule;
+        return h(DayCard, { key: index, day: cell?.day, year: cell?.year ?? year, month: cell?.month ?? month, previous: cell?.previous, schedule: visibleSchedule, plan: cell ? visibleSchedule[cell.day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal });
+      }),
     ),
   );
 }
@@ -2892,7 +2899,7 @@ export default function App() {
         setOverrides(nextOverrides);
         setHourOverrides(nextHourOverrides);
       } }) : null,
-      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
+      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, hourOverrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,

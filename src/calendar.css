@@ -103,3 +103,6 @@
   .app .calendar > .dow { display: block !important; }
   .app .day-card .slot { min-height: 0; }
 }
+.calendar .day-card.previous-month { background: #edf0f3; border-color: #cbd2d9; }
+.calendar .day-card.previous-month .day-head { color: #54616e; font-size: 11px; flex-wrap: wrap; }
+.calendar .day-card.previous-month button:disabled { opacity: 1; cursor: default; }
