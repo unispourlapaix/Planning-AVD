@@ -293,7 +293,10 @@ h2 { font-size: 16px; }
 .assignment-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; color: #697981; font-size: 10px; font-weight: 850; }
 .assignment-meta span { padding: 3px 6px; border-radius: 999px; background: rgba(255,255,255,.72); border: 1px solid rgba(218,227,230,.7); }
 .pill { border-radius: 999px; padding: 5px 8px; font-weight: 900; font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
-.audit-panel { display: grid; gap: 10px; }
+.audit-panel { display: block; }
+.audit-panel > summary { cursor: pointer; overflow-wrap: anywhere; }
+.audit-panel[open] > summary { margin-bottom: 10px; }
+.audit-panel > .manual-panel { margin-top: 16px; padding-top: 12px; border-top: 1px solid #dce2e6; }
 .audit-panel h3 { margin: 0 0 3px; }
 .audit-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
 .audit-item {

@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { RotationAudit } from "../src/App.js";
+const html = renderToStaticMarkup(React.createElement(RotationAudit, { checks: [{ level: "danger", title: "Test", detail: "Detail" }] }));
+assert.match(html, /^<details/);
+assert.ok(!html.includes(" open="));
+assert.match(html, /<summary>.*1 point à corriger.*<\/summary>/);
+assert.match(html, /Detail/);
+const grouped = renderToStaticMarkup(React.createElement(RotationAudit, { checks: [] }, React.createElement("section", null, "Emploi du temps saisi")));
+assert.match(grouped, /<section>Emploi du temps saisi<\/section><\/details>$/);
+assert.ok(!grouped.includes(" open="));
+console.log("Controle replie par defaut : OK");

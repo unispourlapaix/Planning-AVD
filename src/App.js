@@ -870,29 +870,28 @@ function AssignmentProgress({ auxiliaries, assignedHours }) {
   }));
 }
 
-function RotationAudit({ checks }) {
+export function RotationAudit({ checks, children }) {
   const visible = checks.slice(0, 6);
   const critical = checks.filter(item => item.level === "danger").length;
-  const title = critical ? `${critical} point(s) a corriger` : checks[0]?.level === "ok" ? "Planning coherent" : "Controle du planning";
-  return h("section", { className: "panel audit-panel" },
-    h("div", { className: "title-row" },
-      h("div", null,
-        h("h3", null, "Contrôle du planning"),
-        h("div", { className: "muted" }, title),
-      ),
+  const title = critical ? `${critical} point${critical > 1 ? "s" : ""} à corriger` : checks[0]?.level === "ok" ? "Planning cohérent" : "Voir les points de contrôle";
+  return h("details", { className: "panel audit-panel" },
+    h("summary", null,
+      h("strong", null, "Contrôle du planning"),
+      h("span", { className: "muted" }, ` · ${title}`),
     ),
     h("div", { className: "audit-list" }, visible.map((item, index) => h("div", { key: `${item.title}-${index}`, className: `audit-item ${item.level}` },
       h("span", { className: "audit-dot" }),
       h("span", null, h("b", null, item.title), h("small", null, item.detail)),
     ))),
     checks.length > visible.length ? h("div", { className: "muted", style: { marginTop: 8 } }, `${checks.length - visible.length} autre(s) point(s) detecte(s).`) : null,
+    children,
   );
 }
 
 function ManualOverridesPanel({ items, onReset }) {
   if (!items.length) return null;
   const visible = items.slice(0, 8);
-  return h("section", { className: "panel manual-panel" },
+  return h("section", { className: "manual-panel" },
     h("div", { className: "title-row" },
       h("div", null,
         h("h3", null, "Emploi du temps saisi"),
@@ -2888,9 +2887,8 @@ export default function App() {
       view === "life" ? h(TaskPanel, { authState, isAdmin: sessionRole.isAdmin, auxiliaries: activeAux, year, month, beneficiaryId }) : null,
       planningView ? h(PlanningFillPanel, { assignmentCount: manualOverrides.length, rotationDays, onApplyExample: applyRotationExample, onCopyPreviousMonth: copyPreviousMonthPlanning, onClearMonth: clearMonthPlanning }) : null,
       planningView ? h(AssignmentProgress, { auxiliaries: activeAux, assignedHours }) : null,
-      planningView ? h(RotationAudit, { checks: rotationChecks }) : null,
       planningView ? h(AdminChangeRequestsPanel, { requests: adminChangeRequests, error: adminChangeError, auxiliaries: activeAux, onApprove: approveChangeRequest, onReject: rejectChangeRequest }) : null,
-      planningView ? h(ManualOverridesPanel, { items: manualOverrides, onReset: (key, alreadyEmpty) => {
+      planningView ? h(RotationAudit, { checks: rotationChecks }, h(ManualOverridesPanel, { items: manualOverrides, onReset: (key, alreadyEmpty) => {
         const nextOverrides = { ...overrides };
         if (alreadyEmpty) delete nextOverrides[key];
         else nextOverrides[key] = emptyManualSlot();
@@ -2898,7 +2896,7 @@ export default function App() {
         persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
         setOverrides(nextOverrides);
         setHourOverrides(nextHourOverrides);
-      } }) : null,
+      } })) : null,
       view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, hourOverrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
