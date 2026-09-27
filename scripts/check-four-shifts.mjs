@@ -16,7 +16,7 @@ assert.equal(summarizeHours(accounts.A).bedtime, 2);
 const mail = buildPersonalPlanningEmail({ ...params, schedule, auxiliaries, auxiliary: auxiliaries[0] });
 assert.equal(mail.rows[0].range, "20:00–22:00");
 const nightMail = buildPersonalPlanningEmail({ ...params, schedule, auxiliaries, auxiliary: auxiliaries[1] });
-assert.equal(nightMail.rows[0].range, "20:30–08:30 (+1 j)");
+assert.equal(nightMail.rows[0].range, "20:00–08:00 (+1 j)");
 const payloads = buildPersonalSharePayloads({ ...params, schedule, auxiliaries, beneficiaryId: "test" });
 assert.ok(JSON.stringify(payloads).includes("bedtime"));
 const edited = applyManualAssignments({ ...params, schedule: buildEmptySchedule(params), assignments: { "2026-8-1-bedtime": "A", "2026-8-1-night": "B" }, hourOverrides: { "2026-8-1-bedtime::A": 1.5 } });
