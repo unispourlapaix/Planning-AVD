@@ -1,12 +1,12 @@
 import { DAYS_LONG, MONTHS, SHIFT_DEFS } from "./constants.js";
 import { dayName, daysInMonth, monthWeeks } from "./dates.js";
 import { manualWorkerIds } from "./manual-workers.js";
-import { slotHours, slotWorkerHours, shiftTimeRange } from "./shift-hours.js";
+import { slotWorkerHours, shiftTimeRange } from "./shift-hours.js";
 
 export const escapeEmailHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const number = value => Number(value.toFixed(2)).toLocaleString("fr-FR");
 
-export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries = [], schedule = {}, beneficiaryName = "", appUrl = "", startTime = "08:00" }) {
+export function buildPersonalPlanningEmail({ year, month, auxiliary, schedule = {}, beneficiaryName = "", appUrl = "", startTime = "08:00" }) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) throw new Error("Heure de début invalide.");
   const rows = [];
   const calendar = {};
@@ -16,13 +16,14 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
       const entry = plan[shift.id];
       const workers = manualWorkerIds(entry?.workers || entry?.worker || []);
       const own = workers.includes(auxiliary.id);
-      const hours = own ? slotWorkerHours(entry, shift.id, auxiliary.id) : slotHours(entry, shift.id);
+      if (!own) return null;
+      const hours = slotWorkerHours(entry, shift.id, auxiliary.id);
       const range = shiftTimeRange({ plan, shift: shift.id, worker: own ? auxiliary.id : null, startTime });
       const row = { day, label: shift.label, own, hours, range,
-        name: own ? auxiliary.name : auxiliaries.find(aux => aux.id === workers[0])?.name || (workers.length ? "Autre intervenant" : "Non attribué") };
+        name: auxiliary.name };
       if (own) rows.push(row);
       return row;
-    });
+    }).filter(Boolean);
   }
   const total = Math.round(rows.reduce((sum, row) => sum + row.hours, 0) * 100) / 100;
   const quota = Number.isFinite(Number(auxiliary.quota)) ? Math.max(0, Number(auxiliary.quota)) : 0;
@@ -41,7 +42,8 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, auxiliaries
   const calendarHtml = `<table role="table" aria-label="Calendrier du mois" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;table-layout:fixed"><thead><tr>${DAYS_LONG.map(day => `<th style="${cellStyle}background:#f3f5f6">${day}</th>`).join("")}</tr></thead><tbody>${monthWeeks(year, month).map(week => `<tr>${week.map(day => `<td style="${cellStyle}">${day ? `<strong>${day}</strong>${calendar[day].map(row => `<div style="margin-top:5px;padding:5px;background:${row.own ? "#e0f1ff" : "#f1f2f3"};color:${row.own ? "#185981" : "#69727a"};border-left:3px solid ${row.own ? "#488cb5" : "#cdd2d6"};overflow-wrap:anywhere"><small>${esc(row.label)}${row.own ? " · Vous" : ""}</small><br><strong>${esc(row.name)}</strong>${row.own ? `<br>${esc(row.range)}<br>${number(row.hours)} h` : ""}</div>`).join("")}` : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   const detailHtml = `<table cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;text-align:left"><thead><tr><th>Date</th><th>Créneau</th><th>Horaire</th><th>Durée</th></tr></thead><tbody>${rows.map(row => `<tr><td style="border-top:1px solid #ddd">${esc(date(row.day))}</td><td>${esc(row.label)}</td><td>${esc(row.range)}</td><td>${number(row.hours)} h</td></tr>`).join("")}</tbody></table>`;
   const html = `<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Arial,sans-serif;color:#273842;background:#fff;margin:16px"><h2>${esc(subject)}</h2><p>${esc(beneficiaryName)}</p><p>Bleu : vos créneaux. Gris : les autres intervenants.</p>${calendarHtml}<h3>Vos horaires du mois</h3><p style="font-size:12px;color:#576670">${esc(timingNote)}</p>${rows.length ? detailHtml : "<p>Aucun créneau attribué.</p>"}<p><strong>${esc(summary)}</strong></p><p>Planning actualisé après connexion : ${esc(appUrl)}</p></body></html>`;
-  const htmlWithBreaks = html.replace("</h2>", `</h2><p>${esc(breakReminder)}</p>`);
+  const htmlWithBreaks = html.replace("</h2>", `</h2><p>${esc(breakReminder)}</p>`)
+    .replace("Bleu : vos créneaux. Gris : les autres intervenants.", "Votre planning personnel : seuls vos créneaux sont affichés.");
   return { subject, text, html: htmlWithBreaks, rows, total, quota, difference, summary };
 }
 
