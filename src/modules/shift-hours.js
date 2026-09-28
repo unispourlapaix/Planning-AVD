@@ -1,4 +1,5 @@
 import { SHIFT_DEFS } from "./constants.js?v=20260726-normal-slots";
+import { manualWorkerIds } from "./manual-workers.js";
 
 const roundHours = value => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -52,7 +53,12 @@ export function shiftTimeRange({ plan = {}, shift, worker, startTime = "08:00" }
   let start = hour * 60 + minute;
   for (const definition of SHIFT_DEFS) {
     if (definition.id === shift) break;
-    if (definition.id !== "bedtime") start += Math.round(slotHours(plan[definition.id], definition.id) * 60);
+    if (definition.id !== "bedtime") {
+      const entry = plan[definition.id];
+      const primary = manualWorkerIds(entry?.workers || entry?.worker || [])[0];
+      const duration = primary ? slotWorkerHours(entry, definition.id, primary) : slotHours(entry, definition.id);
+      start += Math.round(duration * 60);
+    }
     // The lunch break shifts later slots without increasing worked hours.
     if (definition.id === "morning") start += 30;
   }
