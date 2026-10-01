@@ -32,7 +32,7 @@ export function buildPersonalPlanningEmail({ year, month, auxiliary, schedule = 
   const summary = `Total planifié : ${number(total)} h · Quota : ${number(quota)} h · ${balance}`;
   const date = day => `${dayName(year, month, day)} ${String(day).padStart(2, "0")}/${String(month + 1).padStart(2, "0")}/${year}`;
   const subject = `Planning de ${auxiliary.name} · ${MONTHS[month]} ${year}`;
-  const timingNote = `Journée à partir de ${startTime}. Mise au lit et veille de nuit à partir de 20 h. Veille de nuit : 12 h par défaut, jusqu'à 8 h le lendemain. Les durées personnalisées restent prises en compte. Heures planifiées, non réalisées. Pauses non déduites automatiquement.`;
+  const timingNote = `Journée à partir de ${startTime}. L'après-midi commence à la fin du matin ; les 30 minutes de pause déjeuner sont comprises dans ses heures, sans décaler la fin. Mise au lit et veille de nuit à partir de 20 h. Veille de nuit : 12 h par défaut, jusqu'à 8 h le lendemain. Les durées personnalisées restent prises en compte. Heures planifiées, non réalisées. Pauses non déduites automatiquement.`;
   const breakReminder = "En journée, pensez à prendre votre pause déjeuner du midi et une pause de 20 minutes après 5 heures de travail, en organisant le relais. Mise au lit : début à 20 h, durée habituelle de 2 h, sans pause.";
   const text = [`Bonjour ${auxiliary.name},`, "", subject, beneficiaryName ? `Bénéficiaire : ${beneficiaryName}` : "", breakReminder, "", timingNote, "",
     ...rows.map(row => `${date(row.day)} · ${row.label} · ${row.range} · ${number(row.hours)} h`),

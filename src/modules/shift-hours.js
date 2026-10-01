@@ -59,8 +59,7 @@ export function shiftTimeRange({ plan = {}, shift, worker, startTime = "08:00" }
       const duration = primary ? slotWorkerHours(entry, definition.id, primary) : slotHours(entry, definition.id);
       start += Math.round(duration * 60);
     }
-    // The lunch break shifts later slots without increasing worked hours.
-    if (definition.id === "morning") start += 30;
+    // The lunch break is included in the afternoon duration, not added between slots.
   }
   if (shift === "bedtime" || shift === "night") start = 20 * 60;
   const hours = worker ? slotWorkerHours(plan[shift], shift, worker) : slotHours(plan[shift], shift);
