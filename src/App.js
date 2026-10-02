@@ -2,7 +2,7 @@ import React from "react";
 import { applyDayTemplate } from "./modules/day-template.js";
 import { DayTemplatePicker } from "./modules/day-template-picker.js";
 import { showShortcutHelp } from "./modules/web-only.js";
-import { listedAuxiliaries, retireAuxiliaries } from "./modules/auxiliary-membership.js";
+import { listedAuxiliaries, retireAuxiliaries, syncAuxiliaryMember, availableAuxiliaryMembers, assignExistingMember } from "./modules/auxiliary-membership.js";
 import { TWO_DAY_MODE } from "./modules/two-day-template.js";
 import { DEFAULT_AUXILIARIES, DAYS_SHORT, MAX_AUXILIARIES, MONTHS, PALETTE, SHIFT_DEFS, SHIFT_LABEL } from "./modules/constants.js?v=20260726-normal-slots";
 import { dayName, monthGrid, monthWeeks, monthContextCells } from "./modules/dates.js";
@@ -1822,44 +1822,42 @@ function AdminAccessPanel({ authState, isAdmin, globalAdmin = false, beneficiary
   );
 }
 
-function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary, rotationDays, setRotationDays, onApplyRotationExample }) {
+function ConfigView({ authState, beneficiaryId, beneficiaryName, beneficiaryOptions = [], onSelectBeneficiary, onCreateBeneficiary, beneficiarySwitching = false, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary, rotationDays, setRotationDays, onApplyRotationExample }) {
   const beneficiaryChoices = [
     ...beneficiaryOptions,
     ...(beneficiaryId && !beneficiaryOptions.some(item => item.beneficiaryId === beneficiaryId)
       ? [{ beneficiaryId, beneficiaryName: beneficiaryName || "Bénéficiaire actuel" }]
       : []),
   ];
-  const [emailDrafts, setEmailDrafts] = useState(() =>
-    Object.fromEntries(auxiliaries.map(aux => [aux.id, String(aux.email || "")])));
-  const emailStateKey = auxiliaries.map(aux => `${aux.id}:${aux.email || ""}`).join("|");
+  const [members, setMembers] = useState([]);
+  const [memberError, setMemberError] = useState("");
+  const [selectedMember, setSelectedMember] = useState("");
   useEffect(() => {
-    setEmailDrafts(Object.fromEntries(auxiliaries.map(aux => [aux.id, String(aux.email || "")])));
-  }, [emailStateKey]);
+    setMembers([]);
+    setSelectedMember("");
+    setMemberError("");
+    if (!authState?.db || !authState.user || !beneficiaryId) return;
+    return subscribeAccessMembers({ db: authState.db, user: authState.user, beneficiaryId, onChange: setMembers, onError: error => { setMembers([]); setMemberError(error.message); } });
+  }, [authState?.db, authState?.user?.uid, beneficiaryId]);
+  const availableMembers = availableAuxiliaryMembers(members, auxiliaries);
   const patchAux = (id, patch) => setAuxiliaries(list => list.map(aux => ({
     ...aux,
     ...(patch.lead === true && aux.id !== id ? { lead: false } : {}),
     ...(aux.id === id ? patch : {}),
   })));
-  const commitAuxEmail = id => {
-    const value = String(emailDrafts[id] ?? "").trim();
-    patchAux(id, { email: value });
-    setEmailDrafts(current => ({ ...current, [id]: value }));
-  };
   const addAux = () => setAuxiliaries(list => {
     if (listedAuxiliaries(list).length >= MAX_AUXILIARIES) return list;
-    const id = `P${list.length + 1}`;
-    return [...list, {
+    const member = availableAuxiliaryMembers(members, list).find(item => item.email === selectedMember);
+    if (!member) return list;
+    return assignExistingMember(list, member, {
       ...DEFAULT_AUXILIARIES[0],
-      id,
-      name: `Auxiliaire ${list.length + 1}`,
-      email: "",
       phone: "",
       address: "",
       lead: false,
       night: false,
       quota: 72,
       customDays: [0, 1, 2, 3, 4, 5, 6],
-    }];
+    });
   });
   return h("section", { className: "layout" },
     h("div", { className: "panel beneficiary-panel" },
@@ -1914,7 +1912,13 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
         h("h3", null, "Auxiliaires affectés"),
         h("div", { className: "muted" }, `${listedAuxiliaries(auxiliaries).filter(aux => aux.active !== false).length}/${listedAuxiliaries(auxiliaries).length} affecté(s) au bénéficiaire, maximum ${MAX_AUXILIARIES}`),
       ),
-      h(Button, { onClick: addAux }, "+ Ajouter"),
+      h("div", null,
+        h(Select, { value: selectedMember, onChange: setSelectedMember, "aria-label": "Membre à affecter" },
+          h("option", { value: "" }, "Choisir un membre"),
+          availableMembers.map(member => h("option", { key: member.email, value: member.email }, `${member.name || member.email} · ${member.email}`))),
+        h(Button, { onClick: addAux, disabled: !availableMembers.some(member => member.email === selectedMember) || listedAuxiliaries(auxiliaries).length >= MAX_AUXILIARIES }, "Affecter"),
+        memberError ? h("small", { role: "alert" }, memberError) : !availableMembers.length ? h("small", null, "Aucun membre disponible. Ajoutez un membre dans Membres et rôles.") : null,
+      ),
     ),
     h("div", { className: "aux-grid" }, auxiliaries.map((aux, index) => aux.removedFromGroup ? null : h("div", { className: "aux-card", key: aux.id },
       h("div", { className: "title-row" },
@@ -1923,16 +1927,12 @@ function ConfigView({ beneficiaryId, beneficiaryName, beneficiaryOptions = [], o
         h(Button, { title: "Retirer cet auxiliaire du groupe", "aria-label": `Retirer ${aux.name || aux.id} du groupe`, onClick: () => onRemoveAuxiliary(aux.id) }, h(IconLabel, { icon: "close", label: "Retirer" })),
       ),
       h("div", { className: "form-grid" },
-        h(Field, { label: "Prenom complet" }, h(TextInput, { value: aux.name, onChange: value => patchAux(aux.id, { name: value }) })),
-        h(Field, { label: "Email" }, h(TextInput, {
-          type: "email",
-          value: emailDrafts[aux.id] ?? aux.email,
-          onChange: value => setEmailDrafts(current => ({ ...current, [aux.id]: value })),
-          onBlur: () => commitAuxEmail(aux.id),
-          onKeyDown: event => {
-            if (event.key === "Enter") event.currentTarget.blur();
-          },
-        })),
+        h(Field, { label: "Membre associé" }, h(Select, { value: String(aux.email || "").trim().toLowerCase(), onChange: email => {
+          const member = availableAuxiliaryMembers(members, auxiliaries, aux.id).find(item => item.email === email);
+          if (member) patchAux(aux.id, { name: member.name || email, email });
+        } },
+          h("option", { value: String(aux.email || "").trim().toLowerCase() }, `${aux.name || "Fiche existante"}${aux.email ? ` · ${aux.email}` : " · Choisir un membre"}`),
+          availableAuxiliaryMembers(members, auxiliaries, aux.id).filter(member => member.email !== String(aux.email || "").trim().toLowerCase()).map(member => h("option", { key: member.email, value: member.email }, `${member.name || member.email} · ${member.email}`)))),
         h(Field, { label: "Telephone" }, h(TextInput, { value: aux.phone, onChange: value => patchAux(aux.id, { phone: value }) })),
         h(Field, { label: "Quota mensuel" }, h(TextInput, { type: "number", value: aux.quota, onChange: value => patchAux(aux.id, { quota: Number(value) || 0 }) })),
       ),
@@ -2610,11 +2610,19 @@ export default function App() {
   };
 
   const saveAccessMember = async ({ email, name, role }) => {
-    return grantMemberRole({ db: authState.db, user: authState.user, email, name, role, beneficiaryId, beneficiaryName });
+    const result = await grantMemberRole({ db: authState.db, user: authState.user, email, name, role, beneficiaryId, beneficiaryName });
+    const next = syncAuxiliaryMember(auxiliaries, { email, name, active: true });
+    persistLocalDraft(buildPlanningState({ auxiliaries: next }));
+    setAuxiliaries(next);
+    return result;
   };
 
   const changeMemberAccess = async ({ email, role, active }) => {
-    return setMemberAccess({ db: authState.db, user: authState.user, email, role, active, beneficiaryId, beneficiaryName });
+    const result = await setMemberAccess({ db: authState.db, user: authState.user, email, role, active, beneficiaryId, beneficiaryName });
+    const next = syncAuxiliaryMember(auxiliaries, { email, active });
+    persistLocalDraft(buildPlanningState({ auxiliaries: next }));
+    setAuxiliaries(next);
+    return result;
   };
 
   const removeAccessMember = async ({ email }) => {
@@ -2902,7 +2910,7 @@ export default function App() {
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,
       view === "config" ? h(AdminAccessPanel, { authState, isAdmin: sessionRole.isAdmin, globalAdmin: sessionRole.globalAdmin, beneficiaryId, beneficiaryName, onSaveMember: saveAccessMember, onSetMemberAccess: changeMemberAccess, onDeleteMember: removeAccessMember, onRepairMembers: repairAccessMembers, onResolveAccessRequest: answerAccessRequest }) : null,
-      view === "config" ? h(ConfigView, { beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary: removeAuxiliary, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
+      view === "config" ? h(ConfigView, { authState, beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary: removeAuxiliary, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
     ),
     h(SlotEditor, {
       onApplyDayTemplate: workers => {

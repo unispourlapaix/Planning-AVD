@@ -23,6 +23,7 @@ const makeRef = path => ({
   get: async () => ({ exists: true, data: () => ({ role: path.endsWith("camille@example.test") ? "admin" : "auxiliary" }) }),
 });
 const db = {
+  runTransaction: callback => callback({ get: ref => ref.get(), set: (ref, data) => writes.push({ type: "set", path: ref.path, data }) }),
   collection: name => makeRef(name),
   batch: () => ({
     set: (ref, data) => writes.push({ type: "set", path: ref.path, data }),

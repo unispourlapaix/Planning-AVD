@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import { availableAuxiliaryMembers, assignExistingMember } from "../src/modules/auxiliary-membership.js";
+const member = { email: "test@example.com", name: "Test", role: "admin" };
+const assigned = assignExistingMember([], member, { quota: 72 });
+assert.equal(assigned[0].name, "Test");
+assert.equal(assigned[0].email, member.email);
+assert.equal(availableAuxiliaryMembers([member], assigned).length, 0);
+assert.equal(assignExistingMember(assigned, member, {}).length, 1);
+assert.equal(availableAuxiliaryMembers([{ ...member, active: false }], []).length, 0);
+assert.equal(availableAuxiliaryMembers([{ ...member, role: "viewer" }], []).length, 0);
+const restored = assignExistingMember([{ ...assigned[0], removedFromGroup: true, quota: 151 }], member, {});
+assert.equal(restored[0].id, assigned[0].id);
+assert.equal(restored[0].quota, 151);
+assert.equal(restored[0].removedFromGroup, false);
+console.log("Affectation par membre : identite reprise, doublons bloques, historique conserve");

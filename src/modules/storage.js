@@ -172,6 +172,17 @@ const buildSyncedAuxiliaryMember = ({ email, name = "", active = true, updatedBy
   if (!role) delete payload.role;
   return payload;
 };
+
+export async function initializeAuxiliaryRoles({ db, beneficiaryId, emails }) {
+  const refs = [...new Set(emails)].map(email => beneficiaryRoot(db, beneficiaryId).collection("members").doc(email));
+  if (!refs.length) return;
+  await db.runTransaction(async transaction => {
+    const snapshots = await Promise.all(refs.map(ref => transaction.get(ref)));
+    snapshots.forEach((snap, index) => {
+      if (snap.exists && !snap.data()?.role) transaction.set(refs[index], { role: "auxiliary" }, { merge: true });
+    });
+  });
+}
 const mergeOverrides = (localOverrides, cloudOverrides, localClearedMonths = {}, cloudUpdatedAt = "", preferLocal = false) => {
   const local = localOverrides && typeof localOverrides === "object" ? localOverrides : {};
   if (!cloudOverrides || typeof cloudOverrides !== "object") return local;
@@ -301,6 +312,7 @@ export async function ensureBeneficiaryGroup({ db, user, state }) {
       batch.set(db.collection("planning-avd-shares").doc(email).collection("beneficiaries").doc(beneficiaryId), sharePayload, { merge: true });
     });
   await batch.commit();
+  await initializeAuxiliaryRoles({ db, beneficiaryId, emails: activeAuxiliaries.map(aux => aux.email) });
 }
 
 export const defaultState = () => {
@@ -1693,6 +1705,7 @@ export async function publishPersonalPlannings({ db, user, year, month, benefici
     });
   });
   await batch.commit();
+  await initializeAuxiliaryRoles({ db, beneficiaryId: safeBeneficiaryId, emails: auxiliaries.filter(aux => !aux.removedFromGroup && firstValidEmail(aux.email)).map(aux => firstValidEmail(aux.email)) });
   await repairBeneficiaryMembers({ db, user, beneficiaryId: safeBeneficiaryId })
     .catch(error => console.warn("Fusion des membres ignoree.", error));
   await addBeneficiaryActivity({

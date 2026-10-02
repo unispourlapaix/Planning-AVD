@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { syncAuxiliaryMember } from "../src/modules/auxiliary-membership.js";
+const source = [{ id: "A", email: "Test@Example.com", name: "Test", active: true, quota: 71 }, { id: "B", email: "other@example.com", active: true }];
+const disabled = syncAuxiliaryMember(source, { email: " test@example.com ", active: false });
+assert.equal(disabled[0].active, false);
+assert.equal(disabled[0].id, "A");
+assert.equal(disabled[0].quota, 71);
+assert.equal(disabled[1], source[1]);
+assert.equal(source[0].active, true);
+assert.equal(syncAuxiliaryMember(source, { email: "test@example.com", role: "admin" }).length, 2);
+assert.equal(syncAuxiliaryMember(source, { email: "test@example.com", role: "auxiliary" })[0].active, true);
+assert.equal(syncAuxiliaryMember(source, { email: "new@example.com", active: true }).length, 2);
+assert.equal(syncAuxiliaryMember([{ ...source[0], removedFromGroup: true }], { email: "test@example.com", active: true })[0].removedFromGroup, true);
+console.log("Lien membre/auxiliaire : statut synchronise, ID et quota conserves, aucun doublon");
