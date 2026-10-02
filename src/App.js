@@ -1924,7 +1924,7 @@ function ConfigView({ authState, beneficiaryId, beneficiaryName, beneficiaryOpti
       h("div", { className: "title-row" },
         h("b", { style: { color: colorFor(index).text } }, aux.name || aux.id),
         h(Checkbox, { checked: aux.active, onChange: value => patchAux(aux.id, { active: value }), label: "Affecté" }),
-        h(Button, { title: "Retirer cet auxiliaire du groupe", "aria-label": `Retirer ${aux.name || aux.id} du groupe`, onClick: () => onRemoveAuxiliary(aux.id) }, h(IconLabel, { icon: "close", label: "Retirer" })),
+        h(Button, { title: "Retirer uniquement l'affectation au planning", "aria-label": `Retirer l'affectation de ${aux.name || aux.id}`, onClick: () => onRemoveAuxiliary(aux.id) }, h(IconLabel, { icon: "close", label: "Retirer" })),
       ),
       h("div", { className: "form-grid" },
         h(Field, { label: "Membre associé" }, h(Select, { value: String(aux.email || "").trim().toLowerCase(), onChange: email => {
@@ -2637,7 +2637,7 @@ export default function App() {
   const removeAuxiliary = id => {
     const aux = auxiliaries.find(item => item.id === id);
     if (!aux || !sessionRole.isAdmin) return;
-    if (!window.confirm(`Retirer ${aux.name || aux.id} du groupe de ${beneficiaryName || "ce bénéficiaire"} ?\n\nSa fiche disparaîtra de la liste et son accès auxiliaire sera retiré à la sauvegarde cloud. Ses créneaux existants restent conservés pour l'historique et peuvent être réattribués manuellement. Ses éventuels droits admin et ses autres groupes restent inchangés.`)) return;
+    if (!window.confirm(`Retirer l'affectation de ${aux.name || aux.id} au planning de ${beneficiaryName || "ce bénéficiaire"} ?\n\nSa fiche disparaîtra des auxiliaires affectés. Le membre et ses droits restent inchangés dans Membres et rôles. Ses créneaux existants sont conservés et peuvent être réattribués manuellement.`)) return;
     const next = retireAuxiliaries(auxiliaries, [id]);
     persistLocalDraft(buildPlanningState({ auxiliaries: next }));
     setAuxiliaries(next);

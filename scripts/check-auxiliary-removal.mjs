@@ -34,9 +34,9 @@ const db = {
 const args = { db, user: { uid: "owner", email: "owner@example.test" }, state: { beneficiaryId: "group-A", beneficiaryName: "Test", auxiliaries: removed } };
 await ensureBeneficiaryGroup(args);
 await ensureBeneficiaryGroup(args);
-assert.equal(writes.filter(item => item.type === "delete" && item.path.endsWith("alice@example.test")).length, 2);
+assert.equal(writes.filter(item => item.type === "delete").length, 0);
 assert.ok(!writes.some(item => item.type === "set" && item.path.endsWith("members/alice@example.test")), "Saving again must not recreate retired membership");
-assert.ok(writes.some(item => item.path === "planning-avd-shares/alice@example.test/beneficiaries/group-A" && item.data.active === false));
+assert.ok(!writes.some(item => item.path.includes("alice@example.test")), "Unassigning must not change membership or shared access");
 assert.ok(!writes.some(item => item.path.includes("camille@example.test")), "Retiring an auxiliary must preserve their independent admin role");
 assert.ok(writes.every(item => item.path.includes("group-A")), "Only this beneficiary group is changed");
 console.log("Auxiliary removal OK: history, duplicate email, repeat sync, admin rights and group isolation.");
