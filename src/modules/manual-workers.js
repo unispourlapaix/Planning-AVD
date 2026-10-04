@@ -32,7 +32,8 @@ export const setManualPrimaryWorker = (value, worker) => {
   const primary = cleanWorkerId(worker);
   if (!primary) return "";
   const extras = isManualEmptySlot(value) ? [] : manualWorkerIds(value).filter(id => id !== primary);
-  return compactManualWorkers([primary, ...extras]);
+  const workers = [primary, ...extras];
+  return value?.notPerformed ? { workers, notPerformed: value.notPerformed.filter(id => workers.includes(id)) } : compactManualWorkers(workers);
 };
 
 export const toggleManualDoubleWorker = (value, worker) => {
@@ -44,5 +45,6 @@ export const toggleManualDoubleWorker = (value, worker) => {
   const nextExtras = extras.includes(target)
     ? extras.filter(id => id !== target)
     : [...extras, target];
-  return compactManualWorkers([primary, ...nextExtras]);
+  const next = [primary, ...nextExtras];
+  return value?.notPerformed ? { workers: next, notPerformed: value.notPerformed.filter(id => next.includes(id)) } : compactManualWorkers(next);
 };

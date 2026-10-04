@@ -15,6 +15,8 @@ export const createHourAccount = auxiliary => ({
   afternoon: 0,
   night: 0,
   total: 0,
+  absentHours: 0,
+  absentSlots: 0,
   quota: quotaFor(auxiliary),
   pause: quotaFor(auxiliary),
   daily: {},
@@ -121,6 +123,11 @@ export function calculatePerformedHours(schedule, auxiliaries, { year, month, no
 
     SHIFT_DEFS.forEach(shift => {
       shiftWorkerIds(plan?.[shift.id]).forEach((worker, workerIndex) => {
+        if (hours[worker] && plan?.[shift.id]?.notPerformed?.includes(worker)) {
+          hours[worker].absentHours = roundHours(hours[worker].absentHours + slotWorkerHours(plan[shift.id], shift.id, worker));
+          hours[worker].absentSlots += 1;
+          return;
+        }
         // Secondary workers are completion hours confirmed when the month is closed.
         if (workerIndex > 0 && !period.monthClosed) return;
         if (!worker || !hours[worker]) return;

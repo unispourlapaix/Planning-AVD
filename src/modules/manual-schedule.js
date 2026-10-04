@@ -71,7 +71,8 @@ export function applyManualAssignments({ schedule, assignments = {}, hourOverrid
       const workerHours = Object.fromEntries(workers
         .map(id => [id, normalizeSlotHour(hourOverrides[shiftWorkerHourKey(year, month, day, shift.id, id)])])
         .filter(([, value]) => value !== null && value !== hours));
-      return [shift.id, worker ? { ...base, worker, workers, hours, workerHours } : { ...emptyShift(shift), hours }];
+      const notPerformed = (assignments[scheduleAssignmentKey(year, month, day, shift.id)]?.notPerformed || []).filter(id => workers.includes(id));
+      return [shift.id, worker ? { ...base, worker, workers, hours, workerHours, notPerformed } : { ...emptyShift(shift), hours }];
     })),
   }]));
 }
@@ -121,7 +122,7 @@ export function copyPreviousMonthAssignments({ current = {}, year, month }) {
     const parsed = parseMonthKey(key);
     if (parsed.year !== source.year || parsed.month !== source.month || !Number.isInteger(parsed.day) || !parsed.shift) return;
     const items = sourceByDay.get(parsed.day) || [];
-    items.push({ ...parsed, value });
+    items.push({ ...parsed, value: value?.notPerformed ? compactManualWorkers(value.workers) : value });
     sourceByDay.set(parsed.day, items);
   });
   const copiedEntries = targetToSourceDayMap({

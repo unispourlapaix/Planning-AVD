@@ -1,4 +1,5 @@
 import React from "react";
+import { setNotPerformed } from "./modules/attendance.js";
 import { applyDayTemplate } from "./modules/day-template.js";
 import { DayTemplatePicker } from "./modules/day-template-picker.js";
 import { showShortcutHelp } from "./modules/web-only.js";
@@ -1011,6 +1012,7 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
             extraWorkers.map(id => h("span", { className: "double-chip", key: id }, shortAuxName(auxiliaries, id))),
           ) : null,
           worker ? h("span", { className: "hour-badge", title: customHours ? "Durée personnalisée" : "Durée prévue" }, `${visibleHours} h`) : null,
+          entry?.notPerformed?.length ? h("small", { className: "field-error" }, `Non effectué : ${entry.notPerformed.map(id => auxName(auxiliaries, id)).join(", ")}`) : null,
           notice ? h("span", { className: `break-badge ${notice.type}`, title: notice.title }, notice.label) : null,
         ),
       );
@@ -1063,6 +1065,7 @@ function HoursView({ auxiliaries, hours }) {
           h("span", null, `Apres-midi : ${hData.afternoon || 0}h`),
           h("span", null, `Mise au lit : ${hData.bedtime || 0}h`),
           h("span", null, `Veille de nuit : ${hData.night || 0}h`),
+          h("span", null, `Non effectué : ${hData.absentHours || 0} h · ${hData.absentSlots || 0} créneau(x)`),
           h("span", null, `En pause : ${hData.pause}h`),
         ),
       );
@@ -1116,7 +1119,7 @@ function WorkerPill({ aux, index, active = false, selected = false, primary = fa
   );
 }
 
-function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onApplyDayTemplate, onClose }) {
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onApplyDayTemplate, onAttendance, onClose }) {
   const [hourInputs, setHourInputs] = useState({});
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
   const entry = edit ? schedule[edit.day]?.[edit.shift] : null;
@@ -1227,6 +1230,11 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
           onClick: () => onToggleDouble(key, aux.id),
         });
       }))),
+      h("div", { className: "slot-editor-section" }, currentWorkers.map(worker => h("div", { key: worker },
+        h("b", null, auxName(auxiliaries, worker)),
+        h(Checkbox, { label: "Créneau non effectué", checked: entry?.notPerformed?.includes(worker) || false, onChange: absent => onAttendance(worker, edit.shift, absent) }),
+        h(Checkbox, { label: "Journée non effectuée", checked: SHIFT_DEFS.filter(slot => shiftWorkerIds(schedule[edit.day]?.[slot.id]).includes(worker)).every(slot => schedule[edit.day]?.[slot.id]?.notPerformed?.includes(worker)), onChange: absent => onAttendance(worker, null, absent) }),
+      ))),
       h("div", { className: "slot-editor-actions" },
         overrides[key] ? h(Button, { onClick: () => onReset(key, manualEmpty) }, manualEmpty ? "Retirer la saisie vide" : "Vider ce créneau") : null,
         h(Button, { active: true, onClick: onClose }, "Terminer"),
@@ -2913,6 +2921,12 @@ export default function App() {
       view === "config" ? h(ConfigView, { authState, beneficiaryId, beneficiaryName, beneficiaryOptions, beneficiarySwitching, onSelectBeneficiary: selectBeneficiary, onCreateBeneficiary: createBeneficiary, setBeneficiaryName, auxiliaries, setAuxiliaries, onRemoveAuxiliary: removeAuxiliary, rotationDays, setRotationDays, onApplyRotationExample: applyRotationExample }) : null,
     ),
     h(SlotEditor, {
+      onAttendance: (worker, shift, absent) => {
+        if (!slotEdit || !sessionRole.isAdmin) return;
+        const next = setNotPerformed({ assignments: overrides, year, month, day: slotEdit.day, shift, worker, absent });
+        persistLocalDraft(buildPlanningState({ overrides: next }));
+        setOverrides(next);
+      },
       onApplyDayTemplate: workers => {
         if (!slotEdit || !sessionRole.isAdmin) return;
         if (!window.confirm(`Appliquer 5 h le matin, 5 h l'après-midi et 2 h de mise au lit au ${slotEdit.day} ${MONTHS[month]} ? Les affectations et renforts de ces trois créneaux seront remplacés. La veille de nuit reste inchangée.`)) return;
