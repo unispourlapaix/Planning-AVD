@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { requestCalendarLandscape } from "../src/modules/calendar-landscape.js";
+assert.equal(await requestCalendarLandscape({}, {}), false);
+let exited = false;
+const doc = { fullscreenElement: null, documentElement: { async requestFullscreen() { doc.fullscreenElement = {}; } }, async exitFullscreen() { exited = true; doc.fullscreenElement = null; } };
+assert.equal(await requestCalendarLandscape(doc, { async lock(mode) { assert.equal(mode, "landscape"); } }), true);
+doc.fullscreenElement = null;
+assert.equal(await requestCalendarLandscape(doc, { async lock() { throw new Error("Unsupported"); } }), false);
+assert.equal(exited, true);
+console.log("Paysage : activation et repli navigateur OK");

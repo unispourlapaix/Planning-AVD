@@ -24,7 +24,7 @@ Object.values(schedule).forEach(plan => {
   }
 });
 const markup = renderToStaticMarkup(React.createElement(MonthView, { year, month, schedule, auxiliaries, overrides: {}, onEditSlot() {}, onOpenMeal() {} }));
-assert.equal((markup.match(/<article /g) || []).length, 31);
+assert.equal((markup.match(/<article /g) || []).length, 35);
 const context = monthContextCells(2026, 0);
 assert.deepEqual(context[0], { year: 2025, month: 11, day: 29, previous: true });
 assert.equal(monthContextCells(2026, 5)[0].previous, false);

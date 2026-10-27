@@ -3,6 +3,7 @@ import { mealForDate } from "./meal-planning.js";
 import { shiftDisplayLabel } from "./shift-labels.js?v=20260726-normal-slots";
 import { personalBreakNoticeForSlot } from "./break-rules.js?v=20260722-custom-hours";
 import { monthWeeks, dayName, monthContextCells } from "./dates.js";
+import { openCalendarLandscape } from "./calendar-landscape.js";
 
 const normalizeEmail = email => String(email || "").trim().toLowerCase();
 const cleanEmail = email => String(email || "").trim();
@@ -223,7 +224,7 @@ const render = ({ calendar = [], entries = [], year, month, previousCalendar = [
   section.id = "personal-team-calendar";
   section.className = "team-admin-view";
   if (view === "month") {
-    section.innerHTML = `<div class="calendar">
+    section.innerHTML = `<div class="calendar-mobile-tools"><button type="button" class="btn" data-calendar-landscape>Paysage / plein écran</button></div><div class="calendar">
       ${DAYS_SHORT.map((day, index) => `<div class="dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}">${day}</div>`).join("")}
       ${monthContextCells(year, month).map(cell => {
         if (!cell) return dayHtml(null, year, month, ownSlots, byDay, entriesByDay);
@@ -245,6 +246,7 @@ const render = ({ calendar = [], entries = [], year, month, previousCalendar = [
 export async function initPersonalTeamCalendar() {
   ensureStyle();
   document.addEventListener("click", event => {
+    if (event.target.closest?.("[data-calendar-landscape]")) { openCalendarLandscape(); return; }
     const exchangeButton = event.target.closest?.("#personal-team-calendar .exchange-tag");
     if (exchangeButton) {
       window.dispatchEvent(new CustomEvent("planning-avd-request-change", {

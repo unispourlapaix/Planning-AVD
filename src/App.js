@@ -1,4 +1,6 @@
 import React from "react";
+import { copyMonthWithinQuotas } from "./modules/month-template.js";
+import { openCalendarLandscape } from "./modules/calendar-landscape.js";
 import { setNotPerformed } from "./modules/attendance.js";
 import { applyDayTemplate } from "./modules/day-template.js";
 import { DayTemplatePicker } from "./modules/day-template-picker.js";
@@ -923,7 +925,7 @@ function PlanningFillPanel({ assignmentCount, rotationDays, onApplyExample, onCo
     ),
     h("div", { className: "summary", style: { marginTop: 8 } },
       h("span", null, `Exemple sélectionné : ${selected.label}`),
-      h(Button, { onClick: onCopyPreviousMonth }, "Reprendre les jours"),
+      h(Button, { onClick: onCopyPreviousMonth }, "Reprendre le mois · quotas max"),
       h(Button, { active: true, onClick: onApplyExample }, "Remplir avec l'exemple"),
       h(Button, { onClick: onClearMonth }, "Vider le mois"),
     ),
@@ -969,13 +971,13 @@ function AdminChangeRequestsPanel({ requests, error, auxiliaries, onApprove, onR
   );
 }
 
-export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal, previous = false }) {
+export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrides, onEditSlot, onOpenMeal, previous = false, nextMonth = false }) {
   if (!day) return h("div", { className: "day-card empty" });
   const today = new Date();
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
   return h("article", { className: `day-card${previous ? " previous-month" : ""}${alternateDayTone(day)}${dayTone(year, month, day)}${isToday ? " today" : ""}`, "aria-label": `${dayName(year, month, day)} ${day} ${MONTHS[month]}` },
     h("div", { className: "day-head" },
-      h("span", null, previous ? `${day} ${MONTHS[month]}` : day),
+      h("span", null, previous || nextMonth ? `${day} ${MONTHS[month]}` : day),
       h("span", { className: "day-head-meta" }, h("span", null, dayName(year, month, day)), isToday ? h("small", null, "Aujourd’hui") : null),
     ),
     SHIFT_DEFS.map(shift => {
@@ -1021,16 +1023,21 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
   );
 }
 
-export function MonthView({ year, month, schedule, auxiliaries, overrides, hourOverrides = {}, onEditSlot, onOpenMeal }) {
+export function MonthView({ year, month, schedule, auxiliaries, overrides, hourOverrides = {}, onEditSlot, onOpenMeal, onNextMonth }) {
   const previousDate = new Date(year, month - 1, 1);
   const previousParams = { year: previousDate.getFullYear(), month: previousDate.getMonth() };
   const previousSchedule = applyManualAssignments({ ...previousParams, schedule: buildEmptySchedule(previousParams), assignments: overrides || {}, hourOverrides });
+  const nextDate = new Date(year, month + 1, 1);
+  const nextParams = { year: nextDate.getFullYear(), month: nextDate.getMonth() };
+  const nextSchedule = applyManualAssignments({ ...nextParams, schedule: buildEmptySchedule(nextParams), assignments: overrides || {}, hourOverrides });
   return h("section", { className: "layout" },
+    h("div", { className: "calendar-mobile-tools" }, h(Button, { onClick: openCalendarLandscape, title: "Paysage / quitter le plein écran" }, "Paysage / plein écran")),
     h("div", { className: "calendar" },
       ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((day, index) => h("div", { key: `d-${index}`, className: `dow${index === 5 ? " saturday" : index === 6 ? " sunday" : ""}` }, day)),
-      monthContextCells(year, month).map((cell, index) => {
-        const visibleSchedule = cell?.previous ? previousSchedule : schedule;
-        return h(DayCard, { key: index, day: cell?.day, year: cell?.year ?? year, month: cell?.month ?? month, previous: cell?.previous, schedule: visibleSchedule, plan: cell ? visibleSchedule[cell.day] : null, auxiliaries, overrides, onEditSlot, onOpenMeal });
+      monthContextCells(year, month, true).map((cell, index) => {
+        const next = cell && !cell.previous && (cell.month !== month || cell.year !== year);
+        const visibleSchedule = cell?.previous ? previousSchedule : next ? nextSchedule : schedule;
+        return h(DayCard, { key: index, day: cell?.day, year: cell?.year ?? year, month: cell?.month ?? month, previous: cell?.previous, nextMonth: next, schedule: visibleSchedule, plan: cell ? visibleSchedule[cell.day] : null, auxiliaries, overrides, onEditSlot: next ? edit => onNextMonth?.(cell.year, cell.month, edit) : onEditSlot, onOpenMeal });
       }),
     ),
   );
@@ -2452,13 +2459,15 @@ export default function App() {
       alert(`Aucun planning saisi trouvé sur ${MONTHS[copiedOverrides.sourceMonth]} ${copiedOverrides.sourceYear}.`);
       return;
     }
-    const copiedHours = copyPreviousMonthAssignments({ current: hourOverrides, year, month });
+    const filled = copyMonthWithinQuotas({ year, month, overrides, hourOverrides, auxiliaries });
     const nextClearedMonths = withoutClearedMonth(clearedMonths, year, month);
-    persistLocalDraft(buildPlanningState({ overrides: copiedOverrides.current, hourOverrides: copiedHours.current, clearedMonths: nextClearedMonths }));
-    setOverrides(copiedOverrides.current);
-    setHourOverrides(copiedHours.current);
+    persistLocalDraft(buildPlanningState({ overrides: filled.overrides, hourOverrides: filled.hourOverrides, clearedMonths: nextClearedMonths }));
+    setOverrides(filled.overrides);
+    setHourOverrides(filled.hourOverrides);
     setClearedMonths(nextClearedMonths);
-    setCloudStatus({ kind: "local", text: "Mois précédent repris" });
+    setCloudStatus({ kind: "local", text: `Mois repris · ${filled.reduced} créneau(x) ajusté(s) aux quotas` });
+    const missing = auxiliaries.filter(aux => (filled.remaining.get(aux.id) || 0) > 0);
+    if (missing.length) alert(`Le modèle ne suffit pas à atteindre tous les quotas. Reste à attribuer :\n${missing.map(aux => `${aux.name} : ${filled.remaining.get(aux.id) / 100} h`).join("\n")}`);
   };
   const clearMonthPlanning = () => {
     const confirmed = window.confirm("Vider tous les créneaux saisis de ce mois ?");
@@ -2913,7 +2922,7 @@ export default function App() {
         setOverrides(nextOverrides);
         setHourOverrides(nextHourOverrides);
       } })) : null,
-      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, hourOverrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
+      view === "month" ? h(MonthView, { year, month, schedule, auxiliaries, overrides, hourOverrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate, onNextMonth: (nextYear, nextMonth, edit) => { setYear(nextYear); setMonth(nextMonth); setSlotEdit(edit); } }) : null,
       view === "week" ? h(WeekView, { year, month, schedule, auxiliaries, overrides, onEditSlot: setSlotEdit, onOpenMeal: setMealDate }) : null,
       view === "hours" ? h(HoursView, { auxiliaries: activeAux, hours }) : null,
       view === "config" ? h(GroupDashboard, { dashboard: groupDashboard, beneficiaryName, pendingExchangeCount: adminChangeRequests.filter(request => request.status === "pending").length }) : null,

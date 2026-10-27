@@ -106,3 +106,24 @@
 .calendar .day-card.previous-month { background: #edf0f3; border-color: #cbd2d9; }
 .calendar .day-card.previous-month .day-head { color: #54616e; font-size: 11px; flex-wrap: wrap; }
 .calendar .day-card.previous-month button:disabled { opacity: 1; cursor: default; }
+
+.calendar-mobile-tools { display: none; }
+@media screen and (max-width: 1000px) {
+  .calendar-mobile-tools { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+  .app .layout, .app .team-admin-view { min-width: 0; }
+  .app .calendar { grid-template-columns: repeat(7, minmax(100px, 1fr)) !important; overflow-x: auto !important; gap: 0 !important; max-width: 100%; overscroll-behavior-x: contain; }
+  .app .calendar > .dow, .app .calendar .day-card.empty { display: block !important; }
+  .app .calendar > .dow { padding: 6px 2px; font-size: 10px; }
+  .app .calendar .day-card { display: grid; grid-template-columns: minmax(0, 1fr); padding: 4px !important; border-radius: 0; gap: 2px !important; align-content: start; }
+  .app .calendar .day-head { min-height: 24px; gap: 3px; }
+  .app .calendar .day-head > span:first-child { font-size: 14px; }
+  .app .calendar .day-head-meta { display: none; }
+  .app .calendar .slot, .app .calendar .editable-slot { min-height: 44px; padding: 3px !important; gap: 1px !important; }
+  .app .calendar .slot-label { font-size: 9px !important; }
+  .app .calendar .slot-name { font-size: 12px !important; }
+  .app .calendar .hour-badge, .app .calendar .break-badge, .app .calendar .double-stack { display: none; }
+  .app .calendar .slot-content { min-width: 0; flex-wrap: wrap; }
+  .app .calendar .meal-tag { min-height: 32px; margin-top: 0; }
+  .app .calendar .meal-tag > span { display: none; }
+}
+@media print { .calendar-mobile-tools { display: none !important; } }
