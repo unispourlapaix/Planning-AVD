@@ -22,7 +22,8 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
     }).join("");
     return `<div class="day${dayIndex(year, month, day) >= 5 ? " weekend" : ""}"><div class="date">${day}</div>${slots}</div>`;
   };
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning ${MONTHS[month]} ${year}</title><style>
+  const portraitNotice = '<section class="orientation-notice" aria-label="Orientation du planning"><div><h2>Tournez votre téléphone en paysage</h2><p>Le planning imprimable se lit horizontalement. Activez la rotation automatique si nécessaire.</p><button type="button" class="print-button" onclick="window.print()">Imprimer en A4 paysage</button></div></section>';
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning ${MONTHS[month]} ${year}</title><style>
     @page{size:A4 landscape;margin:8mm}
     *{box-sizing:border-box}body{margin:0;padding:16px;background:#f1f3f4;color:#243641;font-family:Arial,sans-serif}
     .sheet{max-width:281mm;margin:auto;padding:12px;background:#fff}
@@ -36,6 +37,14 @@ export function buildCleanPlanningHtml({ year, month, beneficiaryName = "", auxi
     .slot{display:grid;grid-template-columns:48px minmax(0,1fr);gap:4px;padding:4px 0;border-top:1px solid #edf0f2}
     .label{font-size:9px;line-height:1.2;color:#60717b}.slot strong{display:block;font-size:10px;line-height:1.2;overflow-wrap:anywhere}
     time{display:block;font-size:9px;line-height:1.3;color:#364f60}
+    .orientation-notice{display:none}
+    @media screen and (max-width:1000px){body{padding:8px}.sheet{min-width:900px}.slot{grid-template-columns:1fr;gap:2px}.label{font-size:10px}.slot strong{font-size:12px}time{font-size:11px}}
+    @media screen and (orientation:portrait) and (max-width:1000px){
+      .sheet{display:none}
+      .orientation-notice{display:flex;min-height:85vh;align-items:center;justify-content:center;text-align:center;padding:24px}
+      .orientation-notice div{max-width:360px}.orientation-notice h2{font-size:20px}.orientation-notice p{font-size:16px;line-height:1.5}
+    }
     @media print{body{padding:0;background:white}.sheet{max-width:none;padding:0}header{margin-bottom:3mm}h1{font-size:14pt}header p{font-size:8pt}.print-button{display:none}.dow{font-size:7pt;padding:1mm}.day{padding:1mm}.date{font-size:9pt;margin-bottom:.5mm}.slot{padding:.65mm 0;grid-template-columns:12mm minmax(0,1fr);gap:1mm}.label{font-size:6.5pt}.slot strong{font-size:7pt}time{font-size:6.5pt}}
   </style></head><body><main class="sheet"><header><div><h1>${MONTHS[month]} ${year}</h1><p>${esc(beneficiaryName || "Planning-AVD")} · Début de journée : ${esc(startTime)}</p></div><button type="button" class="print-button" onclick="window.print()">Imprimer</button></header><div class="calendar">${DAYS_LONG.map(day => `<div class="dow">${day}</div>`).join("")}${monthGrid(year, month).map(dayHtml).join("")}</div></main></body></html>`;
+  return html.replace('<body>', `<body>${portraitNotice}`);
 }
