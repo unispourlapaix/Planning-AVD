@@ -1,4 +1,6 @@
 import React from "react";
+import { AuxiliaryIdentityEditor } from "./modules/auxiliary-identity-editor.js";
+import { updateMemberIdentity } from "./modules/member-identity.js";
 import { copyMonthWithinQuotas } from "./modules/month-template.js";
 import { openCalendarLandscape } from "./modules/calendar-landscape.js";
 import { setNotPerformed } from "./modules/attendance.js";
@@ -1942,15 +1944,14 @@ function ConfigView({ authState, beneficiaryId, beneficiaryName, beneficiaryOpti
         h(Button, { title: "Retirer uniquement l'affectation au planning", "aria-label": `Retirer l'affectation de ${aux.name || aux.id}`, onClick: () => onRemoveAuxiliary(aux.id) }, h(IconLabel, { icon: "close", label: "Retirer" })),
       ),
       h("div", { className: "form-grid" },
-        h(Field, { label: "Membre associé" }, h(Select, { value: String(aux.email || "").trim().toLowerCase(), onChange: email => {
-          const member = availableAuxiliaryMembers(members, auxiliaries, aux.id).find(item => item.email === email);
-          if (member) patchAux(aux.id, { name: member.name || email, email });
-        } },
-          h("option", { value: String(aux.email || "").trim().toLowerCase() }, `${aux.name || "Fiche existante"}${aux.email ? ` · ${aux.email}` : " · Choisir un membre"}`),
-          availableAuxiliaryMembers(members, auxiliaries, aux.id).filter(member => member.email !== String(aux.email || "").trim().toLowerCase()).map(member => h("option", { key: member.email, value: member.email }, `${member.name || member.email} · ${member.email}`)))),
+        h("div", { className: "field" }, h("span", null, "Email"), h("span", { style: { overflowWrap: "anywhere" } }, aux.email || "Non renseigné")),
         h(Field, { label: "Telephone" }, h(TextInput, { value: aux.phone, onChange: value => patchAux(aux.id, { phone: value }) })),
         h(Field, { label: "Quota mensuel" }, h(TextInput, { type: "number", value: aux.quota, onChange: value => patchAux(aux.id, { quota: Number(value) || 0 }) })),
       ),
+      h(AuxiliaryIdentityEditor, { key: `${aux.id}:${aux.name}:${aux.email}`, auxiliary: aux, onSave: async values => {
+        const identity = await updateMemberIdentity({ db: authState.db, user: authState.user, beneficiaryId, oldEmail: aux.email, ...values });
+        setAuxiliaries(list => list.map(item => String(item.email || "").trim().toLowerCase() === String(aux.email || "").trim().toLowerCase() ? { ...item, ...identity } : item));
+      } }),
       h(Field, { label: "Adresse complete" }, h("textarea", { value: aux.address || "", onChange: event => patchAux(aux.id, { address: event.target.value }), rows: 2 })),
       h("details", null,
         h("summary", null, "Placement des heures · modèle 2 jours"),

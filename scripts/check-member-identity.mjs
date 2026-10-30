@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { updateMemberIdentity } from "../src/modules/member-identity.js";
+globalThis.firebase = { firestore: { FieldValue: { serverTimestamp: () => "now" } } };
+const records = new Map([["planning-avd-beneficiaries/group/members/old@example.com", { role: "admin", active: true }]]);
+const writes = [];
+const ref = path => ({ path, collection: key => ref(`${path}/${key}`), doc: key => ref(`${path}/${key}`) });
+const db = { collection: ref, runTransaction: fn => fn({ get: async r => ({ exists: records.has(r.path), data: () => records.get(r.path) }), set: (r, data) => writes.push({ path: r.path, data }), delete: r => writes.push({ path: r.path, deleted: true }) }) };
+const args = { db, user: { uid: "owner", email: "owner@example.com" }, beneficiaryId: "group", oldEmail: "old@example.com", email: "new@example.com", name: "Nouveau" };
+const result = await updateMemberIdentity(args);
+assert.equal(result.name, "Nouveau");
+assert.ok(writes.some(w => w.path.endsWith("members/new@example.com") && w.data.role === "admin"));
+assert.ok(writes.some(w => w.path.includes("shares/old@example.com") && w.data.active === false));
+assert.ok(writes.every(w => w.path.includes("group")));
+records.set("planning-avd-beneficiaries/group/members/new@example.com", {});
+await assert.rejects(updateMemberIdentity(args), /déjà/);
+await assert.rejects(updateMemberIdentity({ ...args, email: "incomplet" }), /complet/);
+console.log("Identite : role conserve, ancien acces ferme, doublon bloque et groupe isole OK");
