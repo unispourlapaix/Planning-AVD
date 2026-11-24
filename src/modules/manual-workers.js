@@ -28,6 +28,12 @@ export const compactManualWorkers = value => {
 
 export const primaryManualWorker = value => manualWorkerIds(value)[0] || "";
 
+export const removeManualPrimaryWorker = value => {
+  const workers = manualWorkerIds(value).slice(1);
+  if (!workers.length) return emptyManualSlot();
+  return value?.notPerformed ? { workers, notPerformed: value.notPerformed.filter(id => workers.includes(id)) } : compactManualWorkers(workers);
+};
+
 export const clearManualReinforcements = value => {
   const primary = primaryManualWorker(value);
   if (!primary) return value;

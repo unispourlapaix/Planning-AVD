@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { previousDayTemplate, applyPreviousDay } from "../src/modules/previous-day-template.js";
+const args = { year: 2026, month: 10, day: 2, overrides: { "2026-9-5-morning": { workers: ["A", "B"], notPerformed: ["A"] }, "2026-10-3-night": "C" }, hourOverrides: { "2026-9-5-morning::A": 7, "2026-9-5-morning::B": 3 } };
+const template = previousDayTemplate(args);
+assert.equal(template.sourceDay, 5);
+assert.equal(template.found, true);
+template.slots[0].workers[0].id = "C";
+const result = applyPreviousDay({ ...args, slots: template.slots });
+assert.deepEqual(result.overrides['2026-10-2-morning'], ['C', 'B']);
+assert.equal(result.hourOverrides['2026-10-2-morning::C'], 7);
+assert.equal(result.hourOverrides['2026-10-2-morning::B'], 3);
+assert.equal(result.overrides['2026-10-3-night'], 'C');
+assert.equal(previousDayTemplate({ ...args, overrides: {} }).found, false);
+console.log('Jour precedent : correspondance, changement auxiliaire, heures, renforts et autres jours conserves OK');

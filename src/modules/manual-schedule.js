@@ -32,7 +32,7 @@ const monthDaysByWeekday = (year, month) => {
   return groups;
 };
 
-const targetToSourceDayMap = ({ sourceYear, sourceMonth, targetYear, targetMonth }) => {
+export const targetToSourceDayMap = ({ sourceYear, sourceMonth, targetYear, targetMonth }) => {
   const sourceGroups = monthDaysByWeekday(sourceYear, sourceMonth);
   const targetGroups = monthDaysByWeekday(targetYear, targetMonth);
   const pairs = [];

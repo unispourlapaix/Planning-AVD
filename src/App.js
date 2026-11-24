@@ -1,11 +1,12 @@
 import React from "react";
+import { removeManualPrimaryWorker } from "./modules/manual-workers.js";
 import { AuxiliaryIdentityEditor } from "./modules/auxiliary-identity-editor.js";
 import { updateMemberIdentity } from "./modules/member-identity.js";
 import { copyMonthWithinQuotas } from "./modules/month-template.js";
 import { openCalendarLandscape } from "./modules/calendar-landscape.js";
 import { setNotPerformed } from "./modules/attendance.js";
-import { applyDayTemplate } from "./modules/day-template.js";
-import { DayTemplatePicker } from "./modules/day-template-picker.js";
+import { applyPreviousDay } from "./modules/previous-day-template.js";
+import { DayTemplatePicker } from "./modules/previous-day-picker.js";
 import { showShortcutHelp } from "./modules/web-only.js";
 import { listedAuxiliaries, retireAuxiliaries, syncAuxiliaryMember, availableAuxiliaryMembers, assignExistingMember } from "./modules/auxiliary-membership.js";
 import { TWO_DAY_MODE } from "./modules/two-day-template.js";
@@ -1133,7 +1134,7 @@ function WorkerPill({ aux, index, active = false, selected = false, primary = fa
   );
 }
 
-function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onClearReinforcements, onReset, onSetHours, onResetHours, onApplyDayTemplate, onAttendance, onClose }) {
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onClearReinforcements, onRemovePrimary, onReset, onSetHours, onResetHours, onApplyDayTemplate, onAttendance, onClose }) {
   const [hourInputs, setHourInputs] = useState({});
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
   const entry = edit ? schedule[edit.day]?.[edit.shift] : null;
@@ -1185,7 +1186,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
-      h(DayTemplatePicker, { key: `${year}-${month}-${edit.day}-${!!edit.fillDay}`, auxiliaries, onApply: onApplyDayTemplate, defaultOpen: !!edit.fillDay }),
+      h(DayTemplatePicker, { key: `${year}-${month}-${edit.day}-${!!edit.fillDay}`, year, month, day: edit.day, overrides, hourOverrides, auxiliaries, onApply: onApplyDayTemplate, defaultOpen: !!edit.fillDay }),
       currentWorkers.some(id => !canWorkShift(auxiliaries.find(aux => aux.id === id), edit.shift, year, month, edit.day)) ? h("p", { role: "status", className: "availability-warning-label" }, "Anomalie : un intervenant est placé hors de ses disponibilités. L'affectation reste autorisée.") : null,
       h("div", { className: `slot-editor-current${manualEmpty ? " empty" : ""}` },
         h("span", null, manualEmpty ? "Créneau vidé" : currentNames.length ? "Actuel" : "À définir"),
@@ -1199,6 +1200,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
       ),
       h("div", { className: "slot-editor-section" },
         h("b", null, "Titulaire"),
+        current ? h(Button, { onClick: () => onRemovePrimary(key) }, "Retirer le titulaire") : null,
         h("div", { className: "worker-pill-grid main-pill-grid" }, available.map((aux, index) => {
           const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
           const preferred = canWorkShift(aux, edit.shift, year, month, edit.day);
@@ -2944,10 +2946,10 @@ export default function App() {
         persistLocalDraft(buildPlanningState({ overrides: next }));
         setOverrides(next);
       },
-      onApplyDayTemplate: workers => {
+      onApplyDayTemplate: slots => {
         if (!slotEdit || !sessionRole.isAdmin) return;
-        if (!window.confirm(`Appliquer 5 h le matin, 5 h l'après-midi et 2 h de mise au lit au ${slotEdit.day} ${MONTHS[month]} ? Les affectations et renforts de ces trois créneaux seront remplacés. La veille de nuit reste inchangée.`)) return;
-        const changes = applyDayTemplate({ year, month, day: slotEdit.day, workers, overrides, hourOverrides });
+        if (!window.confirm(`Remplacer les quatre créneaux du ${slotEdit.day} ${MONTHS[month]} par cette journée du mois précédent avec les intervenants choisis ? Les heures et renforts seront repris, sans les absences.`)) return;
+        const changes = applyPreviousDay({ year, month, day: slotEdit.day, slots, overrides, hourOverrides });
         const nextClearedMonths = withoutClearedMonth(clearedMonths, year, month);
         persistLocalDraft(buildPlanningState({ ...changes, clearedMonths: nextClearedMonths }));
         setOverrides(changes.overrides);
@@ -2982,6 +2984,17 @@ export default function App() {
       },
       onClearReinforcements: key => {
         const nextValue = clearManualReinforcements(overrides[key]);
+        const nextOverrides = { ...overrides, [key]: nextValue };
+        const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
+        setOverrides(nextOverrides);
+        setHourOverrides(nextHourOverrides);
+      },
+      onRemovePrimary: key => {
+        const workers = manualWorkerIds(overrides[key]);
+        if (!workers.length) return;
+        if (workers.length > 1 && !window.confirm(`Retirer ${auxName(auxiliaries, workers[0])} ? ${auxName(auxiliaries, workers[1])}, actuellement en renfort, deviendra titulaire. Les autres renforts seront conservés.`)) return;
+        const nextValue = removeManualPrimaryWorker(overrides[key]);
         const nextOverrides = { ...overrides, [key]: nextValue };
         const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
         persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
