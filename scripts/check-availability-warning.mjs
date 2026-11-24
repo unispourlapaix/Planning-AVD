@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DayCard } from "../src/App.js";
+import { buildRotationAudit } from "../src/modules/rotation-audit.js";
+const auxiliaries = [{ id: "A", name: "Alice", days: "weekend", shift: "all" }, { id: "B", name: "Benoit", days: "all", shift: "all" }];
+const schedule = { 2: { morning: { worker: "B", workers: ["B", "A"], hours: 5 } } };
+const args = { year: 2026, month: 10, auxiliaries, schedule };
+const checks = buildRotationAudit(args);
+assert.ok(checks.some(check => check.level === "warning" && check.title === "Affectation hors disponibilités" && check.detail.includes("Alice")));
+const html = renderToStaticMarkup(React.createElement(DayCard, { ...args, day: 2, plan: schedule[2], overrides: {}, onEditSlot() {}, onOpenMeal() {} }));
+assert.ok(html.includes("Hors disponibilités : Alice"));
+assert.ok(html.includes("availability-warning"));
+assert.deepEqual(schedule[2].morning.workers, ["B", "A"]);
+const allowed = buildRotationAudit({ ...args, auxiliaries: auxiliaries.map(aux => ({ ...aux, days: "all" })) });
+assert.ok(!allowed.some(check => check.title === "Affectation hors disponibilités"));
+console.log("Disponibilites : avertissement renfort/titulaire sans bloquer les affectations OK");

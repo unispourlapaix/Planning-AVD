@@ -108,6 +108,10 @@
 .calendar .day-card.previous-month button:disabled { opacity: 1; cursor: default; }
 
 .calendar-mobile-tools { display: none; }
+.app .day-card .slot.availability-warning { border-left: 3px solid #b35c12 !important; }
+.availability-warning-label { display: block; color: #85420a; background: #fff3df; font-size: 11px; line-height: 1.35; padding: 3px; overflow-wrap: anywhere; }
+.day-edit-button { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; min-width: 32px; min-height: 32px; padding: 2px 4px; cursor: pointer; }
+.day-edit-button:focus-visible { outline: 2px solid #417d9d; outline-offset: 2px; }
 @media screen and (max-width: 1000px) {
   .calendar-mobile-tools { display: flex; justify-content: flex-end; margin-bottom: 6px; }
   .app .layout, .app .team-admin-view { min-width: 0; }

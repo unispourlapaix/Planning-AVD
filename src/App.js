@@ -51,7 +51,7 @@ import { buildReportHtml } from "./modules/report.js?v=20260722-custom-hours";
 import { buildRotationAudit } from "./modules/rotation-audit.js?v=20260726-manual-weekend-free";
 import { calculateAssignedHours, calculatePerformedHours, summarizeHours } from "./modules/hour-accounting.js?v=20260722-custom-hours";
 import { applyManualAssignments, assignmentsFromSchedule, buildEmptySchedule, clearMonthAssignments, copyPreviousMonthAssignments, removeAutomaticNightMorningAssignments, replaceMonthAssignments } from "./modules/manual-schedule.js?v=20260726-empty-slot";
-import { emptyManualSlot, isManualEmptySlot, manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker } from "./modules/manual-workers.js?v=20260726-empty-slot";
+import { emptyManualSlot, isManualEmptySlot, manualWorkerIds, setManualPrimaryWorker, toggleManualDoubleWorker, clearManualReinforcements } from "./modules/manual-workers.js?v=20260726-empty-slot";
 import { mealForDate, mealWeekForDate, shoppingListText, WEEKLY_SHOPPING } from "./modules/meal-planning.js";
 import { sharePlanningByEmail } from "./modules/planning-share.js?v=20260722-custom-hours";
 import { shiftDisplayLabel } from "./modules/shift-labels.js?v=20260726-normal-slots";
@@ -877,7 +877,7 @@ function AssignmentProgress({ auxiliaries, assignedHours }) {
 
 export function RotationAudit({ checks, children }) {
   const visible = checks.slice(0, 6);
-  const critical = checks.filter(item => item.level === "danger").length;
+  const critical = checks.filter(item => item.level === "danger" || item.level === "warning").length;
   const title = critical ? `${critical} point${critical > 1 ? "s" : ""} à corriger` : checks[0]?.level === "ok" ? "Planning cohérent" : "Voir les points de contrôle";
   return h("details", { className: "panel audit-panel" },
     h("summary", null,
@@ -979,7 +979,7 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
   const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
   return h("article", { className: `day-card${previous ? " previous-month" : ""}${alternateDayTone(day)}${dayTone(year, month, day)}${isToday ? " today" : ""}`, "aria-label": `${dayName(year, month, day)} ${day} ${MONTHS[month]}` },
     h("div", { className: "day-head" },
-      h("span", null, previous || nextMonth ? `${day} ${MONTHS[month]}` : day),
+      previous ? h("span", null, `${day} ${MONTHS[month]}`) : h("button", { type: "button", className: "day-edit-button", title: "Remplir cette journée", "aria-label": `Remplir la journée du ${day} ${MONTHS[month]}`, onClick: () => onEditSlot({ day, shift: "morning", fillDay: true }) }, nextMonth ? `${day} ${MONTHS[month]}` : day),
       h("span", { className: "day-head-meta" }, h("span", null, dayName(year, month, day)), isToday ? h("small", null, "Aujourd’hui") : null),
     ),
     SHIFT_DEFS.map(shift => {
@@ -994,12 +994,16 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
       const label = shiftDisplayLabel({ shift: shift.id, schedule, day, worker });
       const notice = breakNoticeForSlot({ shift: shift.id, schedule, day, worker });
       const entry = plan?.[shift.id];
+      const unavailable = workers.filter(id => {
+        const aux = auxiliaries.find(item => item.id === id);
+        return !aux || !canWorkShift(aux, shift.id, year, month, day);
+      });
       const customHours = worker
         ? hasCustomWorkerHours(entry, shift.id, worker) || slotHours(entry, shift.id) !== defaultHoursForShift(shift.id)
         : hasCustomSlotHours(entry, shift.id);
       const visibleHours = worker ? slotWorkerHours(entry, shift.id, worker) : slotHours(entry, shift.id);
       return h("button", {
-        className: `slot editable-slot${!worker ? " unassigned-slot" : ""}`,
+        className: `slot editable-slot${!worker ? " unassigned-slot" : ""}${unavailable.length ? " availability-warning" : ""}`,
         key: shift.id,
         title: [manual ? "Créneau saisi" : "", label, notice?.title].filter(Boolean).join(" · "),
         onClick: previous ? undefined : () => onEditSlot({ day, shift: shift.id }),
@@ -1007,6 +1011,7 @@ export function DayCard({ day, year, month, schedule, plan, auxiliaries, overrid
         "aria-label": `${day} ${MONTHS[month]}, ${label}, ${worker ? auxName(auxiliaries, worker) : "non attribué"}${previous ? " : mois précédent" : " : modifier"}`,
       },
         h("span", { className: "slot-label", title: label }, label),
+        unavailable.length ? h("small", { className: "availability-warning-label" }, `Hors disponibilités : ${unavailable.map(id => auxName(auxiliaries, id)).join(", ")}`) : null,
         h("span", { className: "slot-content" },
           h("span", {
             className: `slot-name slot-person-pill${worker ? "" : " empty"}`,
@@ -1128,7 +1133,7 @@ function WorkerPill({ aux, index, active = false, selected = false, primary = fa
   );
 }
 
-function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onReset, onSetHours, onResetHours, onApplyDayTemplate, onAttendance, onClose }) {
+function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourOverrides, assignedHours, onChoose, onToggleDouble, onClearReinforcements, onReset, onSetHours, onResetHours, onApplyDayTemplate, onAttendance, onClose }) {
   const [hourInputs, setHourInputs] = useState({});
   const key = edit ? overrideKey(year, month, edit.day, edit.shift) : "";
   const entry = edit ? schedule[edit.day]?.[edit.shift] : null;
@@ -1180,7 +1185,8 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
         ),
         h(Button, { className: "icon-btn", title: "Fermer", onClick: onClose }, h(Icon, { name: "close" })),
       ),
-      h(DayTemplatePicker, { key: `${year}-${month}-${edit.day}`, auxiliaries, onApply: onApplyDayTemplate }),
+      h(DayTemplatePicker, { key: `${year}-${month}-${edit.day}-${!!edit.fillDay}`, auxiliaries, onApply: onApplyDayTemplate, defaultOpen: !!edit.fillDay }),
+      currentWorkers.some(id => !canWorkShift(auxiliaries.find(aux => aux.id === id), edit.shift, year, month, edit.day)) ? h("p", { role: "status", className: "availability-warning-label" }, "Anomalie : un intervenant est placé hors de ses disponibilités. L'affectation reste autorisée.") : null,
       h("div", { className: `slot-editor-current${manualEmpty ? " empty" : ""}` },
         h("span", null, manualEmpty ? "Créneau vidé" : currentNames.length ? "Actuel" : "À définir"),
         h("b", null, manualEmpty ? "Aucun auxiliaire" : currentNames.length ? currentNames.join(" + ") : "Choisir un titulaire"),
@@ -1215,6 +1221,7 @@ function SlotEditor({ edit, year, month, auxiliaries, schedule, overrides, hourO
       ),
       h("div", { className: "slot-editor-section" },
         h("b", null, "Renforts"),
+        currentDoubles.length ? h(Button, { onClick: () => onClearReinforcements(key) }, "Retirer les renforts") : null,
         h("div", { className: "muted" }, current ? "Ajouter une ou plusieurs pastilles sur le même créneau." : "Choisissez d'abord le titulaire."),
         h("div", { className: "worker-pill-grid support-pill-grid" }, available.map((aux, index) => {
         const data = assignmentSummary(assignedHours?.[aux.id], aux.quota);
@@ -2967,6 +2974,14 @@ export default function App() {
       onToggleDouble: (key, worker) => {
         const nextValue = toggleManualDoubleWorker(overrides[key], worker);
         if (!nextValue) return;
+        const nextOverrides = { ...overrides, [key]: nextValue };
+        const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
+        persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));
+        setOverrides(nextOverrides);
+        setHourOverrides(nextHourOverrides);
+      },
+      onClearReinforcements: key => {
+        const nextValue = clearManualReinforcements(overrides[key]);
         const nextOverrides = { ...overrides, [key]: nextValue };
         const nextHourOverrides = pruneSlotWorkerHourOverrides(hourOverrides, key, manualWorkerIds(nextValue));
         persistLocalDraft(buildPlanningState({ overrides: nextOverrides, hourOverrides: nextHourOverrides }));

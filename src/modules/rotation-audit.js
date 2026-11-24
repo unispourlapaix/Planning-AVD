@@ -4,13 +4,6 @@ import { canWorkShift } from "./scheduler-handover.js?v=20260726-normal-slots";
 
 const workers = entry => Array.isArray(entry?.workers) ? entry.workers.filter(Boolean) : (entry?.worker ? [entry.worker] : []);
 const primary = entry => workers(entry)[0] || "";
-const isNightHandoverMorning = (schedule, day, shift, id) =>
-  shift === "morning" && day > 1 && primary(schedule[day - 1]?.night) === id;
-const isWeekendOpeningNight = ({ schedule, year, month, day, shift, id, aux }) =>
-  shift === "night"
-  && dayIndex(year, month, day) === 4
-  && (primary(schedule[day + 1]?.morning) || primary(schedule[day + 1]?.afternoon)) === id
-  && canWorkShift(aux, "night", year, month, day + 1);
 
 const auxName = (auxiliaries, id) => auxiliaries.find(aux => aux.id === id)?.name || "A definir";
 const compactDays = days => days.slice(0, 4).join(", ") + (days.length > 4 ? ` +${days.length - 4}` : "");
@@ -49,11 +42,9 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
       if (!ids.length && dayHasWorker) undefinedSlots.push(`${day} ${SHIFT_LABEL[shift.id]}`);
       ids.forEach(id => {
         const aux = byId[id];
-        const allowedHandover = isNightHandoverMorning(schedule, day, shift.id, id)
-          || isWeekendOpeningNight({ schedule, year, month, day, shift: shift.id, id, aux });
         if (!aux) {
           missingWorkerSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
-        } else if (!canWorkShift(aux, shift.id, year, month, day) && !allowedHandover) {
+        } else if (!canWorkShift(aux, shift.id, year, month, day)) {
           preferenceSlots.push(`${day} ${SHIFT_LABEL[shift.id]} : ${auxName(auxiliaries, id)}`);
         }
       });
@@ -109,7 +100,7 @@ export function buildRotationAudit({ year, month, auxiliaries = [], schedule = {
   }
 
   if (preferenceSlots.length) {
-    add("warning", "Hors preferences auxiliaires", `${compactDays(preferenceSlots)}. Autorise en mode manuel.`);
+    add("warning", "Affectation hors disponibilités", `${preferenceSlots.join(" ; ")}. Affectation conservée : à vérifier avec l'auxiliaire.`);
   }
 
   if (brokenWeekendHandovers.length) {

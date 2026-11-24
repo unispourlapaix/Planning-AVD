@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { clearManualReinforcements, emptyManualSlot } from "../src/modules/manual-workers.js";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DayTemplatePicker } from "../src/modules/day-template-picker.js";
+const before = { workers: ["A", "B", "C"], notPerformed: ["A", "B"] };
+assert.deepEqual(clearManualReinforcements(before), { workers: ["A"], notPerformed: ["A"] });
+assert.deepEqual(before.workers, ["A", "B", "C"]);
+assert.equal(clearManualReinforcements(["A", "B"]), "A");
+assert.equal(clearManualReinforcements("A"), "A");
+const empty = emptyManualSlot();
+assert.equal(clearManualReinforcements(empty), empty);
+const html = renderToStaticMarkup(React.createElement(DayTemplatePicker, { auxiliaries: [], defaultOpen: true }));
+assert.match(html, /open=""/);
+assert.match(html, /Remplir la journée/);
+console.log("Remplissage jour ouvert et retrait des renforts sans toucher au titulaire : OK");
